@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4fd1c5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TT Partner">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Thread Tribe Partner Portal</title>
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  :root{
+    --bg:#f2f4f7; --panel:#ffffff; --panel2:#f7f9fb; --line:#dbe1e8; --text:#16202c; --dim:#5b6b7d; --input-bg:#eef1f5;
+    --cyan:#2bb5a9; --cyan-soft:rgba(79,209,197,0.14); --amber:#d98f1f; --red:#d9534c; --green:#3f9f4f; --purple:#8b63d6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0d1117; --panel:#131a24; --panel2:#0f1620; --line:#223142; --text:#dbe4ee; --dim:#7d8ea3; --input-bg:#0a0f16;
+      --cyan:#4fd1c5; --amber:#f0a83c; --red:#e8615a; --green:#7ed08a; --purple:#b48cf0; }
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--bg); color:var(--text); font-family:'Space Grotesk', system-ui, sans-serif; padding:calc(20px + env(safe-area-inset-top)) 16px 120px; -webkit-text-size-adjust:100%; }
+  .wrap{ max-width:620px; margin:0 auto; }
+  .mono{ font-family:'JetBrains Mono', ui-monospace, monospace; }
+  .eyebrow{ font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--cyan); }
+  h1{ font-size:26px; letter-spacing:-0.4px; margin-top:4px; }
+  .sub{ color:var(--dim); font-size:13px; margin-top:4px; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:14px; }
+  .btn{ font-family:'JetBrains Mono', monospace; font-size:12px; letter-spacing:0.4px; padding:11px 14px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; }
+  .btn:active{ transform:scale(0.98); }
+  .btn.primary{ border-color:var(--cyan); background:var(--cyan); color:#06201d; font-weight:700; }
+  .btn.ghost{ color:var(--dim); }
+  .btn.small{ padding:7px 10px; font-size:11px; }
+  .stats{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:14px; }
+  .stat{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .stat .k{ font-family:'JetBrains Mono', monospace; font-size:10px; text-transform:uppercase; color:var(--dim); letter-spacing:0.4px; }
+  .stat .v{ font-size:20px; font-weight:700; margin-top:4px; }
+  .tabs{ display:flex; gap:6px; margin-top:16px; }
+  .tab{ flex:1; font-family:'JetBrains Mono', monospace; font-size:12px; padding:10px 6px; border-radius:20px; border:1px solid var(--line); background:transparent; color:var(--dim); cursor:pointer; }
+  .tab.active{ color:var(--cyan); border-color:var(--cyan); background:var(--cyan-soft); font-weight:700; }
+  .job{ background:var(--panel); border:1px solid var(--line); border-radius:12px; margin-top:12px; overflow:hidden; }
+  .job.overdue{ border-color:var(--red); }
+  .job-head{ padding:14px 16px; display:flex; gap:12px; align-items:flex-start; cursor:pointer; }
+  .swatch{ width:14px; height:14px; border-radius:50%; flex:none; margin-top:4px; border:1px solid rgba(0,0,0,0.15); }
+  .job-title{ font-weight:600; font-size:15px; line-height:1.3; }
+  .job-meta{ font-family:'JetBrains Mono', monospace; font-size:11.5px; color:var(--dim); margin-top:4px; }
+  .pill{ display:inline-block; font-family:'JetBrains Mono', monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; padding:3px 9px; border-radius:20px; border:1px solid; white-space:nowrap; }
+  .job-body{ border-top:1px solid var(--line); padding:14px 16px; background:var(--panel2); }
+  .steps{ display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .step{ font-family:'JetBrains Mono', monospace; font-size:11px; padding:11px 4px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--dim); cursor:pointer; text-transform:uppercase; }
+  .step.done{ border-color:var(--cyan); color:var(--cyan); background:var(--cyan-soft); font-weight:700; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  label{ display:block; font-size:12px; color:var(--dim); margin-bottom:5px; }
+  input, textarea{ width:100%; background:var(--input-bg); border:1px solid var(--line); border-radius:8px; color:var(--text); font-family:'JetBrains Mono', monospace; font-size:16px; padding:10px 11px; outline:none; }
+  textarea{ font-family:'Space Grotesk', sans-serif; font-size:15px; min-height:60px; resize:vertical; }
+  input:focus, textarea:focus{ border-color:var(--cyan); }
+  .hint{ font-size:11px; color:var(--dim); margin-top:4px; font-family:'JetBrains Mono', monospace; }
+  .section{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--cyan); margin:16px 0 8px; }
+  .shipto{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; font-size:14px; line-height:1.45; }
+  .shipto a{ color:var(--cyan); }
+  .qc{ border-radius:10px; padding:10px 12px; font-size:13px; margin-top:12px; border:1px solid; }
+  .qc.issues{ color:var(--red); border-color:var(--red); background:rgba(232,97,90,0.08); }
+  .qc.pass{ color:var(--green); border-color:var(--green); background:rgba(126,208,138,0.1); }
+  .row{ display:flex; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px dotted var(--line); font-size:14px; }
+  .row:last-child{ border-bottom:none; }
+  .row .v{ font-family:'JetBrains Mono', monospace; text-align:right; }
+  .empty{ text-align:center; color:var(--dim); padding:26px 10px; font-size:14px; line-height:1.5; }
+  .bar{ position:fixed; left:0; right:0; bottom:0; background:var(--panel); border-top:1px solid var(--line); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .bar-inner{ max-width:620px; margin:0 auto; display:flex; gap:8px; align-items:center; }
+  .bar-inner .btn.primary{ flex:1; padding:14px; font-size:13px; }
+  .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--amber); margin-right:6px; }
+  .toast{ position:fixed; left:50%; bottom:92px; transform:translateX(-50%); background:var(--text); color:var(--bg); padding:10px 18px; border-radius:10px; font-size:13px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:10; max-width:90vw; text-align:center; }
+  .toast.show{ opacity:1; }
+  .hidden{ display:none !important; }
+  .signin{ text-align:left; padding:6px 2px; }
+  .signin h2{ font-size:18px; margin-bottom:6px; }
+  .signin p{ color:var(--dim); font-size:14px; line-height:1.5; }
+  .signin .btn.primary{ width:100%; padding:14px; font-size:13px; margin-top:12px; }
+  .err{ color:var(--red); font-size:13px; margin-top:10px; min-height:1em; }
+  .linkbtn{ background:none; border:none; color:var(--cyan); font:inherit; cursor:pointer; text-decoration:underline; padding:0; }
+  .live{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:6px; }
+  .bar-status{ font-size:12px; color:var(--dim); font-family:'JetBrains Mono', monospace; }
+  @media (max-width:400px){ .stats{ grid-template-columns:1fr 1fr; } .stats .stat:last-child{ grid-column:1 / -1; } }
+  .golive{ background:rgba(43,181,169,0.12); border:1px solid rgba(43,181,169,0.45); border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.5; margin-bottom:14px; }
+  .reqs{ margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+  .req{ border-top:1px dashed var(--line); padding-top:8px; }
+  .req-top{ display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:13px; }
+  .req-sub{ font-size:11.5px; color:var(--dim); margin-top:3px; line-height:1.5; }
+  .rq{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:0.5px; text-transform:uppercase; padding:2px 8px; border-radius:12px; border:1px solid var(--line); color:var(--dim); white-space:nowrap; }
+  .rq-open{ color:var(--amber); border-color:var(--amber); } .rq-done{ color:var(--green); border-color:var(--green); } .rq-no{ color:var(--red); border-color:var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;"><div class="eyebrow">Partner Portal</div><button class="btn small hidden" id="installBtn">⬇ Install app</button></div>
+  <h1 id="title">Thread Tribe</h1>
+  <div class="sub" id="subtitle">Your print jobs, filament and payouts.</div>
+
+  <div id="emptyState" class="card">
+    <div class="signin" id="signin"></div>
+    <div class="hint" style="text-align:center; margin-top:18px; font-family:inherit; font-size:12px;">Got a job pack file on WhatsApp instead? <button class="linkbtn" id="loadBtn1">Open the file</button></div>
+  </div>
+
+  <div id="main" class="hidden">
+    <div class="stats" id="stats"></div>
+    <div class="tabs">
+      <button class="tab active" data-tab="jobs">Jobs</button>
+      <button class="tab" data-tab="filament">Filament</button>
+      <button class="tab" data-tab="payout">Payout</button>
+    </div>
+    <div id="view"></div>
+    <div class="card" style="font-size:12px; color:var(--dim); line-height:1.5;">
+      <span id="packInfo"></span><br>
+      <button class="btn small ghost" id="loadBtn2" style="margin-top:8px;">Open a newer job pack</button>
+      <button class="btn small ghost hidden" id="signOutBtn" style="margin-top:8px;">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<div class="bar hidden" id="bar">
+  <div class="bar-inner">
+    <button class="btn" id="copyBtn">Copy text</button>
+    <button class="btn primary" id="sendBtn">Send update to Thread Tribe</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept="application/json,.json,text/plain" class="hidden">
+
+<script>
+(function(){
+  var KEY = 'tt-partner-portal-v1';
+  var FLOW = ['assigned', 'accepted', 'printing', 'shipped'];
+  var LABEL = { assigned:'New', accepted:'Accepted', printing:'Printing', shipped:'Shipped', delivered:'Delivered', cancelled:'Cancelled' };
+  var COLOR = { assigned:'#8a95a3', accepted:'#b48cf0', printing:'#f0a83c', shipped:'#4fd1c5', delivered:'#7ed08a', cancelled:'#e8615a' };
+  var SWATCH = { black:'#2b2f36', white:'#f2f4f7', red:'#e8615a', blue:'#4f7fd6', green:'#7ed08a', yellow:'#f0dd52', orange:'#f0a83c', purple:'#b48cf0',
+    grey:'#8a95a3', gray:'#8a95a3', silver:'#c3cad4', gold:'#d8b34a', pink:'#f08cc4', brown:'#8a5a3c', beige:'#d9c7a3', cyan:'#22d3ee', skin:'#e8b89b', ivory:'#f3ead7' };
+  var EDIT_FIELDS = ['status', 'unitsShipped', 'failedPrints', 'gramsUsed', 'trackingNo', 'shippedDate', 'partnerNotes'];
+  var store = { pack: null, edits: {}, lastSentAt: '', mode: 'file', email: '' };
+  var CLOUD_URL = (window.TT_CONFIG && window.TT_CONFIG.supabaseUrl) || 'https://aeshadnzutizlpayhtnf.supabase.co';
+  var CLOUD_KEY = (window.TT_CONFIG && window.TT_CONFIG.supabaseKey) || 'sb_publishable_tunpMMqpGPgRQreweefjTA_nBO7fXId';
+  var sb = null, session = null, channel = null, reports = {};
+  var cloud = { status: '', otpEmail: '', err: '', unlinked: false, saving: false, again: false, timer: null, refreshTimer: null, lastRefresh: 0, choosing: null };
+  var view = 'jobs', pendingView = false;
+  var openJob = null;
+
+  function load(){ try{ var s = JSON.parse(localStorage.getItem(KEY)); if(s && (s.pack || s.mode === 'cloud')) store = s; if(!store.edits) store.edits = {}; if(!store.mode) store.mode = 'file'; }catch(e){} }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  function esc(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML.replace(/"/g, '&quot;'); }
+  function num(v){ v = parseFloat(v); return isFinite(v) && v > 0 ? v : 0; }
+  function money(v){ return '₹' + Math.round(v || 0).toLocaleString('en-IN'); }
+  function grams(g){ g = g || 0; return Math.abs(g) >= 1000 ? (Math.round(g / 100) / 10) + ' kg' : Math.round(g) + ' g'; }
+  function today(){ var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function fmtDate(iso){ if(!iso) return ''; var d = new Date(iso + 'T00:00:00'); return isNaN(d) ? iso : d.toLocaleDateString('en-IN', { day:'numeric', month:'short' }); }
+  function swatch(c){ return SWATCH[(c || '').trim().toLowerCase()] || '#9aa6b2'; }
+  function toast(msg){ var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(function(){ t.classList.remove('show'); }, 2600); }
+  function isOpen(j){ return FLOW.indexOf(j.status) !== -1; }
+
+  // A job as the partner currently sees it: pack data + their unsent edits on top.
+  function job(j){
+    var e = store.edits[j.id];
+    if(!e) return j;
+    var out = {}; for(var k in j) out[k] = j[k];
+    EDIT_FIELDS.forEach(function(f){ if(e[f] !== undefined) out[f] = e[f]; });
+    out._dirty = true;
+    return out;
+  }
+  function setEdit(id, field, value){
+    if(!store.edits[id]) store.edits[id] = {};
+    store.edits[id][field] = value;
+    store.edits[id].at = new Date().toISOString();
+    save();
+  }
+  function dirtyCount(){
+    if(!store.pack) return 0;
+    return store.pack.jobs.filter(function(j){ return isOpen(j) && store.edits[j.id]; }).length;
+  }
+
+  function acceptPack(text){
+    var p;
+    try{ p = JSON.parse(text); }catch(e){ alert('That file couldn’t be read. Make sure it’s the job pack Thread Tribe sent you.'); return; }
+    if(!p || p.type !== 'tt-pon-pack' || !Array.isArray(p.jobs) || !p.partner){
+      alert(p && p.type === 'tt-pon-update' ? 'That’s an update file you created. Open the job pack Thread Tribe sent you instead.' : 'That isn’t a Thread Tribe job pack.');
+      return;
+    }
+    if(store.pack && store.pack.partner && store.pack.partner.id !== p.partner.id){
+      if(!confirm('This job pack is for ' + p.partner.name + ', not ' + store.pack.partner.name + '. Replace it?')) return;
+      store.edits = {};
+    }
+    if(store.pack && p.generatedAt && store.pack.generatedAt && p.generatedAt < store.pack.generatedAt){
+      if(!confirm('This job pack is older than the one already loaded. Load it anyway?')) return;
+    }
+    // Keep unsent edits only where they're still ahead of what Thread Tribe has.
+    var kept = {};
+    p.jobs.forEach(function(j){
+      var e = store.edits[j.id];
+      if(!e || !isOpen(j)) return;
+      var eIdx = FLOW.indexOf(e.status || j.status), pIdx = FLOW.indexOf(j.status);
+      if(eIdx >= pIdx){ if(e.status && eIdx === pIdx) delete e.status; kept[j.id] = e; }
+    });
+    store.pack = p; store.edits = kept;
+    if(store.mode === 'cloud'){ store.mode = 'file'; }
+    save(); render();
+    toast('Job pack loaded — ' + p.jobs.filter(isOpen).length + ' open job' + (p.jobs.filter(isOpen).length === 1 ? '' : 's'));
+  }
+
+  function render(){
+    var p = store.pack;
+    var live = store.mode === 'cloud';
+    var needSignin = !!sb && !session && ((store.mode !== 'cloud' && !store.fileOk) || cloud.forceSignin);
+    var showMain = !!p && !needSignin;
+    document.getElementById('emptyState').classList.toggle('hidden', showMain);
+    document.getElementById('main').classList.toggle('hidden', !showMain);
+    document.getElementById('bar').classList.toggle('hidden', !showMain);
+    document.getElementById('loadBtn2').classList.toggle('hidden', live);
+    document.getElementById('signOutBtn').classList.toggle('hidden', !session);
+    if(!showMain){ renderSignin(); return; }
+    document.getElementById('title').textContent = (p.partner.name || 'Partner');
+    document.getElementById('subtitle').textContent = 'Printing for ' + ((p.business && p.business.name) || 'Thread Tribe') + ' · ₹' + (p.partner.ratePerGram || 0) + ' per gram';
+    var jobs = p.jobs.map(job);
+    var open = jobs.filter(isOpen);
+    var dueSoon = open.filter(function(j){ return j.status !== 'shipped' && j.dueDate && j.dueDate <= addDays(2); }).length;
+    var pay = p.payout || {};
+    document.getElementById('stats').innerHTML =
+      '<div class="stat"><div class="k">Open jobs</div><div class="v">' + open.length + '</div></div>' +
+      '<div class="stat"><div class="k">Due ≤ 2 days</div><div class="v" style="color:' + (dueSoon ? 'var(--amber)' : 'var(--text)') + ';">' + dueSoon + '</div></div>' +
+      '<div class="stat"><div class="k">To be paid</div><div class="v" style="color:var(--green);">' + money(pay.outstanding) + '</div></div>';
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-tab') === view); });
+    var el = document.getElementById('view');
+    // Never redraw under someone's thumb: if they're typing in a field, redraw once they leave it.
+    var ae = document.activeElement;
+    if(ae && el.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) pendingView = true;
+    else {
+      pendingView = false;
+      if(view === 'filament') el.innerHTML = filamentHtml() + filamentExtrasHtml();
+      else if(view === 'payout') el.innerHTML = payoutHtml(jobs) + payoutExtrasHtml();
+      else el.innerHTML = jobsHtml(jobs) + jobsExtrasHtml();
+    }
+    renderBar();
+    var stamp = function(t){ return new Date(t).toLocaleString('en-IN', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' }); };
+    if(live){
+      document.getElementById('packInfo').innerHTML = (isLive() ? '<span class="live"></span><b>Live</b> — changes go both ways instantly' : 'Connected — checking for changes every 15 seconds') + ' · signed in as ' + esc(store.email || '') +
+        (cloud.lastRefresh ? '<br>Updated ' + stamp(cloud.lastRefresh) : (cloud.status === 'offline' ? '<br>Offline — showing your last copy' : ''));
+    } else {
+      document.getElementById('packInfo').innerHTML = esc('Job pack from ' + stamp(p.generatedAt) + (store.lastSentAt ? ' · last update sent ' + stamp(store.lastSentAt) : '')) +
+        (sb ? '<br><button class="btn small primary" id="goLiveBtn" style="margin-top:8px;">Sign in for live updates</button>' : '');
+    }
+  }
+  function renderBar(){
+    var d = dirtyCount(), btn = document.getElementById('sendBtn');
+    if(store.mode !== 'cloud'){
+      btn.innerHTML = d ? '<span class="dot"></span>Send update (' + d + ' changed)' : 'Send update to Thread Tribe';
+      return;
+    }
+    if(!session && sb) btn.innerHTML = 'Sign in to save your changes';
+    else if(cloud.saving) btn.innerHTML = 'Saving…';
+    else if(d && cloud.status === 'offline') btn.innerHTML = '<span class="dot"></span>Offline — ' + d + ' change' + (d === 1 ? '' : 's') + ' waiting';
+    else if(d) btn.innerHTML = '<span class="dot"></span>Save changes (' + d + ')';
+    else if(cloud.status === 'error') btn.innerHTML = '⚠ Couldn’t save — tap to retry';
+    else btn.innerHTML = isLive() ? '✓ Saved · Thread Tribe sees it live' : '✓ Saved';
+  }
+  function addDays(n){ var d = new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  function jobsHtml(jobs){
+    var open = jobs.filter(isOpen).sort(function(a, b){ return (a.dueDate || '9999').localeCompare(b.dueDate || '9999'); });
+    var done = jobs.filter(function(j){ return !isOpen(j); });
+    if(!open.length && !done.length) return '<div class="card"><div class="empty">No jobs in this pack.</div></div>';
+    var html = open.length ? open.map(jobCard).join('') : '<div class="card"><div class="empty">No open jobs right now. 🎉</div></div>';
+    if(done.length){
+      html += '<div class="section" style="margin-top:22px;">Recently completed</div>' + done.map(function(j){
+        return '<div class="job"><div class="job-head"><span class="swatch" style="background:' + swatch(j.color) + ';"></span><div style="flex:1;">' +
+          '<div class="job-title">' + esc(j.productName) + '</div><div class="job-meta">' + esc(j.jobCode) + ' · ' + (j.unitsShipped || 0) + ' shipped' +
+          (j.clientRejects ? ' · ' + j.clientRejects + ' rejected' : '') + ' · ' + money(j.payout) + '</div>' +
+          (j.qcNotes ? '<div class="qc ' + (j.qcResult === 'issues' ? 'issues' : 'pass') + '">' + esc(j.qcNotes) + '</div>' : '') +
+          '</div>' + pill(j.status) + '</div></div>';
+      }).join('');
+    }
+    return html;
+  }
+  function pill(s){ var c = COLOR[s] || '#8a95a3'; return '<span class="pill" style="color:' + c + '; border-color:' + c + '88; background:' + c + '1c;">' + (LABEL[s] || s) + '</span>'; }
+
+  function jobCard(j){
+    var overdue = j.status !== 'shipped' && j.dueDate && j.dueDate < today();
+    var expanded = openJob === j.id;
+    var expected = (j.unitsShipped || j.qty || 0) * (j.gramsPerUnit || 0);
+    var html = '<div class="job' + (overdue ? ' overdue' : '') + '" data-job="' + esc(j.id) + '">' +
+      '<div class="job-head" data-act="toggle"><span class="swatch" style="background:' + swatch(j.color) + ';"></span><div style="flex:1; min-width:0;">' +
+      '<div class="job-title">' + esc(j.productName) + (j.color ? ' — ' + esc(j.color) : '') + '</div>' +
+      '<div class="job-meta">' + esc(j.jobCode) + ' · ' + (j.qty || 0) + ' pcs · ' + (j.gramsPerUnit || 0) + 'g each' + (j.material ? ' · ' + esc(j.material) : '') + '</div>' +
+      '<div class="job-meta" style="color:' + (overdue ? 'var(--red)' : 'var(--dim)') + ';">' + (j.dueDate ? (overdue ? '⚠ Was due ' : 'Ship by ') + fmtDate(j.dueDate) : 'No due date') +
+      ' · earns ~' + money(j.payout) + (j._dirty ? ' · <span style="color:var(--amber);">' + (store.mode === 'cloud' ? 'saving…' : 'unsent changes') + '</span>' : '') + '</div>' +
+      '</div>' + pill(j.status) + '</div>';
+    if(!expanded) return html + '</div>';
+    var idx = FLOW.indexOf(j.status);
+    html += '<div class="job-body">' +
+      '<div class="steps">' + ['accepted', 'printing', 'shipped'].map(function(s){
+        return '<button class="step' + (FLOW.indexOf(s) <= idx ? ' done' : '') + '" data-act="status" data-val="' + s + '">' + (FLOW.indexOf(s) <= idx ? '✓ ' : '') + LABEL[s] + '</button>';
+      }).join('') + '</div>';
+    html += declineHtml(j);
+    if(j.qcNotes) html += '<div class="qc ' + (j.qcResult === 'pass' ? 'pass' : 'issues') + '"><b>Note from Thread Tribe:</b> ' + esc(j.qcNotes) + '</div>';
+    var st = j.shipTo || {};
+    if(st.name || st.address || st.phone){
+      html += '<div class="section">Ship to</div><div class="shipto"><b>' + esc(st.name) + '</b><br>' + esc(st.address).replace(/\n/g, '<br>') +
+        (st.phone ? '<br><a href="tel:' + esc(st.phone.replace(/[^0-9+]/g, '')) + '">' + esc(st.phone) + '</a>' : '') +
+        '<div style="margin-top:8px;"><button class="btn small" data-act="copy-address">Copy address</button></div></div>';
+    }
+    html += '<div class="section">Your report</div><div class="grid2">' +
+      field('Pieces shipped', 'unitsShipped', 'number', j.unitsShipped || '', 'of ' + (j.qty || 0) + ' ordered') +
+      field('Failed prints', 'failedPrints', 'number', j.failedPrints || '', 'pieces you re-printed') +
+      field('Filament used (g)', 'gramsUsed', 'number', j.gramsUsed || '', 'spec ≈ ' + Math.round(expected) + ' g') +
+      field('Shipped on', 'shippedDate', 'date', j.shippedDate || '', '') +
+      '</div><div style="margin-top:10px;">' + field('Tracking / AWB number', 'trackingNo', 'text', j.trackingNo || '', '') + '</div>' +
+      '<div style="margin-top:10px;"><label>Notes for Thread Tribe</label><textarea data-f="partnerNotes" placeholder="Anything we should know">' + esc(j.partnerNotes || '') + '</textarea></div>' +
+      (j._dirty ? '<div style="margin-top:12px;"><button class="btn small ghost" data-act="discard">Undo my changes on this job</button></div>' : '') +
+      '</div>';
+    return html + '</div>';
+  }
+  function field(label, f, type, val, hint){
+    return '<div><label>' + label + '</label><input type="' + type + '" data-f="' + f + '" value="' + esc(val) + '"' + (type === 'number' ? ' inputmode="decimal" min="0"' : '') + '>' + (hint ? '<div class="hint">' + hint + '</div>' : '') + '</div>';
+  }
+
+  function filamentHtml(){
+    var rows = (store.pack.filament || []).filter(function(r){ return r.issued || r.used || r.returned; });
+    if(!rows.length) return '<div class="card"><div class="empty">No filament on record yet.</div></div>';
+    return '<div class="card">' + rows.map(function(r){
+      return '<div class="row"><span><span class="swatch" style="display:inline-block; vertical-align:middle; margin:0 8px 0 0; background:' + swatch(r.color) + ';"></span>' + esc(r.color) + '</span>' +
+        '<span class="v"><b style="color:' + (r.held < 0 ? 'var(--red)' : 'var(--text)') + ';">' + grams(r.held) + '</b><br><span style="font-size:11px; color:var(--dim);">got ' + grams(r.issued) + ' · used ' + grams(r.used) + (r.returned ? ' · returned ' + grams(r.returned) : '') + '</span></span></div>';
+    }).join('') + '<div class="hint" style="margin-top:10px;">“Used” is what you reported on each job (or spec weight for jobs without a report). Running low? Message Thread Tribe.</div></div>';
+  }
+
+  function payoutHtml(jobs){
+    var p = store.pack.payout || {};
+    var done = jobs.filter(function(j){ return j.status === 'delivered'; });
+    return '<div class="card">' +
+      '<div class="row"><span>Earned (delivered jobs)</span><span class="v">' + money(p.earned) + '</span></div>' +
+      '<div class="row"><span>Paid to you</span><span class="v">' + money(p.paid) + '</span></div>' +
+      '<div class="row"><span><b>To be paid</b></span><span class="v" style="color:var(--green);"><b>' + money(p.outstanding) + '</b></span></div>' +
+      '<div class="row"><span>On jobs in progress</span><span class="v" style="color:var(--dim);">~' + money(p.onOpenJobs) + '</span></div></div>' +
+      '<div class="card" style="font-size:13px; color:var(--dim); line-height:1.5;">You’re paid <b style="color:var(--text);">₹' + (store.pack.partner.ratePerGram || 0) + ' per gram</b> of accepted pieces: pieces shipped, minus any the client rejects, × the spec weight. Payment is earned once Thread Tribe confirms delivery.</div>' +
+      (done.length ? '<div class="section">Delivered jobs</div><div class="card">' + done.map(function(j){
+        return '<div class="row"><span>' + esc(j.jobCode) + ' ' + esc(j.productName) + '<br><span style="font-size:11px; color:var(--dim);">' + Math.max(0, (j.unitsShipped || 0) - (j.clientRejects || 0)) + ' accepted' + (j.clientRejects ? ', ' + j.clientRejects + ' rejected' : '') + '</span></span><span class="v">' + money(j.payout) + '</span></div>';
+      }).join('') + '</div>' : '');
+  }
+
+  // ---------- update out ----------
+  function buildUpdate(){
+    var p = store.pack;
+    return { type: 'tt-pon-update', version: 1, partnerId: p.partner.id, partnerName: p.partner.name, exportedAt: new Date().toISOString(), packGeneratedAt: p.generatedAt,
+      jobs: p.jobs.filter(isOpen).map(job).map(function(j){
+        return { id: j.id, jobCode: j.jobCode, status: j.status, unitsShipped: j.unitsShipped || 0, failedPrints: j.failedPrints || 0, gramsUsed: j.gramsUsed || 0,
+          trackingNo: j.trackingNo || '', shippedDate: j.shippedDate || '', partnerNotes: j.partnerNotes || '' };
+      }) };
+  }
+  function summaryText(){
+    var u = buildUpdate();
+    var lines = ['Update from ' + u.partnerName + ' — ' + new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short' })];
+    u.jobs.forEach(function(j){
+      var pj = store.pack.jobs.find(function(x){ return x.id === j.id; }) || {};
+      lines.push('• ' + j.jobCode + ' ' + (pj.productName || '') + ': ' + (LABEL[j.status] || j.status) +
+        (j.unitsShipped ? ', ' + j.unitsShipped + '/' + (pj.qty || 0) + ' shipped' : '') + (j.trackingNo ? ', AWB ' + j.trackingNo : '') +
+        (j.failedPrints ? ', ' + j.failedPrints + ' failed' : '') + (j.gramsUsed ? ', ' + j.gramsUsed + 'g used' : '') + (j.partnerNotes ? ' — ' + j.partnerNotes : ''));
+    });
+    return lines.join('\n');
+  }
+  function markSent(){ store.lastSentAt = new Date().toISOString(); save(); render(); }
+
+  function sendUpdate(){
+    var u = buildUpdate();
+    if(!u.jobs.length){ toast('No open jobs to report on'); return; }
+    var name = 'tt-update-' + (u.partnerName || 'partner').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + today() + '.json';
+    var json = JSON.stringify(u, null, 2);
+    var file = null;
+    try{ file = new File([json], name, { type: 'application/json' }); }catch(e){}
+    if(file && navigator.canShare && navigator.canShare({ files: [file] })){
+      navigator.share({ files: [file], title: 'Job update', text: summaryText() }).then(markSent).catch(function(err){ if(err && err.name !== 'AbortError') download(json, name); });
+      return;
+    }
+    download(json, name);
+  }
+  function download(json, name){
+    var url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    var a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    markSent();
+    toast('Update file saved — send it to Thread Tribe on WhatsApp');
+  }
+  function copy(text, msg){
+    (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject()).then(function(){ toast(msg); })
+      .catch(function(){ var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try{ document.execCommand('copy'); toast(msg); }catch(e){ alert(text); } document.body.removeChild(t); });
+  }
+
+  // ---------- events ----------
+  function pickFile(){ document.getElementById('fileInput').click(); }
+  document.getElementById('loadBtn1').addEventListener('click', pickFile);
+  document.getElementById('loadBtn2').addEventListener('click', pickFile);
+  document.getElementById('fileInput').addEventListener('change', function(e){
+    var f = e.target.files[0]; if(!f) return;
+    var r = new FileReader(); r.onload = function(ev){ acceptPack(ev.target.result); }; r.readAsText(f);
+    e.target.value = '';
+  });
+  document.getElementById('sendBtn').addEventListener('click', function(){
+    if(store.mode !== 'cloud') sendUpdate();
+    else if(!session && sb){ cloud.forceSignin = true; render(); }
+    else cloudSave();
+  });
+  document.getElementById('packInfo').addEventListener('click', function(e){
+    if(e.target.id === 'goLiveBtn'){ store.fileOk = false; save(); render(); window.scrollTo(0, 0); }
+  });
+  document.getElementById('signOutBtn').addEventListener('click', function(){ if(confirm('Sign out of the Partner app on this phone?')) signOut(); });
+  document.getElementById('copyBtn').addEventListener('click', function(){ copy(summaryText(), 'Summary copied — paste it in WhatsApp'); });
+  document.querySelectorAll('.tab').forEach(function(t){ t.addEventListener('click', function(){ view = t.getAttribute('data-tab'); render(); }); });
+
+  var viewEl = document.getElementById('view');
+  viewEl.addEventListener('click', function(e){
+    var act = e.target.closest('[data-act]'); if(!act) return;
+    var card = act.closest('[data-job]'); if(!card) return;
+    var id = card.getAttribute('data-job');
+    var base = store.pack.jobs.find(function(x){ return x.id === id; }); if(!base) return;
+    var a = act.getAttribute('data-act');
+    if(a === 'toggle'){ openJob = openJob === id ? null : id; render(); return; }
+    if(a === 'status'){
+      var target = act.getAttribute('data-val');
+      var cur = job(base).status;
+      // Tapping the current step steps back one (fixes a mis-tap), never below what Thread Tribe already has.
+      var next = target === cur ? FLOW[Math.max(FLOW.indexOf(base.status), FLOW.indexOf(cur) - 1)] : target;
+      if(FLOW.indexOf(next) < FLOW.indexOf(base.status)) next = base.status;
+      setEdit(id, 'status', next);
+      if(next === 'shipped'){
+        var j = job(base);
+        if(!j.unitsShipped) setEdit(id, 'unitsShipped', base.qty || 0);
+        if(!j.shippedDate) setEdit(id, 'shippedDate', today());
+      }
+      scheduleCloudSave();
+      render(); return;
+    }
+    if(a === 'copy-address'){ var st = base.shipTo || {}; copy([st.name, st.address, st.phone].filter(Boolean).join('\n'), 'Address copied'); return; }
+    if(a === 'discard'){ delete store.edits[id]; save(); render(); }
+  });
+  function onField(e){
+    var f = e.target.getAttribute('data-f'); if(!f) return;
+    var card = e.target.closest('[data-job]'); if(!card) return;
+    var id = card.getAttribute('data-job');
+    var v = e.target.type === 'number' ? num(e.target.value) : String(e.target.value).slice(0, 2000);
+    setEdit(id, f, v);
+    scheduleCloudSave();
+    renderBar();
+  }
+  viewEl.addEventListener('input', onField);
+  viewEl.addEventListener('change', function(e){ onField(e); setTimeout(render, 0); });
+  viewEl.addEventListener('focusout', function(){
+    setTimeout(function(){
+      var ae = document.activeElement;
+      if(pendingView && !(ae && viewEl.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) render();
+    }, 0);
+  });
+
+  // ---------- install + offline ----------
+  var deferred = null, installBtn = document.getElementById('installBtn');
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred = e; installBtn.classList.remove('hidden'); });
+  installBtn.addEventListener('click', function(){ if(!deferred) return; deferred.prompt(); deferred.userChoice.finally(function(){ deferred = null; installBtn.classList.add('hidden'); }); });
+  window.addEventListener('appinstalled', function(){ installBtn.classList.add('hidden'); toast('Installed \u2014 open TT Partner from your home screen'); });
+  if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
+    window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+  }
+  if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(function(){}); }
+
+
+  // ---------- live mode (sign in with an emailed code) ----------
+  function okEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+  function friendly(err){
+    var m = String((err && err.message) || err || '');
+    if(/rate limit|security purposes|seconds/i.test(m)) return 'Please wait a minute before asking for another code.';
+    if(/expired|invalid|otp/i.test(m)) return 'That code didn’t work — check it, or ask for a new one.';
+    if(/fetch|network|Load failed/i.test(m)) return 'No internet connection.';
+    return m || 'Something went wrong.';
+  }
+  function renderSignin(){
+    var el = document.getElementById('signin');
+    if(!sb){
+      el.innerHTML = '<h2>Your job pack</h2><p>Thread Tribe sends you a <span class="mono">tt-jobs-….json</span> file on WhatsApp. Download it, then open it here.</p><button class="btn primary" data-si="file">Open job pack</button>';
+      return;
+    }
+    if(session && cloud.choosing){
+      el.innerHTML = '<h2>Which workshop?</h2><p>This email is linked to more than one partner.</p>' + cloud.choosing.map(function(r){
+        return '<button class="btn primary" data-si="pick" data-pid="' + esc(r.partner_id) + '">' + esc((r.pack && r.pack.partner && r.pack.partner.name) || r.partner_id) + '</button>';
+      }).join('');
+      return;
+    }
+    if(session && cloud.unlinked){
+      el.innerHTML = '<h2>Almost there</h2><p>You’re signed in as <b style="color:var(--text);">' + esc(store.email) + '</b>, but this email isn’t linked to a partner yet. Ask Thread Tribe to add it as the <b style="color:var(--text);">App login email</b> on your partner card — this page updates as soon as they do.</p>' +
+        '<button class="btn primary" data-si="refresh">Check again</button><div style="text-align:center; margin-top:12px;"><button class="linkbtn" data-si="signout">Use a different email</button></div>';
+      return;
+    }
+    if(session){ el.innerHTML = '<h2>Loading your jobs…</h2><p>' + (cloud.status === 'offline' ? 'No internet connection — this will load when you’re back online.' : '') + '</p>'; return; }
+    var fromFile = store.pack && store.mode !== 'cloud';
+    var keepFile = (fromFile || (store.pack && cloud.forceSignin)) ? '<div style="text-align:center; margin-top:12px;"><button class="linkbtn" data-si="usefile">Not now — keep using ' + (fromFile ? 'the job file' : 'my last copy') + '</button></div>' : '';
+    if(!cloud.otpEmail){
+      el.innerHTML = (fromFile ? '<div class="golive">Your jobs are now live with Thread Tribe. Sign in once and your updates reach them instantly — no more sending files.</div>' : '') +
+        '<h2>Sign in</h2><p>Enter the email you gave Thread Tribe. We’ll email you a code — no password needed.</p>' +
+        '<div style="margin-top:14px;"><label>Email</label><input type="email" id="siEmail" autocomplete="email" inputmode="email" placeholder="you@example.com" value="' + esc(store.email || '') + '"></div>' +
+        '<button class="btn primary" data-si="send">Email me a code</button><div class="err" id="siErr">' + esc(cloud.err) + '</div>' + keepFile;
+    } else {
+      el.innerHTML = '<h2>Check your email</h2><p>We sent a code to <b style="color:var(--text);">' + esc(cloud.otpEmail) + '</b>. It can take a minute — check spam too.</p>' +
+        '<div style="margin-top:14px;"><label>Code</label><input type="text" id="siCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></div>' +
+        '<button class="btn primary" data-si="verify">Sign in</button><div class="err" id="siErr">' + esc(cloud.err) + '</div>' +
+        '<div style="text-align:center; margin-top:12px;"><button class="linkbtn" data-si="restart">Use a different email</button></div>' + keepFile;
+    }
+  }
+  document.getElementById('signin').addEventListener('click', async function(e){
+    var b = e.target.closest('[data-si]'); if(!b) return;
+    var a = b.getAttribute('data-si');
+    if(a === 'file'){ pickFile(); return; }
+    if(a === 'usefile'){ store.fileOk = true; cloud.forceSignin = false; save(); render(); return; }
+    if(a === 'restart'){ cloud.otpEmail = ''; cloud.err = ''; renderSignin(); return; }
+    if(a === 'signout'){ signOut(); return; }
+    if(a === 'refresh'){ refresh(); return; }
+    if(a === 'pick'){ store.partnerId = b.getAttribute('data-pid'); cloud.choosing = null; save(); refresh(); return; }
+    if(a === 'send'){
+      var email = String(document.getElementById('siEmail').value || '').trim().toLowerCase();
+      if(!okEmail(email)){ cloud.err = 'Enter a valid email address.'; renderSignin(); return; }
+      b.disabled = true; b.textContent = 'Sending…';
+      var r = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true } });
+      cloud.err = r.error ? friendly(r.error) : '';
+      if(!r.error) cloud.otpEmail = email;
+      renderSignin();
+      return;
+    }
+    if(a === 'verify'){
+      var code = String(document.getElementById('siCode').value || '').replace(/\s+/g, '');
+      if(!/^\d{6,10}$/.test(code)){ cloud.err = 'Enter the code from the email.'; renderSignin(); return; }
+      b.disabled = true; b.textContent = 'Checking…';
+      var v = await sb.auth.verifyOtp({ email: cloud.otpEmail, token: code, type: 'email' });
+      if(v.error){ cloud.err = friendly(v.error); renderSignin(); return; }
+      cloud.otpEmail = ''; cloud.err = ''; cloud.forceSignin = false; store.fileOk = false; save();
+      if(v.data && v.data.session) onSignedIn(v.data.session);
+    }
+  });
+  document.getElementById('signin').addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    var b = document.querySelector('#signin [data-si="send"], #signin [data-si="verify"]'); if(b) b.click();
+  });
+
+  function onSignedIn(s){
+    var email = String((s.user && s.user.email) || '').toLowerCase();
+    var sameUser = session && session.user && session.user.id === s.user.id;
+    session = s;
+    if(store.email !== email){
+      // A different person on this phone: never mix their jobs or edits.
+      if(store.mode === 'cloud') { store.pack = null; store.edits = {}; store.partnerId = ''; }
+      store.requests = []; store.profile = null; inbox.requests = []; inbox.profile = null;
+      store.email = email;
+    }
+    save();
+    if(!sameUser){ refresh(); subscribe(); }
+    render();
+  }
+  var live = null;
+  function subscribe(){
+    if(channel || !sb) return;
+    try{
+      channel = sb.channel('tt-partner-' + Math.random().toString(36).slice(2, 8))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pon_packs' }, function(){ refreshSoon(250); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pon_reports' }, function(){ refreshSoon(400); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pon_requests' }, function(){ refreshSoon(300); })
+        .subscribe(function(st){ cloud.rtDb = st; render(); });
+    }catch(e){}
+    // Instant "Thread Tribe changed something" pings. No data in them: the app re-reads its own jobs.
+    try{
+      live = sb.channel('tt-live', { config: { broadcast: { self: false } } })
+        .on('broadcast', { event: 'ping' }, function(m){ if(m && m.payload && m.payload.kind === 'packs') refreshSoon(150); })
+        .subscribe(function(st){ cloud.rtLive = st; render(); });
+    }catch(e){}
+  }
+  function isLive(){ return cloud.rtLive === 'SUBSCRIBED' || cloud.rtDb === 'SUBSCRIBED'; }
+  function ping(kind){ try{ if(live && cloud.rtLive === 'SUBSCRIBED') live.send({ type: 'broadcast', event: 'ping', payload: { kind: kind } }); }catch(e){} }
+  // Tell the partner what Thread Tribe just changed.
+  function notifyChanges(prev, next){
+    var before = {}, msgs = [];
+    (prev.jobs || []).forEach(function(j){ before[j.id] = j; });
+    (next.jobs || []).forEach(function(j){
+      var o = before[j.id], name = (j.jobCode ? j.jobCode + ' ' : '') + (j.productName || 'job');
+      if(!o){ if(isOpen(j)) msgs.push('New job: ' + name); return; }
+      if(o.status !== j.status && (j.status === 'delivered' || j.status === 'cancelled')) msgs.push(name + (j.status === 'delivered' ? ' confirmed delivered' : ' cancelled'));
+      else if(o.qty !== j.qty || o.dueDate !== j.dueDate || o.shipAddress !== j.shipAddress || JSON.stringify(o.shipTo || {}) !== JSON.stringify(j.shipTo || {})) msgs.push(name + ' was updated');
+    });
+    var pb = (prev.payout || {}).paid || 0, pa = (next.payout || {}).paid || 0;
+    if(pa > pb + 0.5) msgs.push('Payment recorded: ' + money(pa - pb));
+    if(msgs.length){
+      toast(msgs.length > 2 ? msgs.slice(0, 2).join(' · ') + ' +' + (msgs.length - 2) + ' more' : msgs.join(' · '));
+      try{ if(navigator.vibrate) navigator.vibrate(80); }catch(e){}
+    }
+  }
+  function refreshSoon(ms){ clearTimeout(cloud.refreshTimer); cloud.refreshTimer = setTimeout(refresh, ms || 0); }
+  async function refresh(){
+    if(!sb || !session) return;
+    var r = await sb.from('pon_packs').select('partner_id,pack,updated_at').order('partner_id');
+    if(r.error){ cloud.status = /fetch|network|Load failed/i.test(r.error.message || '') || !navigator.onLine ? 'offline' : 'error'; render(); return; }
+    var rows = r.data || [];
+    cloud.unlinked = !rows.length;
+    if(!rows.length){
+      if(store.mode === 'cloud'){ store.pack = null; store.edits = {}; save(); }
+      render(); return;
+    }
+    var row = rows.find(function(x){ return x.partner_id === store.partnerId; });
+    if(!row && rows.length > 1){ cloud.choosing = rows; if(store.mode === 'cloud'){ store.pack = null; } render(); return; }
+    row = row || rows[0];
+    var rr = await sb.from('pon_reports').select('job_id,report,updated_at').eq('partner_id', row.partner_id);
+    if(rr.error){ cloud.status = 'offline'; render(); return; }
+    reports = {};
+    (rr.data || []).forEach(function(x){ reports[x.job_id] = x; });
+    cloud.status = 'ok'; cloud.lastRefresh = Date.now();
+    takeCloudPack(row.pack, row.partner_id);
+    try{ await loadInbox(row.partner_id); }catch(e){}
+    render();
+    if(dirtyCount()) scheduleCloudSave();
+  }
+  // Pack from Thread Tribe + anything this partner already sent that TT hasn't processed yet.
+  function takeCloudPack(pack, pid){
+    var prevPack = store.mode === 'cloud' && store.pack && store.partnerId === pid ? store.pack : null;
+    var p = JSON.parse(JSON.stringify(pack || {}));
+    if(!Array.isArray(p.jobs)) p.jobs = [];
+    p.jobs.forEach(function(j){
+      var rep = reports[j.id];
+      if(!rep || !isOpen(j)) return;
+      if(j.reportAt && Date.parse(rep.updated_at) <= Date.parse(j.reportAt)) return;
+      var R = rep.report || {};
+      if(FLOW.indexOf(R.status) > FLOW.indexOf(j.status)) j.status = R.status;
+      ['unitsShipped', 'failedPrints', 'gramsUsed'].forEach(function(f){ if(typeof R[f] === 'number') j[f] = R[f]; });
+      ['trackingNo', 'partnerNotes'].forEach(function(f){ if(typeof R[f] === 'string') j[f] = R[f]; });
+      if(R.shippedDate) j.shippedDate = R.shippedDate;
+    });
+    if(store.pack && store.pack.partner && store.pack.partner.id !== pid) store.edits = {};
+    // Keep edits only where they still differ from what's now on record.
+    var kept = {};
+    p.jobs.forEach(function(j){
+      var e = store.edits[j.id];
+      if(!e || !isOpen(j)) return;
+      var diff = EDIT_FIELDS.some(function(f){ return e[f] !== undefined && String(e[f]) !== String(j[f] == null ? '' : j[f]); });
+      if(diff && FLOW.indexOf(e.status || j.status) >= FLOW.indexOf(j.status)){ if(e.status && FLOW.indexOf(e.status) === FLOW.indexOf(j.status)) delete e.status; kept[j.id] = e; }
+    });
+    var prevGen = prevPack && prevPack.generatedAt;
+    store.mode = 'cloud'; store.partnerId = pid; store.pack = p; store.edits = kept;
+    save(); render();
+    if(prevPack && prevGen !== p.generatedAt) notifyChanges(prevPack, p);
+  }
+  function scheduleCloudSave(){
+    if(store.mode !== 'cloud' || !sb || !session) return;
+    clearTimeout(cloud.timer);
+    cloud.timer = setTimeout(cloudSave, 700);
+  }
+  async function cloudSave(){
+    if(store.mode !== 'cloud' || !store.pack) return;
+    if(!session){ toast('Sign in again to save'); return; }
+    if(cloud.saving){ cloud.again = true; return; }
+    var ids = Object.keys(store.edits).filter(function(id){ return store.pack.jobs.some(function(j){ return j.id === id && isOpen(j); }); });
+    if(!ids.length){ cloud.status = 'ok'; renderBar(); return; }
+    cloud.saving = true; renderBar();
+    var sentAt = new Date().toISOString();
+    var jobs = store.pack.jobs.filter(function(j){ return ids.indexOf(j.id) !== -1; }).map(job).map(function(j){
+      return { id: j.id, status: j.status, unitsShipped: j.unitsShipped || 0, failedPrints: j.failedPrints || 0, gramsUsed: j.gramsUsed || 0,
+        trackingNo: j.trackingNo || '', shippedDate: j.shippedDate || '', partnerNotes: j.partnerNotes || '' };
+    });
+    var r = await sb.rpc('pon_submit_report', { p_jobs: jobs });
+    cloud.saving = false;
+    if(r.error){
+      cloud.status = /fetch|network|Load failed/i.test(r.error.message || '') || !navigator.onLine ? 'offline' : 'error';
+      renderBar();
+      clearTimeout(cloud.timer); cloud.timer = setTimeout(cloudSave, 20000);
+      return;
+    }
+    cloud.status = 'ok';
+    ping('report');
+    // Fold what was sent into the pack so the screen doesn't flicker back, then clear those edits.
+    jobs.forEach(function(u){
+      var pj = store.pack.jobs.find(function(x){ return x.id === u.id; });
+      if(pj){ EDIT_FIELDS.forEach(function(f){ if(u[f] !== undefined) pj[f] = u[f]; }); }
+      var e = store.edits[u.id];
+      if(e && e.at <= sentAt) delete store.edits[u.id];
+    });
+    store.lastSentAt = sentAt; save(); render();
+    if(cloud.again){ cloud.again = false; scheduleCloudSave(); }
+    refreshSoon(800);
+  }
+  async function signOut(){
+    try{ if(channel) await sb.removeChannel(channel); }catch(e){}
+    try{ if(live) await sb.removeChannel(live); }catch(e){}
+    channel = null; live = null; cloud.rtDb = ''; cloud.rtLive = '';
+    try{ await sb.auth.signOut(); }catch(e){}
+    session = null; cloud.unlinked = false; cloud.choosing = null;
+    if(store.mode === 'cloud'){ store = { pack: null, edits: {}, lastSentAt: '', mode: 'file', email: store.email }; }
+    inbox.requests = []; inbox.profile = null;
+    save(); render();
+  }
+  function cloudInit(){
+    if(!window.supabase || !window.supabase.createClient) return;
+    try{
+      sb = window.supabase.createClient(CLOUD_URL, CLOUD_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'tt-partner-auth' } });
+    }catch(e){ sb = null; return; }
+    sb.auth.onAuthStateChange(function(ev, s){
+      setTimeout(function(){
+        if(s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION' || ev === 'TOKEN_REFRESHED')) onSignedIn(s);
+        else if(ev === 'SIGNED_OUT' && session){ session = null; render(); }
+      }, 0);
+    });
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden && session) refreshSoon(100); });
+    window.addEventListener('online', function(){ if(session){ refreshSoon(100); scheduleCloudSave(); } });
+    setInterval(function(){ if(!document.hidden && session) refresh(); }, 15000);
+  }
+
+
+  // ---------- requests to the Master Center (payouts, filament, handing a job back, messages) ----------
+  var inbox = { requests: (store.requests || []), profile: (store.profile || null), missing: false };
+  var ui = { declineJob: null, ackProblem: null, profileOpen: false };
+  var REQ_LABEL = { payout: 'Payout', filament: 'Filament', decline: 'Hand back job', payment_ack: 'Payment', message: 'Message' };
+  function reqState(q){
+    if(q.status === 'open') return '<span class="rq rq-open">Waiting</span>';
+    if(q.status === 'done') return '<span class="rq rq-done">Done</span>';
+    if(q.status === 'rejected') return '<span class="rq rq-no">Declined</span>';
+    return '<span class="rq">Withdrawn</span>';
+  }
+  async function loadInbox(pid){
+    if(!sb || !session || !pid) return;
+    var res = await Promise.all([
+      sb.from('pon_requests').select('id,kind,payload,status,reply,created_at,updated_at').eq('partner_id', pid).order('created_at', { ascending: false }).limit(100),
+      sb.from('pon_profiles').select('*').eq('partner_id', pid).maybeSingle()
+    ]);
+    if(res[0].error){ inbox.missing = /pon_requests|does not exist|schema cache|relation/i.test(res[0].error.message || ''); return; }
+    inbox.missing = false;
+    var before = {};
+    (inbox.requests || []).forEach(function(q){ before[q.id] = q.status; });
+    var news = [];
+    (res[0].data || []).forEach(function(q){
+      if(before[q.id] === 'open' && q.status !== 'open' && q.status !== 'cancelled' && q.kind !== 'payment_ack') news.push(q);
+    });
+    inbox.requests = res[0].data || [];
+    if(!res[1].error) inbox.profile = res[1].data || null;
+    store.requests = inbox.requests.slice(0, 60); store.profile = inbox.profile; save();
+    if(news.length){
+      var q = news[0];
+      toast('Thread Tribe ' + (q.status === 'done' ? 'answered' : 'declined') + ' your ' + (REQ_LABEL[q.kind] || '').toLowerCase() + ' request' + (q.reply ? ': ' + q.reply : ''));
+      try{ if(navigator.vibrate) navigator.vibrate(80); }catch(e){}
+    }
+  }
+  function friendlyReq(err){
+    var m = String((err && err.message) || err || '');
+    if(/does not exist|schema cache|pon_submit_request/i.test(m)) return 'Thread Tribe hasn’t switched this on yet.';
+    if(/fetch|network|Load failed/i.test(m)) return 'No internet — try again when you’re online.';
+    return m.replace(/^.*?ERROR:\s*/i, '') || 'Couldn’t send.';
+  }
+  async function submitRequest(kind, payload){
+    if(store.mode !== 'cloud' || !session){ toast('Sign in first to send requests'); return false; }
+    var r = await sb.rpc('pon_submit_request', { p_partner_id: store.partnerId, p_kind: kind, p_payload: payload });
+    if(r.error){ toast(friendlyReq(r.error)); return false; }
+    ping('request');
+    await loadInbox(store.partnerId);
+    render();
+    return true;
+  }
+  function openReq(kind, test){ return (inbox.requests || []).filter(function(q){ return q.kind === kind && q.status === 'open' && (!test || test(q)); }); }
+  function liveOnly(html){
+    if(store.mode !== 'cloud') return '<div class="card hint" style="font-family:inherit;">Sign in for live mode to send requests to Thread Tribe.</div>';
+    if(inbox.missing) return '';
+    return html;
+  }
+
+  // Job card: hand a job back
+  function declineHtml(j){
+    if(store.mode !== 'cloud' || inbox.missing || ['assigned', 'accepted', 'printing'].indexOf(j.status) === -1) return '';
+    var pending = openReq('decline', function(q){ return q.payload && q.payload.jobId === j.id; })[0];
+    if(pending) return '<div class="qc issues"><b>You asked to hand this job back.</b> Waiting for Thread Tribe. <button class="linkbtn" data-pa="req-cancel" data-id="' + esc(pending.id) + '">Withdraw</button></div>';
+    var last = (inbox.requests || []).filter(function(q){ return q.kind === 'decline' && q.payload && q.payload.jobId === j.id && q.status === 'rejected'; })[0];
+    var html = last && last.reply ? '<div class="qc"><b>Thread Tribe:</b> ' + esc(last.reply) + '</div>' : '';
+    if(ui.declineJob === j.id){
+      return html + '<div class="card" style="margin:10px 0; padding:12px;"><label>Why can’t you do this job?</label><textarea id="declineReason" placeholder="e.g. printer down, can’t meet the date"></textarea>' +
+        '<div style="display:flex; gap:8px; margin-top:10px;"><button class="btn small" data-pa="decline-close">Cancel</button><button class="btn small primary" data-pa="decline-send" data-id="' + esc(j.id) + '">Send to Thread Tribe</button></div></div>';
+    }
+    return html + '<div style="margin:6px 0 10px;"><button class="linkbtn" data-pa="decline-open" data-id="' + esc(j.id) + '">Can’t do this job?</button></div>';
+  }
+
+  // Jobs tab: message box
+  function jobsExtrasHtml(){
+    return liveOnly('<div class="section">Message Thread Tribe</div><div class="card"><textarea id="msgText" placeholder="Question or update about anything"></textarea>' +
+      '<button class="btn small primary" data-pa="msg-send" style="margin-top:10px;">Send</button>' + reqListHtml(['message']) + '</div>');
+  }
+  function reqListHtml(kinds, limit){
+    var list = (inbox.requests || []).filter(function(q){ return kinds.indexOf(q.kind) !== -1 && q.status !== 'cancelled'; }).slice(0, limit || 6);
+    if(!list.length) return '';
+    return '<div class="reqs">' + list.map(function(q){
+      var P = q.payload || {}, what = '';
+      if(q.kind === 'payout') what = money(P.amount) + (P.note ? ' · ' + esc(P.note) : '');
+      else if(q.kind === 'filament') what = grams(P.grams) + ' ' + esc([P.material, P.color].filter(Boolean).join(' '));
+      else if(q.kind === 'message') what = esc(P.text || '');
+      return '<div class="req"><div class="req-top"><span>' + what + '</span>' + reqState(q) + '</div>' +
+        '<div class="req-sub">' + fmtDate(String(q.created_at || '').slice(0, 10)) + (q.reply ? ' · <b>Thread Tribe:</b> ' + esc(q.reply) : '') +
+        (q.status === 'open' ? ' · <button class="linkbtn" data-pa="req-cancel" data-id="' + esc(q.id) + '">Withdraw</button>' : '') + '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  // Filament tab: ask for filament
+  function filamentExtrasHtml(){
+    var colors = {};
+    (store.pack.jobs || []).forEach(function(j){ if(j.color) colors[j.color] = 1; });
+    (store.pack.filament || []).forEach(function(r){ if(r.color) colors[r.color] = 1; });
+    return liveOnly('<div class="section">Need filament?</div><div class="card"><div class="grid2">' +
+      '<div><label>Color</label><input type="text" id="rqColor" list="rqColors" placeholder="e.g. Skin"><datalist id="rqColors">' + Object.keys(colors).map(function(c){ return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></div>' +
+      '<div><label>Material</label><input type="text" id="rqMaterial" value="PLA"></div>' +
+      '<div><label>How much (kg)</label><input type="number" id="rqKg" min="0.1" step="0.5" value="1" inputmode="decimal"></div>' +
+      '<div><label>Note</label><input type="text" id="rqFilNote" placeholder="optional"></div></div>' +
+      '<button class="btn small primary" data-pa="fil-send" style="margin-top:12px;">Ask Thread Tribe</button>' + reqListHtml(['filament']) + '</div>');
+  }
+
+  // Payout tab: request payout, confirm payments, payment details, statement
+  function payoutExtrasHtml(){
+    var p = store.pack.payout || {};
+    var pend = openReq('payout');
+    var html = '<div class="section">Get paid</div><div class="card">' +
+      (pend.length ? '<div class="hint" style="font-family:inherit; margin-bottom:8px;">You’ve asked for ' + money(pend.reduce(function(a, q){ return a + (q.payload.amount || 0); }, 0)) + ' — waiting for Thread Tribe.</div>' : '') +
+      '<div class="grid2"><div><label>Amount (₹)</label><input type="number" id="rqAmount" min="1" step="1" inputmode="numeric" value="' + Math.max(0, Math.round(p.outstanding || 0)) + '"></div>' +
+      '<div><label>Note</label><input type="text" id="rqPayNote" placeholder="optional"></div></div>' +
+      '<button class="btn small primary" data-pa="pay-req" style="margin-top:12px;"' + (p.outstanding > 0.5 ? '' : ' disabled') + '>Request payout</button>' +
+      (p.outstanding > 0.5 ? '' : '<div class="hint" style="font-family:inherit; margin-top:8px;">Nothing to be paid right now — payouts build up as Thread Tribe confirms delivered jobs.</div>') +
+      reqListHtml(['payout']) + '</div>';
+
+    var pays = p.payments || [];
+    if(pays.length){
+      html += '<div class="section">Payments from Thread Tribe</div><div class="card">' + pays.map(function(x){
+        var ack = (inbox.requests || []).filter(function(q){ return q.kind === 'payment_ack' && q.payload && q.payload.paymentId === x.id && q.status !== 'cancelled'; })[0];
+        var right;
+        if(ack) right = ack.payload.ok ? '<span class="rq rq-done">✓ Received</span>' : '<span class="rq rq-no">Problem reported</span>' + (ack.reply ? '<div class="req-sub"><b>Thread Tribe:</b> ' + esc(ack.reply) + '</div>' : '');
+        else if(store.mode === 'cloud' && !inbox.missing) right = ui.ackProblem === x.id
+          ? '<input type="text" id="ackNote" placeholder="What’s wrong?" style="margin-bottom:6px;"><button class="btn small primary" data-pa="ack-send" data-id="' + esc(x.id) + '" data-amt="' + (x.amount || 0) + '">Send</button>'
+          : '<button class="btn small" data-pa="ack-ok" data-id="' + esc(x.id) + '" data-amt="' + (x.amount || 0) + '">✓ Got it</button> <button class="linkbtn" data-pa="ack-problem" data-id="' + esc(x.id) + '">Problem?</button>';
+        else right = '';
+        return '<div class="row"><span><b>' + money(x.amount) + '</b><br><span style="font-size:11px; color:var(--dim);">' + fmtDate(x.date) + (x.mode ? ' · ' + esc(x.mode) : '') + (x.ref ? ' · ' + esc(x.ref) : '') + '</span></span><span class="v" style="text-align:right;">' + right + '</span></div>';
+      }).join('') + '</div>';
+    }
+
+    var pr = inbox.profile || {};
+    var has = pr.upi || pr.account_no;
+    html += '<div class="section">How you get paid</div><div class="card">';
+    if(has && !ui.profileOpen){
+      html += (pr.upi ? '<div class="row"><span>UPI</span><span class="v">' + esc(pr.upi) + '</span></div>' : '') +
+        (pr.account_no ? '<div class="row"><span>Bank account</span><span class="v">' + esc(pr.account_no) + (pr.ifsc ? '<br><span style="font-size:11px; color:var(--dim);">' + esc(pr.ifsc) + (pr.bank_name ? ' · ' + esc(pr.bank_name) : '') + '</span>' : '') + '</span></div>' : '') +
+        '<button class="btn small" data-pa="profile-edit" style="margin-top:10px;">Change</button>';
+    } else if(store.mode === 'cloud' && !inbox.missing){
+      html += '<div class="grid2"><div><label>UPI ID</label><input type="text" id="pfUpi" value="' + esc(pr.upi || '') + '" placeholder="name@bank" autocomplete="off"></div>' +
+        '<div><label>Account holder</label><input type="text" id="pfName" value="' + esc(pr.account_name || '') + '"></div>' +
+        '<div><label>Account number</label><input type="text" id="pfAcc" value="' + esc(pr.account_no || '') + '" inputmode="numeric" autocomplete="off"></div>' +
+        '<div><label>IFSC</label><input type="text" id="pfIfsc" value="' + esc(pr.ifsc || '') + '" autocapitalize="characters"></div>' +
+        '<div><label>Bank</label><input type="text" id="pfBank" value="' + esc(pr.bank_name || '') + '"></div></div>' +
+        '<div class="hint" style="font-family:inherit; margin-top:8px;">Only Thread Tribe can see these. UPI alone is enough.</div>' +
+        '<button class="btn small primary" data-pa="profile-save" style="margin-top:10px;">Save</button>';
+    } else html += '<div class="hint" style="font-family:inherit;">Sign in to add your UPI or bank details.</div>';
+    html += '</div>';
+    html += '<div style="margin:4px 0 16px;"><button class="btn small" data-pa="statement">Share my statement</button></div>';
+    return html;
+  }
+  function statementText(){
+    var p = store.pack, pay = p.payout || {};
+    var lines = ['Statement — ' + (p.partner.name || '') + ' (' + fmtDate(today()) + ')', 'Rate: ₹' + (p.partner.ratePerGram || 0) + '/g', ''];
+    var done = (p.jobs || []).filter(function(j){ return j.status === 'delivered'; });
+    if(done.length){ lines.push('Delivered:'); done.forEach(function(j){ lines.push('• ' + j.jobCode + ' ' + j.productName + ': ' + Math.max(0, (j.unitsShipped || 0) - (j.clientRejects || 0)) + ' pcs = ' + money(j.payout)); }); lines.push(''); }
+    (pay.payments || []).slice(0, 10).forEach(function(x, i){ if(i === 0) lines.push('Payments:'); lines.push('• ' + fmtDate(x.date) + ' ' + money(x.amount) + (x.ref ? ' (' + x.ref + ')' : '')); });
+    lines.push('', 'Earned: ' + money(pay.earned), 'Paid: ' + money(pay.paid), 'To be paid: ' + money(pay.outstanding));
+    return lines.join('\n');
+  }
+
+  document.getElementById('view').addEventListener('click', async function(e){
+    var b = e.target.closest('[data-pa]'); if(!b) return;
+    e.stopPropagation();
+    var a = b.getAttribute('data-pa'), id = b.getAttribute('data-id');
+    if(a === 'decline-open'){ ui.declineJob = id; render(); setTimeout(function(){ var t = document.getElementById('declineReason'); if(t) t.focus(); }, 30); return; }
+    if(a === 'decline-close'){ ui.declineJob = null; render(); return; }
+    if(a === 'profile-edit'){ ui.profileOpen = true; render(); return; }
+    if(a === 'ack-problem'){ ui.ackProblem = id; render(); return; }
+    if(a === 'statement'){
+      var txt = statementText();
+      if(navigator.share){ try{ await navigator.share({ title: 'Statement', text: txt }); return; }catch(err){ if(err && err.name === 'AbortError') return; } }
+      copy(txt, 'Statement copied — paste it in WhatsApp'); return;
+    }
+    b.disabled = true;
+    var ok = false;
+    if(a === 'decline-send'){
+      ok = await submitRequest('decline', { jobId: id, reason: (document.getElementById('declineReason') || {}).value || '' });
+      if(ok){ ui.declineJob = null; toast('Sent — Thread Tribe will reply here'); }
+    } else if(a === 'msg-send'){
+      var t = String((document.getElementById('msgText') || {}).value || '').trim();
+      if(!t){ toast('Write a message first'); b.disabled = false; return; }
+      ok = await submitRequest('message', { text: t });
+      if(ok) toast('Message sent');
+    } else if(a === 'fil-send'){
+      var kg = num((document.getElementById('rqKg') || {}).value), col = String((document.getElementById('rqColor') || {}).value || '').trim();
+      if(!col || !(kg > 0)){ toast('Enter the color and how much'); b.disabled = false; return; }
+      ok = await submitRequest('filament', { color: col, material: (document.getElementById('rqMaterial') || {}).value || '', grams: Math.round(kg * 1000), note: (document.getElementById('rqFilNote') || {}).value || '' });
+      if(ok) toast('Filament request sent');
+    } else if(a === 'pay-req'){
+      var amt = Math.round(num((document.getElementById('rqAmount') || {}).value));
+      if(!(amt > 0)){ toast('Enter an amount'); b.disabled = false; return; }
+      ok = await submitRequest('payout', { amount: amt, note: (document.getElementById('rqPayNote') || {}).value || '' });
+      if(ok) toast('Payout request sent');
+    } else if(a === 'ack-ok' || a === 'ack-send'){
+      ok = await submitRequest('payment_ack', { paymentId: id, ok: a === 'ack-ok', amount: num(b.getAttribute('data-amt')), note: a === 'ack-send' ? ((document.getElementById('ackNote') || {}).value || '') : '' });
+      if(ok){ ui.ackProblem = null; toast(a === 'ack-ok' ? 'Thanks — marked as received' : 'Sent to Thread Tribe'); }
+    } else if(a === 'req-cancel'){
+      var r = await sb.rpc('pon_cancel_request', { p_id: id });
+      if(r.error) toast(friendlyReq(r.error)); else { ping('request'); await loadInbox(store.partnerId); toast('Withdrawn'); }
+      ok = true;
+    } else if(a === 'profile-save'){
+      var g = function(i){ return (document.getElementById(i) || {}).value || ''; };
+      if(!g('pfUpi').trim() && !g('pfAcc').trim()){ toast('Add a UPI ID or bank account'); b.disabled = false; return; }
+      var rs = await sb.rpc('pon_save_profile', { p_partner_id: store.partnerId, p: { upi: g('pfUpi'), accountName: g('pfName'), accountNo: g('pfAcc'), ifsc: g('pfIfsc'), bankName: g('pfBank') } });
+      if(rs.error) toast(friendlyReq(rs.error)); else { ping('request'); ui.profileOpen = false; await loadInbox(store.partnerId); toast('Payment details saved'); ok = true; }
+    }
+    b.disabled = false;
+    render();
+  }, true);
+
+  load(); inbox.requests = store.requests || []; inbox.profile = store.profile || null;
+  if(window.TT_CONFIG && window.TT_CONFIG.instanceName){ var eb = document.querySelector('.eyebrow'); if(eb) eb.textContent = 'Partner Portal · ' + window.TT_CONFIG.instanceName; }
+  cloudInit(); render();
+})();
+</script>
+</body>
+</html>
