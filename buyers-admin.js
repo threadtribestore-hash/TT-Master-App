@@ -373,11 +373,10 @@
   }
 
   // ---------- view ----------
-  function appUrl(){
-    const cfg = (window.TT_CONFIG && window.TT_CONFIG.buyerAppUrl) || '';
-    if(cfg) return cfg;
-    try{ return new URL('buyer/', location.href).href; }catch(e){ return 'buyer/'; }
-  }
+  // The Buyer app lives in its own repo (TT-Buyer-App) so it installs as its own app.
+  // config.js can override this, e.g. for a copy hosted elsewhere.
+  const BUYER_APP_URL = 'https://threadtribestore-hash.github.io/TT-Buyer-App/';
+  function appUrl(){ return (window.TT_CONFIG && window.TT_CONFIG.buyerAppUrl) || BUYER_APP_URL; }
   function openCount(){ return B.requests.filter(function(q){ return q.status === 'open'; }).length; }
   function refreshViews(){
     const n = openCount();
@@ -451,7 +450,7 @@
 
     let html = '<div class="panel"><div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><span>Buyer App</span>' +
       '<span><button class="ba-btn" data-ba="copy-link">Copy app link</button></span></div>' +
-      '<p class="ba-dim">Buyers sign in at <b>' + esc(appUrl()) + '</b> with their email. They see the catalogue at their tier price, their orders with production progress, invoices and what they owe — nothing else.</p></div>';
+      '<p class="ba-dim">Buyers sign in at <a href="' + esc(appUrl()) + '" target="_blank" rel="noopener"><b>' + esc(appUrl()) + '</b></a> with their email and can install it from there as its own app. They see the catalogue at their tier price, their orders with production progress, invoices and what they owe — nothing else.</p></div>';
 
     html += '<div class="panel"><div class="panel-title">Order requests' + (open.length ? ' <span class="pon-badge">' + open.length + '</span>' : '') + '</div>' +
       (open.length ? open.map(requestCard).join('') : '<p class="ba-dim">No open requests.</p>') +
