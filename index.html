@@ -15492,7 +15492,10 @@ function ponImportUpdate(text){
   });
   window.addEventListener('appinstalled', function(){ installBtn.classList.add('hidden'); showToast('Installed — find TT Studio on your home screen'); });
   if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
-    window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+    // updateViaCache 'none' + a check on every return to the app, so phones see new builds promptly.
+    window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function(reg){
+      document.addEventListener('visibilitychange', function(){ if(!document.hidden) reg.update().catch(function(){}); });
+    }).catch(function(){}); });
   }
   // Ask the browser not to clear this app's saved data under storage pressure.
   if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(function(){}); }
