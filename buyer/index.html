@@ -635,9 +635,9 @@
     var html = '<p class="hello">Hi ' + esc(p.client.contact || p.client.name || 'there') + '. Here’s how your business is doing.</p>';
     html += '<div class="stats">' +
       '<button class="stat" data-go="business"><div class="k">Earned from your buyers</div><div class="v">' + money(ss.year) + '</div>' +
-        '<div class="s">' + (invoicing ? money(ss.month) + ' this month · 12 months' : 'Bill your buyers in Business to see this') + '</div></button>' +
+        '<div class="s">' + (invoicing ? 'Last 12 months · ' + money(ss.month) + ' this month' : 'Bill your buyers in Business to see this') + '</div></button>' +
       '<div class="stat"><div class="k">Saved with Thread Tribe</div><div class="v" style="color:var(--green)">' + money(sv.year) + '</div>' +
-        '<div class="s">' + money(sv.month) + ' this month · 12 months</div></div>' +
+        '<div class="s">' + 'Last 12 months · ' + money(sv.month) + ' this month</div></div>' +
       '</div>';
     html += '<div class="card"><div class="muted">By month</div>' + chart(ss.months, sv.months) + '</div>';
     if(invoicing){
