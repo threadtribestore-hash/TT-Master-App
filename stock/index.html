@@ -14677,7 +14677,8 @@ function ponPartnersHtml(){
       '<div style="margin-top:10px;"><label>Notes</label><textarea rows="2" data-pid="' + p.id + '" data-pf="notes" placeholder="Printer models, specialties, SKUs qualified…">' + escapeHtml(p.notes) + '</textarea></div>' +
       '<div class="pon-dim" style="margin-top:10px;">' + s.jobs + ' job' + (s.jobs === 1 ? '' : 's') + ' · ' + ponGrams(s.held) + ' filament held · ' + ponMoney(s.outstanding) + ' outstanding' +
         (typeof cloudPartnerEmail === 'function' && cloudPartnerEmail(p) ? (typeof cloudIsOn === 'function' && cloudIsOn() ? ' · <span style="color:var(--green);">live in Partner app</span>' : ' · sign in to Cloud sync to go live') : '') + '</div>' +
-      '<div class="pon-score-actions"><button class="client-trend-mini-btn" data-act="export-pack" data-id="' + p.id + '">Export job pack</button>' +
+      '<div class="pon-score-actions"><button class="client-trend-mini-btn" data-ma="share-invite" data-id="' + p.id + '" style="color:var(--cyan); border-color:var(--cyan);">Share app invite</button>' +
+      '<button class="client-trend-mini-btn" data-act="export-pack" data-id="' + p.id + '">Export job pack</button>' +
       '<button class="client-trend-mini-btn" data-act="delete-partner" data-id="' + p.id + '" style="color:var(--red);">Remove</button></div>' +
     '</div>';
   });
@@ -17693,6 +17694,47 @@ function ponSetAppLink(){
     '<div class="pon-modal-actions"><button class="backup-btn" data-act="modal-close">Cancel</button><button class="pon-btn-primary" data-ma="save-link">Save</button></div>', false);
 }
 
+// ---------- partner app invite ----------
+let ponInviteLang = 'en';
+function ponInviteText(p, lang){
+  const link = ponAppUrl(), name = ((p && p.name) || '').trim().split(/\s+/)[0] || 'there';
+  const email = (typeof cloudPartnerEmail === 'function' && cloudPartnerEmail(p)) || '';
+  if(lang === 'hi') return 'Hi ' + name + ', aapke liye Thread Tribe Partner app ready hai. Saare jobs, filament aur payments ab ek hi jagah milenge.\n\n' +
+    '1. Ye link Chrome mein kholiye: ' + link + '\n2. Apna email daaliye' + (email ? ' (' + email + ')' : '') + ' aur "Email me a code" dabaiye\n' +
+    '3. Email mein aaya 6-digit code daaliye (na dikhe to spam dekhiye)\n4. "Install app" dabaiye taaki app phone pe icon ki tarah aa jaye\n\n' +
+    'App mein job accept, printing/shipped mark, filament aur payout request, aur UPI ID add kar sakte hain. Har update hume turant dikhta hai.';
+  return 'Hi ' + name + ', your Thread Tribe Partner app is ready. Your jobs, filament and payments are all in one place now.\n\n' +
+    '1. Open this link in Chrome: ' + link + '\n2. Enter your email' + (email ? ' (' + email + ')' : '') + ' and tap "Email me a code"\n' +
+    '3. Type the 6-digit code from the email (check spam if you don’t see it)\n4. Tap "Install app" so it sits on your phone like a normal app\n\n' +
+    'In the app you can accept jobs, mark them printing and shipped, request filament, ask for payouts and add your UPI ID. We see every update instantly.';
+}
+function ponWaPhone(p){
+  let d = String((p && p.phone) || '').replace(/\D/g, '');
+  if(d.length === 10) d = '91' + d;
+  if(d.length === 11 && d[0] === '0') d = '91' + d.slice(1);
+  return d.length >= 11 ? d : '';
+}
+function ponOpenInvite(pid){
+  const p = ponPartner(pid);
+  if(!p) return;
+  if(!ponAppUrl()){ ponSetAppLink(); showToast('Set your Partner app link first'); return; }
+  const email = typeof cloudPartnerEmail === 'function' ? cloudPartnerEmail(p) : '';
+  const text = ponInviteText(p, ponInviteLang);
+  const phone = ponWaPhone(p);
+  const wa = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
+  ponOpenModal('<div class="panel-title" style="margin-bottom:6px;">Invite ' + escapeHtml((p.name || 'partner').trim()) + ' to the Partner app</div>' +
+    (email ? '' : '<div class="pon-payto" style="border-color:var(--amber);">Add their <b>App login email</b> on the partner card first — that’s the email they sign in with. Without it they’ll see “not linked yet”.</div>') +
+    '<div style="display:flex; gap:6px; margin:6px 0 10px;"><button class="client-trend-mini-btn' + (ponInviteLang === 'en' ? ' active' : '') + '" data-ma="invite-lang" data-lang="en" data-id="' + pid + '"' + (ponInviteLang === 'en' ? ' style="border-color:var(--cyan); color:var(--cyan);"' : '') + '>English</button>' +
+    '<button class="client-trend-mini-btn" data-ma="invite-lang" data-lang="hi" data-id="' + pid + '"' + (ponInviteLang === 'hi' ? ' style="border-color:var(--cyan); color:var(--cyan);"' : '') + '>Hinglish</button></div>' +
+    '<textarea id="ponInviteText" rows="11" style="width:100%; font-size:13px; line-height:1.5;">' + escapeHtml(text) + '</textarea>' +
+    '<div class="pon-modal-actions"><button class="backup-btn" data-ma="invite-copy">Copy message</button><div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+      (navigator.share ? '<button class="backup-btn" data-ma="invite-share">Share…</button>' : '') +
+      '<a class="pon-btn-primary" id="ponInviteWa" href="' + escapeHtml(wa) + '" target="_blank" rel="noopener" style="text-decoration:none;">' + (phone ? 'Send on WhatsApp' : 'Open WhatsApp') + '</a></div></div>' +
+    (phone ? '' : '<div class="pon-dim" style="margin-top:8px;">No phone number on their card, so WhatsApp will ask you to pick the chat.</div>'), false);
+  const ta = document.getElementById('ponInviteText');
+  ta.addEventListener('input', function(){ const a = document.getElementById('ponInviteWa'); if(a) a.href = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(ta.value); });
+}
+
 (function wireMaster(){
   async function onClick(e){
     const b = e.target.closest('[data-ma]');
@@ -17723,6 +17765,10 @@ function ponSetAppLink(){
     if(a === 'cancel-job'){ ponCancelJobFromRequest(id); return; }
     if(a === 'toggle-done'){ ponInboxShowDone = !ponInboxShowDone; renderPartners(); return; }
     if(a === 'set-link'){ ponSetAppLink(); return; }
+    if(a === 'share-invite'){ ponOpenInvite(id); return; }
+    if(a === 'invite-lang'){ ponInviteLang = b.getAttribute('data-lang') === 'hi' ? 'hi' : 'en'; ponOpenInvite(id); return; }
+    if(a === 'invite-copy'){ const v = (document.getElementById('ponInviteText') || {}).value || ''; copyTextToClipboard(v).then(function(){ showToast('Invite copied'); }).catch(function(){}); return; }
+    if(a === 'invite-share'){ const v = (document.getElementById('ponInviteText') || {}).value || ''; try{ await navigator.share({ title: 'Thread Tribe Partner app', text: v }); }catch(err){} return; }
     if(a === 'save-link'){
       let v = String((document.getElementById('ponAppUrlIn') || {}).value || '').trim();
       if(v && !/^https?:\/\//i.test(v)) v = 'https://' + v;
