@@ -18044,10 +18044,11 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     var h = (needed ? '<div class="ttf-banner">' + esc(connErr.message) + '</div>' : '') +
       '<h3 style="margin:0 0 6px;font-size:14px">Bridge address on this device</h3>' +
       '<p class="ttf-note">On the print-farm Mac leave it blank. On a phone or another computer, enter the Mac\'s Tailscale address (e.g. https://pragyas-macbook-air.tailc45511.ts.net) and the passcode set on the Mac. Saved on this device only.</p>' +
-      '<form class="ttf-keyform" id="ttf-connform" autocomplete="off"><input type="url" id="ttf-urlinput" placeholder="' + LOCAL_BRIDGE + ' (this Mac)" value="' + (isCustomBridge() ? esc(c.url) : '') + '" spellcheck="false" aria-label="Bridge address">' +
-      '<input type="password" id="ttf-passinput" placeholder="Passcode (phones only)" value="' + esc(c.passcode) + '" autocomplete="off" aria-label="Bridge passcode">' +
+      '<form class="ttf-keyform" id="ttf-connform" autocomplete="off"><input type="url" id="ttf-urlinput" placeholder="' + (isLocal ? 'Leave blank on this Mac' : 'https://pragyas-macbook-air.tailc45511.ts.net') + '" value="' + (isCustomBridge() ? esc(c.url) : '') + '" spellcheck="false" aria-label="Bridge address">' +
+      '<input type="password" id="ttf-passinput" placeholder="Bridge passcode" value="' + esc(c.passcode) + '" autocomplete="one-time-code" aria-label="Bridge passcode">' +
       '<button class="ttf-btn primary" type="submit">Save &amp; connect</button></form><p class="ttf-msg" id="ttf-connmsg"></p>';
-    if (isLocal !== false) {
+    // Passcode and API key can only be changed on the Mac itself, so show them only there.
+    if (isLocal === true) {
       h += '<h3 style="margin:18px 0 6px;font-size:14px">Passcode for phones</h3>' +
         '<p class="ttf-note">Phones reaching this Mac over Tailscale must give this passcode. Until one is set, remote access stays off. At least 6 characters.</p>' +
         '<form class="ttf-keyform" id="ttf-setpassform" autocomplete="off"><input type="password" id="ttf-newpass" placeholder="New passcode" autocomplete="new-password" aria-label="New passcode">' +
@@ -18058,7 +18059,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
         '<button class="ttf-btn primary" type="submit">Check &amp; save</button></form>' +
         '<p class="ttf-msg" id="ttf-keymsg"></p>';
     } else {
-      h += '<p class="ttf-note" style="margin-top:14px">The passcode and Bambuddy API key can only be changed in Studio on the print-farm Mac.</p>';
+      h += '<p class="ttf-note" style="margin-top:14px">The passcode and Bambuddy API key are set in Studio on the print-farm Mac.</p>';
     }
     return h + (needed ? '' : '<p><button class="ttf-btn" type="button" data-act="back">Back to orders</button></p>');
   }
