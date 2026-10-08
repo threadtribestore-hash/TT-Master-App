@@ -143,7 +143,7 @@
         const items = all.filter(function(x){ return SHOP_TYPES.indexOf(x.product_type) !== -1; }).map(function(x){
           const img = x.images && x.images[0] ? x.images[0].src : '';
           const prices = (x.variants || []).map(function(v){ return parseFloat(v.price) || 0; }).filter(function(v){ return v > 0; });
-          return { handle: x.handle, name: cleanName(x.title), category: x.product_type, retail: prices.length ? Math.min.apply(null, prices) : 0,
+          return { handle: x.handle, name: cleanName(x.title), category: x.product_type, retail: prices.length ? Math.min.apply(null, prices) : 0, published: (x.published_at || x.created_at || '').slice(0, 10),
             photo: img ? img + (img.indexOf('?') === -1 ? '?' : '&') + 'width=600' : '' };
         });
         if(items.length){ WEB.items = items; WEB.at = Date.now(); try{ localStorage.setItem(WEB_KEY, JSON.stringify({ items: items, at: WEB.at })); }catch(e){} }
@@ -223,6 +223,8 @@
       // The tier name is not sent: buyers see their price, not their rank.
       terms: Object.assign(terms(), { tierPct: tier.pct, note: 'Prices are ex-GST. Orders are confirmed by Thread Tribe before production starts.' }),
       catalogue: catalogue(tier.pct),
+      trending: trending(),
+      collections: activeCollections(),
       orders: ordersFor(c.id)
     };
     if(JSON.stringify(pack).length > 4000000) pack.catalogue.forEach(function(i){ i.photo = ''; });
@@ -542,6 +544,9 @@
       T.slabs.map(function(x, i){ return '<tr><td><input type="number" min="1" data-slab="' + i + '" data-f="min" value="' + x.min + '"></td><td class="num"><input type="number" min="0" max="100" step="0.5" data-slab="' + i + '" data-f="pct" value="' + x.pct + '"></td><td><button class="ba-btn" data-ba="slab-del" data-i="' + i + '">✕</button></td></tr>'; }).join('') +
       '</table><button class="ba-btn" data-ba="slab-add">+ Add slab</button></div>';
 
+    html += '<div class="panel"><div class="panel-title">Collections</div>' + collectionsHtml() + '</div>';
+    const tr = trending();
+    html += '<div class="panel"><div class="panel-title">Trending · what buyers see</div>' + (tr.length ? '<p class="ba-dim">' + tr.map(function(n, i){ return (i + 1) + '. ' + esc(n); }).join(' · ') + '</p>' : '<p class="ba-dim">Nothing yet — builds from trade orders in the last 60 days.</p>') + '</div>';
     html += '<div class="panel"><div class="panel-title">Resale · last 90 days</div>' + resaleHtml() + '</div>';
 
     const webOnly = catalogue(0).filter(function(x){ return /^web:/.test(x.id); });
@@ -611,6 +616,8 @@
       const txt = prompt('Your reply (the buyer sees this):', '');
       if(txt) reply(id, 'done', txt);
     } else if(act === 'toggle-done'){ B.showDone = !B.showDone; render(); }
+    else if(act === 'col-add'){ const list = collections().slice(); list.push({ id: newId(), name: '', note: '', until: '', items: [] }); saveCollections(list); render(); }
+    else if(act === 'col-del'){ if(confirm('Delete this collection?')){ saveCollections(collections().filter(function(x){ return x.id !== id; })); render(); } }
     else if(act === 'slab-add'){ const t = terms(); const last = t.slabs[t.slabs.length - 1]; t.slabs.push({ min: last ? last.min * 2 : 100, pct: last ? last.pct + 2 : 3 }); saveTerms(t); render(); }
     else if(act === 'slab-del'){ const t = terms(); t.slabs.splice(+b.getAttribute('data-i'), 1); saveTerms(t); render(); }
     else if(act === 'copy-link'){
@@ -619,9 +626,56 @@
     }
   });
   function orderById(id){ return state.orders.find(function(o){ return o.id === id; }); }
+  // ---------- trending and collections ----------
+  // Trending = toys moving fastest across all trade buyers (their orders with Thread
+  // Tribe in the last 60 days, plus units resellers invoiced onward). Buyers get the
+  // rank only: no quantities, no buyer names.
+  function trending(){
+    const since = isoDaysAgo(60), score = {}, name = {};
+    function add(n, units){ const k = nameKey(n); if(!k || !units) return; score[k] = (score[k] || 0) + units; name[k] = name[k] || cleanName(n); }
+    state.orders.forEach(function(o){
+      const c = client(o.clientId);
+      if(!c || !isTrade(c) || !counts(o) || orderDate(o) < since) return;
+      o.products.forEach(function(p){ add(p.name, p.qty || 0); });
+    });
+    (R.rows || []).forEach(function(r){ if((r.month || '') >= since.slice(0, 7)) add(r.product, +r.units || 0); });
+    const toys = {};
+    catalogue(0).forEach(function(x){ toys[nameKey(x.name)] = 1; });
+    return Object.keys(score).filter(function(k){ return toys[k]; }).sort(function(a, b){ return score[b] - score[a]; }).slice(0, 10).map(function(k){ return name[k]; });
+  }
+  function collections(){ return Array.isArray(state.buyerCollections) ? state.buyerCollections : []; }
+  function activeCollections(){
+    const t = new Date().toISOString().slice(0, 10);
+    return collections().filter(function(c){ return c.name && (c.items || []).length && (!c.until || c.until >= t); })
+      .map(function(c){ return { id: c.id, name: c.name, note: c.note || '', until: c.until || '', items: c.items.slice(0, 200) }; });
+  }
+  function saveCollections(list){ state.buyerCollections = list; scheduleSave(); }
+  function collectionsHtml(){
+    const toys = catalogue(0).slice().sort(function(a, b){ return a.name.localeCompare(b.name); }), t = new Date().toISOString().slice(0, 10);
+    return '<p class="ba-dim">Group toys for a season or launch (e.g. Diwali Collection). Buyers see it as its own section in the shop until the end date.</p>' +
+      collections().map(function(c){
+        const live = c.name && (c.items || []).length && (!c.until || c.until >= t);
+        return '<div class="ba-req"><div class="ba-req-head"><input data-col="name" data-id="' + c.id + '" value="' + esc(c.name || '') + '" placeholder="Collection name" style="flex:1;min-width:160px">' +
+          '<label class="ba-dim" style="margin:0">until <input type="date" data-col="until" data-id="' + c.id + '" value="' + esc(c.until || '') + '"></label>' +
+          '<span class="ba-pill ' + (live ? 'ok' : '') + '">' + (live ? 'live' : 'not shown') + '</span><button class="ba-btn" data-ba="col-del" data-id="' + c.id + '">Delete</button></div>' +
+          '<input data-col="note" data-id="' + c.id + '" value="' + esc(c.note || '') + '" placeholder="Short note for buyers, e.g. Ships before 20 Oct" style="width:100%;margin:4px 0 8px">' +
+          '<details><summary class="ba-dim">' + (c.items || []).length + ' toys — choose</summary><div class="ba-cols" style="margin-top:6px">' +
+          toys.map(function(x){ const on = (c.items || []).indexOf(x.name) !== -1;
+            return '<label class="ba-dim" style="margin:0"><input type="checkbox" data-colitem="' + esc(x.name) + '" data-id="' + c.id + '"' + (on ? ' checked' : '') + '> ' + esc(x.name) + '</label>'; }).join('') + '</div></details></div>';
+      }).join('') + '<button class="ba-btn" data-ba="col-add">+ New collection</button>';
+  }
+
   function saveTerms(t){ state.buyerSettings = { minPerProduct: t.minPerProduct, minOrder: t.minOrder, maxDiscount: t.maxDiscount, slabs: t.slabs }; scheduleSave(); }
   document.addEventListener('change', function(e){
     const tab = document.getElementById('tabBuyers');
+    if(tab && tab.contains(e.target) && (e.target.hasAttribute('data-col') || e.target.hasAttribute('data-colitem'))){
+      const list = collections().slice(), c = list.find(function(x){ return x.id === e.target.getAttribute('data-id'); });
+      if(!c) return;
+      if(e.target.hasAttribute('data-col')) c[e.target.getAttribute('data-col')] = String(e.target.value || '').trim().slice(0, 120);
+      else { const n = e.target.getAttribute('data-colitem'); c.items = (c.items || []).filter(function(x){ return x !== n; }); if(e.target.checked) c.items.push(n); }
+      saveCollections(list); showToast('Collection saved');
+      return;
+    }
     if(tab && tab.contains(e.target) && e.target.hasAttribute('data-disp')){
       const o = orderById(e.target.getAttribute('data-id'));
       if(o){ o[e.target.getAttribute('data-disp')] = String(e.target.value || '').trim().slice(0, 80); scheduleSave(); showToast('Saved — the buyer sees it on the next sync'); }
@@ -662,6 +716,7 @@
     '#tabBuyers .ba-note{margin:6px 0;font-style:italic}' +
     '#tabBuyers .ba-list{margin:4px 0 8px 18px;font-size:12px}' +
     '#tabBuyers .ba-actions{margin-top:8px}' +
+    '#tabBuyers input[data-col]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:12px "JetBrains Mono",monospace}' +
     '#tabBuyers input[type=date],#tabBuyers input[data-disp]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font:12px "JetBrains Mono",monospace}' +
     '#tabBuyers .ba-photos{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}' +
     '#tabBuyers .ba-photos img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}' +
