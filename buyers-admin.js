@@ -70,6 +70,8 @@
   }
 
   // ---------- packs ----------
+  // The Buyer app is for trade clients only; D2C (consumer) clients never get a pack.
+  function isTrade(c){ return !/\bd2c\b|consumer|individual/i.test((c && c.type) || ''); }
   function emailOf(c){
     const em = String((c && c.email) || '').trim().toLowerCase();
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em) ? em : '';
@@ -111,8 +113,11 @@
   function catalogue(pct){
     return (state.productCatalog || []).filter(function(i){ return (i.name || '').trim() && basePrice(i) > 0; }).map(function(i){
       const base = basePrice(i);
+      // Suggested retail only when set by hand: the auto D2C formula is lamp-only and
+      // would put a 10 g clicker at Rs 500, which would mislead a reseller.
+      const retail = i.d2cPrice != null ? (parseFloat(i.d2cPrice) || 0) : 0;
       return { id: i.id, name: i.name.trim(), category: i.category || '', kind: kindOf(i), weight: parseFloat(i.weight) || 0, hours: parseFloat(i.hours) || 0,
-        color: i.color || '', size: i.size || '', material: i.material || '', photo: photoOf(i), base: base, price: tierPrice(base, pct) };
+        color: i.color || '', size: i.size || '', material: i.material || '', photo: photoOf(i), base: base, price: tierPrice(base, pct), retail: retail };
     }).sort(function(a, b){ return a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name); });
   }
   function catalogIdFor(line){
@@ -177,7 +182,7 @@
       const want = {};
       (state.clients || []).forEach(function(c){
         const em = emailOf(c);
-        if(!c.buyerApp || !em) return;
+        if(!c.buyerApp || !em || !isTrade(c)) return;
         const pack = buildPack(c);
         want[c.id] = { pack: pack, em: em, h: cloudHash(em + '|' + cloudCanon(Object.assign({}, pack, { generatedAt: '' }))) };
       });
@@ -361,7 +366,8 @@
     }
     const open = B.requests.filter(function(q){ return q.status === 'open'; });
     const done = B.requests.filter(function(q){ return q.status !== 'open'; }).slice(0, 30);
-    const clients = (state.clients || []).slice().sort(function(a, b){ return (b.buyerApp ? 1 : 0) - (a.buyerApp ? 1 : 0) || (a.name || '').localeCompare(b.name || ''); });
+    const hiddenD2c = (state.clients || []).filter(function(c){ return !isTrade(c); }).length;
+    const clients = (state.clients || []).filter(isTrade).sort(function(a, b){ return (b.buyerApp ? 1 : 0) - (a.buyerApp ? 1 : 0) || (a.name || '').localeCompare(b.name || ''); });
     const cat = (state.productCatalog || []).filter(function(i){ return (i.name || '').trim(); });
     const priced = cat.filter(function(i){ return basePrice(i) > 0; });
     const unpriced = cat.filter(function(i){ return basePrice(i) <= 0; });
@@ -375,7 +381,8 @@
       (done.length ? '<button class="ba-btn" data-ba="toggle-done">' + (B.showDone ? 'Hide' : 'Show') + ' answered (' + done.length + ')</button>' + (B.showDone ? done.map(requestCard).join('') : '') : '') + '</div>';
 
     html += '<div class="panel"><div class="panel-title">Buyers</div><p class="ba-dim">Tier = spend on orders dated in the last ' + TIER_DAYS + ' days, toys and lamps together' +
-      (state.dealerRewardsEnabled === false ? '. <b>Dealer rewards are switched off in Settings, so no tier discounts apply.</b>' : '.') + '</p>' +
+      (state.dealerRewardsEnabled === false ? '. <b>Dealer rewards are switched off in Settings, so no tier discounts apply.</b>' : '.') +
+      (hiddenD2c ? ' ' + hiddenD2c + ' D2C client' + (hiddenD2c === 1 ? ' is' : 's are') + ' left out — the Buyer app is for trade clients only.' : '') + '</p>' +
       '<div style="overflow-x:auto"><table class="ba-table"><tr><th>Access</th><th>Client</th><th>Email</th><th class="num">30-day spend</th><th>Tier</th><th>Next</th></tr>' +
       clients.map(function(c){
         const em = emailOf(c), t = tierOf(c.id);

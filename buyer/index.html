@@ -90,6 +90,15 @@
   .prod .p{ font-weight:700; margin-top:6px; }
   .prod .p s{ color:var(--dim); font-weight:500; font-size:12.5px; margin-left:4px; }
   .search{ margin-bottom:10px; }
+  .prod .mg{ font-size:12px; color:var(--green); font-weight:600; margin-top:2px; }
+  .tools{ display:flex; gap:8px; margin-bottom:10px; }
+  .tools select{ flex:1; padding:10px 12px; font-size:15px; }
+  .tools .btn{ flex:none; }
+  .fchips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:10px; }
+  .fchip{ border:1px solid var(--line); background:var(--panel); border-radius:20px; padding:6px 12px; font-size:13px; font-weight:600; cursor:pointer; }
+  .fchip.on, .tools + .fchips .fchip{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+  label.check{ display:flex; gap:10px; align-items:center; color:var(--text); font-size:14.5px; margin-top:14px; cursor:pointer; }
+  label.check input{ width:20px; height:20px; flex:none; accent-color:var(--accent); }
 
   .item{ display:flex; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; cursor:pointer; width:100%; text-align:left; box-shadow:var(--shadow); }
   .item .body{ flex:1; min-width:0; }
@@ -205,7 +214,12 @@
   var STATUS = { quoted: 'Quote', booked: 'Confirmed', in_production: 'In production', production_done: 'Ready', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled' };
   var PAY = { unpaid: 'Unpaid', partial: 'Part paid', paid: 'Paid', refunded: 'Refunded' };
 
-  var store = { pack: null, clientId: '', email: '', cart: [], requests: [] };
+  var store = { pack: null, clientId: '', email: '', cart: [], requests: [], filt: null };
+  var SORTS = {
+    recommended: 'Recommended', price_asc: 'Price: low to high', price_desc: 'Price: high to low', margin: 'Best margin',
+    name: 'Name A–Z', light: 'Lightest first', heavy: 'Heaviest first', quick: 'Quickest to make'
+  };
+  function blankFilt(){ return { sort: 'recommended', cats: [], min: '', max: '', ordered: false, retailOnly: false }; }
   var sb = null, session = null, channel = null, live = null;
   var cloud = { status: '', otpEmail: '', err: '', unlinked: false, choosing: null, rtDb: '', rtLive: '', missing: false, refreshTimer: null, booting: true, sending: false };
   var tab = 'home', shopSeg = 'all', shopQuery = '', orderSeg = 'active';
@@ -213,6 +227,7 @@
   function load(){
     try{ var s = JSON.parse(localStorage.getItem(KEY)); if(s && typeof s === 'object') store = Object.assign(store, s); }catch(e){}
     if(!Array.isArray(store.cart)) store.cart = [];
+    store.filt = Object.assign(blankFilt(), store.filt || {});
   }
   function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
   function esc(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML.replace(/"/g, '&quot;'); }
@@ -356,7 +371,7 @@
     try{ if(channel) await sb.removeChannel(channel); if(live) await sb.removeChannel(live); }catch(e){}
     channel = null; live = null;
     try{ await sb.auth.signOut(); }catch(e){}
-    session = null; store = { pack: null, clientId: '', email: store.email, cart: [], requests: [] }; save(); renderAll();
+    session = null; store = { pack: null, clientId: '', email: store.email, cart: [], requests: [], filt: blankFilt() }; save(); renderAll();
   }
 
   // ======================= render =======================
@@ -441,22 +456,99 @@
       '<span class="chip ' + chip + '">' + esc(STATUS[o.status] || o.status) + '</span><span class="chev">›</span></button>';
   }
 
+  // ---- shop: filter & sort ----
+  function margin(p){ return p.retail && p.price ? p.retail / p.price : 0; }
+  function orderedIds(){
+    var ids = {};
+    pack().orders.forEach(function(o){ o.lines.forEach(function(l){ if(l.catalogId) ids[l.catalogId] = (ids[l.catalogId] || 0) + l.qty; }); });
+    return ids;
+  }
+  function categoriesFor(seg){
+    var seen = {};
+    pack().catalogue.forEach(function(p){ if((seg === 'all' || p.kind === seg) && p.category) seen[p.category] = (seen[p.category] || 0) + 1; });
+    return Object.keys(seen).sort().map(function(c){ return { name: c, n: seen[c] }; });
+  }
+  function activeFilters(){
+    var f = store.filt, n = 0;
+    if(f.cats.length) n++; if(f.min !== '' || f.max !== '') n++; if(f.ordered) n++; if(f.retailOnly) n++;
+    return n;
+  }
+  function shopList(){
+    var f = store.filt, q = shopQuery.toLowerCase(), ordered = orderedIds();
+    var min = parseFloat(f.min), max = parseFloat(f.max);
+    var list = pack().catalogue.filter(function(p){
+      if(shopSeg !== 'all' && p.kind !== shopSeg) return false;
+      if(q && (p.name + ' ' + p.category + ' ' + p.color).toLowerCase().indexOf(q) === -1) return false;
+      if(f.cats.length && f.cats.indexOf(p.category) === -1) return false;
+      if(isFinite(min) && p.price < min) return false;
+      if(isFinite(max) && p.price > max) return false;
+      if(f.ordered && !ordered[p.id]) return false;
+      if(f.retailOnly && !p.retail) return false;
+      return true;
+    });
+    var by = {
+      recommended: function(a, b){ return (ordered[b.id] || 0) - (ordered[a.id] || 0) || a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name); },
+      price_asc: function(a, b){ return a.price - b.price; },
+      price_desc: function(a, b){ return b.price - a.price; },
+      margin: function(a, b){ return margin(b) - margin(a) || a.price - b.price; },
+      name: function(a, b){ return a.name.localeCompare(b.name); },
+      light: function(a, b){ return (a.weight || 1e9) - (b.weight || 1e9); },
+      heavy: function(a, b){ return (b.weight || 0) - (a.weight || 0); },
+      quick: function(a, b){ return (a.hours || 1e9) - (b.hours || 1e9); }
+    };
+    return list.slice().sort(by[f.sort] || by.recommended);
+  }
+  function filterChips(){
+    var f = store.filt, chips = [];
+    f.cats.forEach(function(c){ chips.push('<button class="fchip" data-a="unfilter" data-k="cat" data-v="' + esc(c) + '">' + esc(c) + ' ✕</button>'); });
+    if(f.min !== '' || f.max !== '') chips.push('<button class="fchip" data-a="unfilter" data-k="price">' + (f.min !== '' ? money(f.min) : '₹0') + ' – ' + (f.max !== '' ? money(f.max) : 'any') + ' ✕</button>');
+    if(f.ordered) chips.push('<button class="fchip" data-a="unfilter" data-k="ordered">Ordered before ✕</button>');
+    if(f.retailOnly) chips.push('<button class="fchip" data-a="unfilter" data-k="retail">With retail price ✕</button>');
+    return chips.length ? '<div class="fchips">' + chips.join('') + '<button class="link" data-a="clear-filters">Clear all</button></div>' : '';
+  }
   function renderShop(){
-    var cat = pack().catalogue;
+    var cat = pack().catalogue, f = store.filt;
     var toys = cat.filter(function(p){ return p.kind === 'toy'; }).length, lamps = cat.filter(function(p){ return p.kind === 'lamp'; }).length;
-    var q = shopQuery.toLowerCase();
-    var list = cat.filter(function(p){ return (shopSeg === 'all' || p.kind === shopSeg) && (!q || (p.name + ' ' + p.category + ' ' + p.color).toLowerCase().indexOf(q) !== -1); });
-    var t = pack().tier || {};
+    var list = shopList(), t = pack().tier || {}, n = activeFilters();
+    var hasRetail = cat.some(function(p){ return p.retail; });
     return '<div class="seg"><button data-seg="all" class="' + (shopSeg === 'all' ? 'on' : '') + '">All<span class="n">' + cat.length + '</span></button>' +
       '<button data-seg="toy" class="' + (shopSeg === 'toy' ? 'on' : '') + '">Toys<span class="n">' + toys + '</span></button>' +
       '<button data-seg="lamp" class="' + (shopSeg === 'lamp' ? 'on' : '') + '">Lamps<span class="n">' + lamps + '</span></button></div>' +
       '<input class="search" id="q" type="search" placeholder="Search products" value="' + esc(shopQuery) + '">' +
-      '<p class="muted" style="margin:0 4px 10px;">Your ' + esc(t.name || 'trade') + ' prices' + (t.pct ? ' (' + t.pct + '% off)' : '') + ', per piece, ex-GST. Minimum ' + moq() + ' per product.</p>' +
+      '<div class="tools"><select id="sortSel" aria-label="Sort">' + Object.keys(SORTS).filter(function(k){ return k !== 'margin' || hasRetail; }).map(function(k){
+        return '<option value="' + k + '"' + (f.sort === k ? ' selected' : '') + '>' + SORTS[k] + '</option>'; }).join('') + '</select>' +
+      '<button class="btn small" data-a="filters">Filter' + (n ? ' · ' + n : '') + '</button></div>' + filterChips() +
+      '<p class="muted" style="margin:0 4px 10px;">' + list.length + ' product' + (list.length === 1 ? '' : 's') + ' · your ' + esc(t.name || 'trade') + ' prices' + (t.pct ? ' (' + t.pct + '% off)' : '') + ', per piece, ex-GST. Minimum ' + moq() + ' per product.</p>' +
       (list.length ? '<div class="grid">' + list.map(function(p){
+        var m = margin(p);
         return '<button class="prod" data-a="product" data-id="' + esc(p.id) + '"><div class="ph">' + (p.photo ? '<img loading="lazy" alt="" src="' + esc(p.photo) + '">' : (p.kind === 'lamp' ? '💡' : '🧸')) + '</div>' +
           '<div class="b"><div class="n">' + esc(p.name) + '</div><div class="w">' + esc([p.weight ? Math.round(p.weight) + ' g' : '', p.color].filter(Boolean).join(' · ')) + '</div>' +
-          '<div class="p">' + money(p.price) + (p.price < p.base ? '<s>' + money(p.base) + '</s>' : '') + '</div></div></button>';
-      }).join('') + '</div>' : '<div class="card empty"><b>Nothing found</b>Try another search.</div>');
+          '<div class="p">' + money(p.price) + (p.price < p.base ? '<s>' + money(p.base) + '</s>' : '') + '</div>' +
+          (m ? '<div class="mg">Retail ' + money(p.retail) + ' · ' + m.toFixed(1) + '× margin</div>' : '') + '</div></button>';
+      }).join('') + '</div>' : '<div class="card empty"><b>Nothing matches</b>Try another search or clear the filters.' + (n ? '<div class="btns" style="justify-content:center;"><button class="btn small" data-a="clear-filters">Clear filters</button></div>' : '') + '</div>');
+  }
+  function filterSheet(){
+    var f = store.filt, cats = categoriesFor(shopSeg);
+    openSheet('<div class="sheet-h"><div class="t">Filter</div><button class="x" data-a="close">✕</button></div>' +
+      (cats.length ? '<label>Category</label><div class="fchips">' + cats.map(function(c){
+        return '<button type="button" class="fchip' + (f.cats.indexOf(c.name) !== -1 ? ' on' : '') + '" data-a="toggle-cat" data-v="' + esc(c.name) + '">' + esc(c.name) + ' <span class="muted">' + c.n + '</span></button>';
+      }).join('') + '</div>' : '') +
+      '<label>Your price per piece (₹)</label><div class="grid2"><input id="fmin" type="number" inputmode="numeric" min="0" placeholder="Min" value="' + esc(f.min) + '"><input id="fmax" type="number" inputmode="numeric" min="0" placeholder="Max" value="' + esc(f.max) + '"></div>' +
+      '<label class="check"><input type="checkbox" id="ford"' + (f.ordered ? ' checked' : '') + '> Only products I’ve ordered before</label>' +
+      (pack().catalogue.some(function(p){ return p.retail; }) ? '<label class="check"><input type="checkbox" id="fret"' + (f.retailOnly ? ' checked' : '') + '> Only products with a suggested retail price</label>' : '') +
+      '<div class="btns"><button class="btn primary block" data-a="apply-filters">Show results</button></div>' +
+      '<div style="text-align:center"><button class="link" data-a="clear-filters">Clear all filters</button></div>');
+  }
+  function applyFilters(){
+    var f = store.filt;
+    f.cats = Array.prototype.map.call(document.querySelectorAll('#sheetBody .fchip.on'), function(b){ return b.getAttribute('data-v'); });
+    var mn = document.getElementById('fmin').value, mx = document.getElementById('fmax').value;
+    f.min = mn === '' ? '' : Math.max(0, Math.round(parseFloat(mn) || 0));
+    f.max = mx === '' ? '' : Math.max(0, Math.round(parseFloat(mx) || 0));
+    if(f.min !== '' && f.max !== '' && f.min > f.max){ var x = f.min; f.min = f.max; f.max = x; }
+    f.ordered = document.getElementById('ford').checked;
+    var r = document.getElementById('fret'); f.retailOnly = !!(r && r.checked);
+    save(); closeSheet(); renderAll();
   }
 
   function productSheet(id){
@@ -467,6 +559,7 @@
       '<div class="hero">' + (p.photo ? '<img alt="" src="' + esc(p.photo) + '">' : (p.kind === 'lamp' ? '💡' : '🧸')) + '</div>' +
       '<div class="card"><div class="row"><span>Your price</span><span class="r">' + money(p.price) + ' <span class="muted">/ pc</span></span></div>' +
       (p.price < p.base ? '<div class="row"><span class="muted">Standard trade price</span><span class="r muted"><s>' + money(p.base) + '</s></span></div>' : '') +
+      (p.retail ? '<div class="row"><span class="muted">Suggested retail</span><span class="r">' + money(p.retail) + ' <span class="muted">· ' + margin(p).toFixed(1) + '× your price</span></span></div>' : '') +
       (p.weight ? '<div class="row"><span class="muted">Weight</span><span class="r">' + Math.round(p.weight) + ' g</span></div>' : '') +
       (p.hours ? '<div class="row"><span class="muted">Print time</span><span class="r">' + p.hours + ' hrs / pc</span></div>' : '') +
       (p.size ? '<div class="row"><span class="muted">Size</span><span class="r">' + esc(p.size) + '</span></div>' : '') +
@@ -666,7 +759,12 @@
     var nb = e.target.closest('#nav [data-tab]');
     if(nb){ tab = nb.getAttribute('data-tab'); renderAll(); window.scrollTo(0, 0); return; }
     var sg = e.target.closest('[data-seg]');
-    if(sg){ shopSeg = sg.getAttribute('data-seg'); renderAll(); return; }
+    if(sg){
+      shopSeg = sg.getAttribute('data-seg');
+      var keep = categoriesFor(shopSeg).map(function(c){ return c.name; });
+      store.filt.cats = store.filt.cats.filter(function(c){ return keep.indexOf(c) !== -1; });
+      save(); renderAll(); return;
+    }
     var os = e.target.closest('[data-oseg]');
     if(os){ orderSeg = os.getAttribute('data-oseg'); renderAll(); return; }
     if(e.target.id === 'scrim'){ closeSheet(); return; }
@@ -681,6 +779,18 @@
     else if(act === 'refresh') refresh();
     else if(act === 'choose'){ store.clientId = id; cloud.choosing = null; save(); refresh(); }
     else if(act === 'product') productSheet(id);
+    else if(act === 'filters') filterSheet();
+    else if(act === 'toggle-cat') a.classList.toggle('on');
+    else if(act === 'apply-filters') applyFilters();
+    else if(act === 'clear-filters'){ store.filt = Object.assign(blankFilt(), { sort: store.filt.sort }); save(); closeSheet(); renderAll(); }
+    else if(act === 'unfilter'){
+      var k = a.getAttribute('data-k'), f = store.filt;
+      if(k === 'cat') f.cats = f.cats.filter(function(c){ return c !== a.getAttribute('data-v'); });
+      else if(k === 'price'){ f.min = ''; f.max = ''; }
+      else if(k === 'ordered') f.ordered = false;
+      else if(k === 'retail') f.retailOnly = false;
+      save(); renderAll();
+    }
     else if(act === 'qty-' || act === 'qty+'){ var q = document.getElementById('pq'); q.value = Math.max(moq(), (Math.round(parseFloat(q.value) || 0)) + (act === 'qty+' ? 5 : -5)); updateLine(); }
     else if(act === 'add') addToCart(id);
     else if(act === 'remove'){ store.cart.splice(parseInt(a.getAttribute('data-i'), 10), 1); save(); renderAll(); }
@@ -704,6 +814,9 @@
       var r = await sb.rpc('buyer_cancel_request', { p_id: id });
       if(r.error) toast(friendlyErr(r.error)); else { ping('request'); await loadRequests(); save(); renderAll(); }
     }
+  });
+  document.addEventListener('change', function(e){
+    if(e.target.id === 'sortSel'){ store.filt.sort = e.target.value; save(); renderAll(); }
   });
   document.addEventListener('input', function(e){
     if(e.target.id === 'q'){
