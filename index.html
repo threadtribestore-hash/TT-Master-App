@@ -18025,8 +18025,18 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
       var rows = (o.products || []).map(function(p){
         var m = map[norm(p.name)], f = m && fileById(m.fileId), left = linesLeft(p), lineSt = st[p.id];
         if (!m || !f) unmapped++; else if (!lineSt && left > 0) sendable++;
-        return '<tr><td>' + esc(p.name) + '</td><td class="num">' + left + '</td>' +
-          '<td>' + (f ? esc(f.name) + (m.plateId ? ' · plate ' + m.plateId : '') : '<a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--amber)">Set up product →</a>') + '</td>' +
+        // Done = units Studio already counts + units from plates the farm has finished, capped at the order qty.
+        var qty = +p.qty || 0, farmUnits = lineSt ? lineSt.completed * Math.max(+((m && m.unitsPerPlate) || 1), 1) : 0;
+        var done = Math.min((+p.already || 0) + farmUnits, qty);
+        var fileCell;
+        if (lineSt) fileCell = (f ? esc(f.name) + (m.plateId ? ' · plate ' + m.plateId : '') : '<span style="color:var(--dim)">file unlinked</span>') +
+          '<div style="color:var(--dim);font-size:12px;margin-top:2px">Sent. Undo send to change the file.</div>';
+        else if (library) fileCell = '<select data-f="fileId" aria-label="Bambuddy file for ' + esc(p.name) + '"><option value="">— choose file —</option>' +
+          library.map(function(x){ return '<option value="' + x.id + '"' + (f && x.id === f.id ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') + '</select>' +
+          (f ? ' <a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--dim);font-size:12px">plate / per plate</a>' : '');
+        else fileCell = f ? esc(f.name) : '—';
+        return '<tr data-name="' + esc(p.name) + '"><td>' + esc(p.name) + '</td><td class="num">' + done + ' / ' + qty + '</td><td class="num">' + left + '</td>' +
+          '<td>' + fileCell + '</td>' +
           '<td class="num">' + (f ? (m.unitsPerPlate || 1) : '') + '</td><td class="num">' + (f ? runsFor(p, m) : '') + '</td>' +
           '<td>' + progressCell(lineSt, o.id, p.id) + '</td><td>' + filamentCell(lineSt) + '</td></tr>';
       }).join('');
@@ -18035,7 +18045,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
         (unmapped ? '<span class="ttf-pill bad">' + unmapped + ' product(s) not set up</span>' : '') +
         (used ? '<span class="ttf-pill">' + g(used) + ' used' + (wasted ? ' · ' + g(wasted) + ' wasted' : '') + '</span>' : '') +
         '<span class="ttf-spacer"></span><button class="ttf-btn primary" data-act="send" data-order="' + esc(o.id) + '"' + (sendable && !connErr ? '' : ' disabled') + '>Send ' + (sendable || '') + ' to farm</button></div>' +
-        '<div class="ttf-wrap"><table><thead><tr><th>Product</th><th class="num">Units left</th><th>Bambuddy file</th><th class="num">Per plate</th><th class="num">Plates</th><th>Farm progress</th><th>Filament</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+        '<div class="ttf-wrap"><table><thead><tr><th>Product</th><th class="num">Done</th><th class="num">Units left</th><th>Bambuddy file</th><th class="num">Per plate</th><th class="num">Plates</th><th>Farm progress</th><th>Filament</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     });
     return h;
   }
@@ -18209,7 +18219,11 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     e.preventDefault();
     if (a.dataset.act === 'retry') { body.innerHTML = '<p class="ttf-note">Connecting…</p>'; connect().then(refreshStatus).then(render); }
     if (a.dataset.act === 'send') send(a.dataset.order);
-    if (a.dataset.act === 'map') { tab = 'products'; render(); }
+    if (a.dataset.act === 'map') {
+      tab = 'products'; render();
+      var row = [].filter.call(body.querySelectorAll('tr[data-name]'), function(r){ return r.dataset.name === a.dataset.name; })[0];
+      if (row) { row.scrollIntoView({ block: 'center' }); row.style.outline = '2px solid var(--cyan)'; setTimeout(function(){ row.style.outline = ''; }, 1600); }
+    }
     if (a.dataset.act === 'back') { tab = 'orders'; render(); }
     if (a.dataset.act === 'setup') { tab = 'key'; render(); }
     if (a.dataset.act === 'undo') undoLine(a.dataset.order, a.dataset.line);
