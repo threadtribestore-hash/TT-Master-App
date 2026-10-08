@@ -17978,6 +17978,20 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     if (!waste) return '<p class="ttf-note">Loading…</p>';
     var map = getMap();
     var h = '<p class="ttf-note"><b>Used</b> is what came off the spools; Bambuddy counts a failed print only up to where it stopped. <b>Wasted</b> is filament that went into failed or cancelled prints. <b>Sliced/unit</b> vs <b>catalogue weight</b> shows extra filament each unit takes for supports, brims and purge.</p>';
+    h += '<h3 class="ttf-h">By order</h3>';
+    var orders = waste.orders || [];
+    if (!orders.length) h += '<p class="ttf-note">No orders sent to the farm yet.</p>';
+    else {
+      var all = studio().orders || [], STATUS = { quoted: 'Quoted', booked: 'Booked', in_production: 'In production', production_done: 'Production done', delivered: 'Delivered', lost: 'Lost', cancelled: 'Cancelled' };
+      h += '<div class="ttf-wrap"><table><thead><tr><th>Order</th><th>Client</th><th>Status</th><th class="num">Plates done</th><th class="num">Failed</th><th class="num">Planned</th><th class="num">Used</th><th class="num">Wasted</th><th class="num">Waste %</th></tr></thead><tbody>';
+      orders.forEach(function(x){
+        var so = all.filter(function(o){ return o.id === x.orderId; })[0] || {};
+        h += '<tr><td>' + esc(so.displayId || x.displayId || '—') + '</td><td>' + esc(so.clientName || '') + '</td><td>' + esc(STATUS[so.status] || so.status || '—') + '</td>' +
+          '<td class="num">' + x.plates + ' / ' + x.target + '</td><td class="num">' + (x.failed ? '<span style="color:var(--red)">' + x.failed + '</span>' : 0) + '</td>' +
+          '<td class="num">' + g(x.plannedGrams) + '</td><td class="num">' + g(x.usedGrams) + '</td><td class="num">' + g(x.wastedGrams) + '</td><td class="num">' + pct(x.wastedGrams, x.usedGrams) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
     h += '<h3 class="ttf-h">By product (orders sent from Studio)</h3>';
     if (!waste.products.length) h += '<p class="ttf-note">No orders sent to the farm yet.</p>';
     else {
