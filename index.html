@@ -17877,7 +17877,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     <header>
       <h2>Print farm · Bambuddy</h2>
       <span class="ttf-tabs"><button data-tab="orders" class="on">Orders</button> <button data-tab="products">Products</button></span>
-      <button class="ttf-btn" id="ttf-key" type="button" title="Set the Bambuddy API key">🔑 API key</button>
+      <button class="ttf-btn" id="ttf-key" type="button" title="Bridge address, passcode and API key">⚙ Setup</button>
       <button class="ttf-btn" id="ttf-close" type="button">Close</button>
     </header>
     <div class="ttf-body" id="ttf-body"></div>
@@ -17887,7 +17887,8 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 (function(){
   // The hosted app reuses this page for Stock mode; the farm panel belongs to Studio only.
   if (window.TT_STOCK_MODE) { ['ttf-open', 'ttf-back'].forEach(function(id){ var el = document.getElementById(id); if (el) el.remove(); }); return; }
-  var BRIDGE = 'http://127.0.0.1:8765';
+  var LOCAL_BRIDGE = 'http://127.0.0.1:8765';
+  var CONN_KEY = 'tt-bambuddy-conn-v1';  // this device's bridge address + passcode
   var STATE_KEY = 'thread-tribe-print-farm-state-v1';
   var MAP_KEY = 'tt-bambuddy-map-v1';
   var HOLD_KEY = 'tt-bambuddy-hold-v1';
@@ -17905,7 +17906,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     }
   }
 
-  var tab = 'orders', library = null, printers = null, connErr = null, statusByOrder = {}, plateCache = {};
+  var tab = 'orders', library = null, printers = null, connErr = null, statusByOrder = {}, plateCache = {}, isLocal = null;
 
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function norm(n){ return String(n || '').trim().toLowerCase().replace(/\s+/g, ' '); }
@@ -17915,11 +17916,17 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   function getMap(){ return rd(MAP_KEY, {}); }
   function setMapEntry(name, patch){ var m = getMap(), k = norm(name); m[k] = Object.assign({ name: name }, m[k] || {}, patch); wr(MAP_KEY, m); }
 
+  function conn(){ var c = rd(CONN_KEY, {}); return { url: (c.url || LOCAL_BRIDGE).replace(/\/+$/, ''), passcode: c.passcode || '' }; }
+  function isCustomBridge(){ return conn().url !== LOCAL_BRIDGE; }
+
   function api(path, body){
-    var opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
-    return fetch(BRIDGE + path, opt).then(function(r){
+    var c = conn(), headers = {};
+    if (c.passcode) headers['X-Bridge-Passcode'] = c.passcode;
+    if (body) headers['Content-Type'] = 'application/json';
+    var opt = body ? { method: 'POST', headers: headers, body: JSON.stringify(body) } : { headers: headers };
+    return fetch(c.url + path, opt).then(function(r){
       return r.json().catch(function(){ return {}; }).then(function(j){
-        if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+        if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; e.code = j.code; throw e; }
         return j;
       });
     }, function(){ var e = new Error('bridge-down'); e.status = 0; throw e; });
@@ -17927,10 +17934,13 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 
   function connect(){
     connErr = null;
-    return api('/status').then(function(s){ printers = s.printers; return api('/library'); })
+    return api('/whoami').then(function(w){ isLocal = w.local; return api('/status'); })
+      .then(function(s){ printers = s.printers; return api('/library'); })
       .then(function(l){ library = l.files; })
       .catch(function(e){ connErr = e; });
   }
+  // Errors only the Setup screen can fix: missing API key, or remote passcode problems.
+  function needsSetup(){ return connErr && (connErr.status === 401 || connErr.status === 403); }
 
   function linesLeft(p){ return Math.max((+p.qty || 0) - (+p.already || 0), 0); }
   function runsFor(p, m){ var u = Math.max(+((m && m.unitsPerPlate) || 1), 1); return Math.ceil(linesLeft(p) / u); }
@@ -17942,8 +17952,9 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 
   function banner(){
     if (!connErr) return '';
-    if (connErr.status === 0) return '<div class="ttf-banner err"><b>The bridge isn\'t running.</b> Double-click <b>Start Studio Bridge</b> in PrintFarm/studio-bridge, keep its window open, then press Retry. <button class="ttf-btn" data-act="retry">Retry</button></div>';
-    if (connErr.status === 401 || connErr.status === 403) return '';
+    if (connErr.status === 0 && isCustomBridge()) return '<div class="ttf-banner err"><b>Can\'t reach the print-farm Mac</b> at ' + esc(conn().url) + '. Check this device is connected in Tailscale and the Mac is on with the bridge running. <button class="ttf-btn" data-act="retry">Retry</button> <button class="ttf-btn" data-act="setup">Setup</button></div>';
+    if (connErr.status === 0) return '<div class="ttf-banner err"><b>No bridge on this device.</b> On the print-farm Mac: double-click <b>Start Studio Bridge</b>, keep its window open, then Retry. On a phone or another computer: open <b>Setup</b> and enter the Mac\'s Tailscale address. <button class="ttf-btn" data-act="retry">Retry</button> <button class="ttf-btn" data-act="setup">Setup</button></div>';
+    if (needsSetup()) return '';
     return '<div class="ttf-banner err"><b>Couldn\'t reach Bambuddy:</b> ' + esc(connErr.message) + ' <button class="ttf-btn" data-act="retry">Retry</button></div>';
   }
 
@@ -18029,20 +18040,51 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   }
 
   function renderKey(){
-    var needed = connErr && (connErr.status === 401 || connErr.status === 403);
-    return '<h3 style="margin:0 0 6px;font-size:14px">Bambuddy API key</h3>' +
-      (needed ? '<div class="ttf-banner">' + esc(connErr.message) + '</div>' : '') +
-      '<p class="ttf-note">In Bambuddy, open Settings → API Keys and create a key with <b>queue</b>, <b>read status</b> and <b>library</b> permissions; leave printer control off. Paste it below. It is checked with Bambuddy, then saved on this Mac only (PrintFarm/studio-bridge/config.json). Studio never stores it.</p>' +
-      '<form class="ttf-keyform" id="ttf-keyform" autocomplete="off"><input type="password" id="ttf-keyinput" placeholder="bb_…" spellcheck="false" autocomplete="off" aria-label="Bambuddy API key">' +
-      '<button class="ttf-btn primary" type="submit">Check &amp; save</button>' + (needed ? '' : ' <button class="ttf-btn" type="button" data-act="back">Cancel</button>') + '</form>' +
-      '<p class="ttf-msg" id="ttf-keymsg"></p>';
+    var c = conn(), needed = needsSetup();
+    var h = (needed ? '<div class="ttf-banner">' + esc(connErr.message) + '</div>' : '') +
+      '<h3 style="margin:0 0 6px;font-size:14px">Bridge address on this device</h3>' +
+      '<p class="ttf-note">On the print-farm Mac leave it blank. On a phone or another computer, enter the Mac\'s Tailscale address (e.g. https://pragyas-macbook-air.tailc45511.ts.net) and the passcode set on the Mac. Saved on this device only.</p>' +
+      '<form class="ttf-keyform" id="ttf-connform" autocomplete="off"><input type="url" id="ttf-urlinput" placeholder="' + LOCAL_BRIDGE + ' (this Mac)" value="' + (isCustomBridge() ? esc(c.url) : '') + '" spellcheck="false" aria-label="Bridge address">' +
+      '<input type="password" id="ttf-passinput" placeholder="Passcode (phones only)" value="' + esc(c.passcode) + '" autocomplete="off" aria-label="Bridge passcode">' +
+      '<button class="ttf-btn primary" type="submit">Save &amp; connect</button></form><p class="ttf-msg" id="ttf-connmsg"></p>';
+    if (isLocal !== false) {
+      h += '<h3 style="margin:18px 0 6px;font-size:14px">Passcode for phones</h3>' +
+        '<p class="ttf-note">Phones reaching this Mac over Tailscale must give this passcode. Until one is set, remote access stays off. At least 6 characters.</p>' +
+        '<form class="ttf-keyform" id="ttf-setpassform" autocomplete="off"><input type="password" id="ttf-newpass" placeholder="New passcode" autocomplete="new-password" aria-label="New passcode">' +
+        '<button class="ttf-btn primary" type="submit">Set passcode</button></form><p class="ttf-msg" id="ttf-setpassmsg"></p>' +
+        '<h3 style="margin:18px 0 6px;font-size:14px">Bambuddy API key</h3>' +
+        '<p class="ttf-note">In Bambuddy, open Settings → API Keys and create a key with <b>queue</b>, <b>read status</b> and <b>library</b> permissions; leave printer control off. It is checked with Bambuddy, then saved on this Mac only. Studio never stores it.</p>' +
+        '<form class="ttf-keyform" id="ttf-keyform" autocomplete="off"><input type="password" id="ttf-keyinput" placeholder="bb_…" spellcheck="false" autocomplete="off" aria-label="Bambuddy API key">' +
+        '<button class="ttf-btn primary" type="submit">Check &amp; save</button></form>' +
+        '<p class="ttf-msg" id="ttf-keymsg"></p>';
+    } else {
+      h += '<p class="ttf-note" style="margin-top:14px">The passcode and Bambuddy API key can only be changed in Studio on the print-farm Mac.</p>';
+    }
+    return h + (needed ? '' : '<p><button class="ttf-btn" type="button" data-act="back">Back to orders</button></p>');
+  }
+
+  function saveConn(){
+    var url = document.getElementById('ttf-urlinput').value.trim(), pass = document.getElementById('ttf-passinput').value.trim(), msg = document.getElementById('ttf-connmsg');
+    if (url && !/^https?:\/\//.test(url)) url = 'https://' + url;
+    wr(CONN_KEY, { url: url || '', passcode: pass });
+    msg.className = 'ttf-msg'; msg.textContent = 'Connecting…';
+    connect().then(function(){
+      if (!connErr) { msg.className = 'ttf-msg ok'; msg.textContent = 'Connected.'; setTimeout(function(){ tab = 'orders'; refreshStatus().then(render); }, 700); }
+      else { msg.className = 'ttf-msg err'; msg.textContent = connErr.status === 0 ? 'Can\'t reach a bridge at that address.' : connErr.message; }
+    });
+  }
+
+  function setPasscode(){
+    var input = document.getElementById('ttf-newpass'), msg = document.getElementById('ttf-setpassmsg');
+    api('/passcode', { passcode: input.value }).then(function(){
+      input.value = ''; msg.className = 'ttf-msg ok'; msg.textContent = 'Passcode set. Enter the same passcode in Setup on your phone.';
+    }).catch(function(e){ msg.className = 'ttf-msg err'; msg.textContent = e.message; });
   }
 
   function render(){
-    var needKey = connErr && (connErr.status === 401 || connErr.status === 403);
+    var needKey = needsSetup();
     document.querySelectorAll('#ttf .ttf-tabs button').forEach(function(b){ b.classList.toggle('on', b.dataset.tab === tab); });
     document.getElementById('ttf-body').innerHTML = (tab === 'key' || needKey) ? renderKey() : banner() + (tab === 'orders' ? renderOrders() : renderProducts());
-    var ki = document.getElementById('ttf-keyinput'); if (ki) ki.focus();
   }
 
   function saveKey(){
@@ -18103,8 +18145,15 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     if (a.dataset.act === 'send') send(a.dataset.order);
     if (a.dataset.act === 'map') { tab = 'products'; render(); }
     if (a.dataset.act === 'back') { tab = 'orders'; render(); }
+    if (a.dataset.act === 'setup') { tab = 'key'; render(); }
   });
-  body.addEventListener('submit', function(e){ if (e.target.id === 'ttf-keyform') { e.preventDefault(); saveKey(); } });
+  body.addEventListener('submit', function(e){
+    var id = e.target.id; if (!/^ttf-/.test(id)) return;
+    e.preventDefault();
+    if (id === 'ttf-keyform') saveKey();
+    if (id === 'ttf-connform') saveConn();
+    if (id === 'ttf-setpassform') setPasscode();
+  });
   body.addEventListener('change', function(e){
     if (e.target.id === 'ttf-hold') { wr(HOLD_KEY, e.target.checked); return; }
     var row = e.target.closest('tr[data-name]'), f = e.target.dataset.f; if (!row || !f) return;
