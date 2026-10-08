@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f4f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TT Trade">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Thread Tribe Trade</title>
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  :root{
+    --bg:#f2f4f7; --panel:#ffffff; --panel2:#f6f8fa; --line:#e1e6ec; --text:#16202c; --dim:#617183; --input:#eef1f5;
+    --accent:#1f9e93; --accent-ink:#ffffff; --accent-soft:rgba(31,158,147,0.12);
+    --amber:#c97c0e; --amber-soft:rgba(240,168,60,0.16); --red:#d0453e; --red-soft:rgba(232,97,90,0.13); --green:#2f8f40; --green-soft:rgba(126,208,138,0.18);
+    --shadow:0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0d1117; --panel:#151c26; --panel2:#111821; --line:#243244; --text:#e3eaf2; --dim:#8a9bb0; --input:#0b1118;
+      --accent:#4fd1c5; --accent-ink:#06201d; --accent-soft:rgba(79,209,197,0.14);
+      --amber:#f0a83c; --red:#ef6b63; --green:#7ed08a; --shadow:none; }
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html, body{ background:var(--bg); }
+  body{ color:var(--text); font-family:'Space Grotesk', system-ui, -apple-system, sans-serif; font-size:15px; line-height:1.45; -webkit-text-size-adjust:100%;
+    padding:calc(12px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom)); min-height:100vh; }
+  .wrap{ max-width:560px; margin:0 auto; }
+  button{ font:inherit; color:inherit; }
+  .hidden{ display:none !important; }
+
+  .top{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0 14px; }
+  .top-left{ min-width:0; }
+  .eyebrow{ font-size:12px; font-weight:600; color:var(--accent); letter-spacing:0.3px; }
+  .title{ font-size:22px; font-weight:700; letter-spacing:-0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sync{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim); background:var(--panel); border:1px solid var(--line); padding:6px 10px; border-radius:20px; white-space:nowrap; cursor:pointer; }
+  .sync i{ width:8px; height:8px; border-radius:50%; background:var(--dim); display:inline-block; }
+  .sync.live i{ background:var(--green); box-shadow:0 0 0 3px var(--green-soft); }
+  .sync.off i{ background:var(--red); }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow); }
+  .h2{ font-size:13px; font-weight:600; color:var(--dim); margin:20px 4px 8px; display:flex; justify-content:space-between; align-items:center; }
+  .h2 .count{ background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:0 8px; font-size:12px; }
+  .muted{ color:var(--dim); font-size:13px; }
+  .row{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .row:last-child{ border-bottom:none; }
+  .row .r{ text-align:right; font-weight:600; white-space:nowrap; }
+  .empty{ text-align:center; color:var(--dim); padding:28px 12px; }
+  .empty b{ display:block; color:var(--text); font-size:17px; margin-bottom:4px; }
+
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid var(--line); background:var(--panel); border-radius:12px; padding:11px 16px; font-weight:600; font-size:14.5px; cursor:pointer; }
+  .btn:active{ transform:scale(0.98); }
+  .btn.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .btn.block{ width:100%; padding:15px 16px; font-size:16px; border-radius:14px; }
+  .btn.small{ padding:8px 12px; font-size:13.5px; border-radius:10px; }
+  .btn.danger{ color:var(--red); }
+  .btn[disabled]{ opacity:0.5; }
+  .link{ background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer; padding:6px 0; font-size:14px; }
+  .btns{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+
+  .hello{ font-size:15px; color:var(--dim); margin:2px 4px 12px; }
+  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px; }
+  .stat{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; cursor:pointer; box-shadow:var(--shadow); text-align:left; }
+  .stat .k{ font-size:12.5px; color:var(--dim); }
+  .stat .v{ font-size:24px; font-weight:700; letter-spacing:-0.4px; margin-top:2px; }
+  .tier .name{ font-size:20px; font-weight:700; }
+  .tier .pct{ color:var(--accent); font-weight:700; }
+  .bar{ height:8px; background:var(--panel2); border-radius:6px; overflow:hidden; margin-top:10px; border:1px solid var(--line); }
+  .bar span{ display:block; height:100%; border-radius:6px; background:var(--accent); }
+
+  .seg{ display:flex; gap:6px; overflow-x:auto; padding:2px 0 4px; margin:0 -16px 8px; padding-left:16px; padding-right:16px; scrollbar-width:none; }
+  .seg::-webkit-scrollbar{ display:none; }
+  .seg button{ flex:none; border:1px solid var(--line); background:var(--panel); border-radius:20px; padding:8px 14px; font-size:13.5px; font-weight:600; color:var(--dim); cursor:pointer; }
+  .seg button.on{ background:var(--text); color:var(--bg); border-color:var(--text); }
+  .seg button .n{ margin-left:6px; font-size:12px; opacity:0.75; }
+
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .prod{ background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden; cursor:pointer; text-align:left; box-shadow:var(--shadow); padding:0; display:flex; flex-direction:column; }
+  .prod .ph{ aspect-ratio:1/1; background:var(--panel2); display:flex; align-items:center; justify-content:center; font-size:34px; color:var(--dim); }
+  .prod .ph img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .prod .b{ padding:10px 12px 12px; }
+  .prod .n{ font-weight:600; font-size:14px; line-height:1.25; }
+  .prod .w{ font-size:12px; color:var(--dim); margin-top:2px; }
+  .prod .p{ font-weight:700; margin-top:6px; }
+  .prod .p s{ color:var(--dim); font-weight:500; font-size:12.5px; margin-left:4px; }
+  .search{ margin-bottom:10px; }
+
+  .item{ display:flex; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; cursor:pointer; width:100%; text-align:left; box-shadow:var(--shadow); }
+  .item .body{ flex:1; min-width:0; }
+  .item .t{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .s{ font-size:13px; color:var(--dim); margin-top:2px; }
+  .item .chev{ color:var(--dim); font-size:20px; }
+  .chip{ display:inline-block; font-size:12px; font-weight:600; padding:2px 8px; border-radius:8px; background:var(--panel2); color:var(--dim); white-space:nowrap; }
+  .chip.ok{ background:var(--green-soft); color:var(--green); } .chip.soon{ background:var(--amber-soft); color:var(--amber); } .chip.bad{ background:var(--red-soft); color:var(--red); } .chip.new{ background:var(--accent-soft); color:var(--accent); }
+
+  .steps{ display:flex; align-items:center; margin:16px 0 4px; }
+  .steps .st{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; font-size:11px; color:var(--dim); position:relative; text-align:center; }
+  .steps .st b{ width:24px; height:24px; border-radius:50%; border:2px solid var(--line); background:var(--panel); display:flex; align-items:center; justify-content:center; font-size:12px; z-index:1; }
+  .steps .st.done b{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .steps .st.now b{ border-color:var(--accent); color:var(--accent); }
+  .steps .st.now{ color:var(--text); font-weight:600; }
+  .steps .st:not(:first-child)::before{ content:''; position:absolute; top:12px; right:50%; width:100%; height:2px; background:var(--line); }
+  .steps .st.done:not(:first-child)::before, .steps .st.now:not(:first-child)::before{ background:var(--accent); }
+
+  .prodbox{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .prodbox > div{ background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .prodbox .k{ font-size:12px; color:var(--dim); }
+  .prodbox .v{ font-size:18px; font-weight:700; }
+
+  label{ display:block; font-size:13px; color:var(--dim); margin:12px 0 6px; font-weight:500; }
+  input, textarea, select{ width:100%; background:var(--input); border:1px solid var(--line); border-radius:12px; padding:13px 14px; font:inherit; font-size:16px; color:var(--text); outline:none; }
+  input:focus, textarea:focus{ border-color:var(--accent); }
+  textarea{ min-height:84px; resize:vertical; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:0 10px; }
+  .qty{ display:flex; align-items:center; gap:8px; }
+  .qty input{ text-align:center; font-weight:700; }
+  .qty button{ width:46px; height:46px; flex:none; border-radius:12px; border:1px solid var(--line); background:var(--panel); font-size:20px; cursor:pointer; }
+  .hint{ font-size:12.5px; color:var(--dim); margin-top:6px; }
+  .note{ border-radius:12px; padding:12px 14px; font-size:14px; margin-top:12px; }
+  .note.info{ background:var(--accent-soft); } .note.warn{ background:var(--amber-soft); } .note.bad{ background:var(--red-soft); } .note.good{ background:var(--green-soft); }
+
+  .big{ text-align:center; padding:22px 16px; }
+  .big .k{ color:var(--dim); font-size:14px; }
+  .big .v{ font-size:40px; font-weight:700; letter-spacing:-1px; margin:4px 0 2px; }
+
+  .nav{ position:fixed; left:0; right:0; bottom:0; z-index:50; background:var(--panel); border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); display:grid; grid-template-columns:repeat(5, 1fr); }
+  .nav button{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0; font-size:11.5px; font-weight:600; color:var(--dim); cursor:pointer; position:relative; }
+  .nav button svg{ width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+  .nav button.on{ color:var(--accent); }
+  .nav .badge{ position:absolute; top:2px; left:calc(50% + 6px); background:var(--accent); color:var(--accent-ink); font-size:10.5px; min-width:17px; height:17px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 4px; }
+
+  .scrim{ position:fixed; inset:0; background:rgba(5,8,12,0.5); z-index:80; opacity:0; transition:opacity .2s; }
+  .scrim.show{ opacity:1; }
+  .sheet{ position:fixed; left:0; right:0; bottom:0; z-index:90; background:var(--bg); border-radius:22px 22px 0 0; max-height:92vh; overflow-y:auto; padding:8px 16px calc(20px + env(safe-area-inset-bottom));
+    transform:translateY(100%); transition:transform .25s ease; max-width:600px; margin:0 auto; overscroll-behavior:contain; }
+  .sheet.show{ transform:none; }
+  .grab{ width:40px; height:5px; border-radius:3px; background:var(--line); margin:4px auto 10px; }
+  .sheet-h{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:6px; }
+  .sheet-h .t{ font-size:19px; font-weight:700; letter-spacing:-0.2px; }
+  .x{ background:var(--panel); border:1px solid var(--line); border-radius:50%; width:34px; height:34px; flex:none; font-size:16px; cursor:pointer; }
+  .hero{ width:100%; aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:var(--panel2); margin:6px 0 10px; display:flex; align-items:center; justify-content:center; font-size:56px; color:var(--dim); }
+  .hero img{ width:100%; height:100%; object-fit:cover; }
+
+  .signin{ max-width:420px; margin:40px auto 0; }
+  .signin h1{ font-size:26px; letter-spacing:-0.4px; margin-bottom:6px; }
+  .err{ color:var(--red); font-size:13.5px; margin-top:10px; min-height:18px; }
+
+  .toast{ position:fixed; left:50%; bottom:calc(86px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); background:var(--text); color:var(--bg); padding:11px 18px; border-radius:12px; font-size:14px; font-weight:600;
+    opacity:0; transition:all .2s; z-index:200; max-width:calc(100% - 32px); text-align:center; pointer-events:none; }
+  .toast.show{ opacity:1; transform:translateX(-50%); }
+
+  /* invoice (printable) */
+  .inv{ position:fixed; inset:0; z-index:150; background:#fff; color:#111; overflow:auto; padding:20px 16px 40px; font-family:system-ui, -apple-system, sans-serif; }
+  .inv .bar2{ display:flex; gap:8px; justify-content:flex-end; margin-bottom:14px; }
+  .inv .doc{ max-width:720px; margin:0 auto; font-size:13px; }
+  .inv h1{ font-size:20px; margin-bottom:2px; }
+  .inv table{ width:100%; border-collapse:collapse; margin:14px 0; }
+  .inv th, .inv td{ border-bottom:1px solid #ddd; padding:7px 6px; text-align:left; }
+  .inv td.n, .inv th.n{ text-align:right; }
+  .inv .meta{ display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-top:12px; }
+  .inv .tot td{ border:none; padding:3px 6px; }
+  .inv .btn{ color:#111; background:#f2f4f7; border-color:#ccc; }
+  @media print{ .inv .bar2{ display:none; } body > *:not(.inv){ display:none !important; } .inv{ position:static; padding:0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top" id="top">
+    <div class="top-left"><div class="eyebrow" id="eyebrow">Thread Tribe Trade</div><div class="title" id="title">Welcome</div></div>
+    <button class="sync hidden" id="sync"><i></i><span id="syncText">Live</span></button>
+  </div>
+  <div id="signin" class="hidden"></div>
+  <div id="screen" class="hidden"></div>
+</div>
+
+<nav class="nav hidden" id="nav">
+  <button data-tab="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</button>
+  <button data-tab="shop"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Shop</button>
+  <button data-tab="cart"><svg viewBox="0 0 24 24"><path d="M3 4h2l2.2 11h11L21 7H7"/><circle cx="9" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/></svg>Cart</button>
+  <button data-tab="orders"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Orders</button>
+  <button data-tab="account"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</button>
+</nav>
+<div class="scrim hidden" id="scrim"></div>
+<div class="sheet hidden" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div id="sheetBody"></div></div>
+<div class="inv hidden" id="inv"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  // ======================= data & sync =======================
+  // Thread Tribe publishes a "buyer pack" for this client (catalogue at their
+  // price, their orders, invoices and production progress). This app only reads
+  // that pack and sends requests back through buyer_submit_request.
+  var KEY = 'tt-buyer-app-v1';
+  var CFG = window.TT_CONFIG || {};
+  var CLOUD_URL = CFG.supabaseUrl || 'https://aeshadnzutizlpayhtnf.supabase.co';
+  var CLOUD_KEY = CFG.supabaseKey || 'sb_publishable_tunpMMqpGPgRQreweefjTA_nBO7fXId';
+  var FLOW = ['booked', 'in_production', 'production_done', 'shipped', 'delivered'];
+  var STATUS = { quoted: 'Quote', booked: 'Confirmed', in_production: 'In production', production_done: 'Ready', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled' };
+  var PAY = { unpaid: 'Unpaid', partial: 'Part paid', paid: 'Paid', refunded: 'Refunded' };
+
+  var store = { pack: null, clientId: '', email: '', cart: [], requests: [] };
+  var sb = null, session = null, channel = null, live = null;
+  var cloud = { status: '', otpEmail: '', err: '', unlinked: false, choosing: null, rtDb: '', rtLive: '', missing: false, refreshTimer: null, booting: true, sending: false };
+  var tab = 'home', shopSeg = 'all', shopQuery = '', orderSeg = 'active';
+
+  function load(){
+    try{ var s = JSON.parse(localStorage.getItem(KEY)); if(s && typeof s === 'object') store = Object.assign(store, s); }catch(e){}
+    if(!Array.isArray(store.cart)) store.cart = [];
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  function esc(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML.replace(/"/g, '&quot;'); }
+  function money(v){ return '₹' + Math.round(v || 0).toLocaleString('en-IN'); }
+  function money2(v){ return '₹' + (Math.round((v || 0) * 100) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  // Plain dates ("2026-10-09") are calendar days; timestamps are shown in local time.
+  function fmtDate(s){ if(!s) return ''; s = String(s); var d = new Date(s.length > 10 ? s : s + 'T00:00:00'); return isNaN(d) ? s : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
+  function toast(msg){ var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(function(){ t.classList.remove('show'); }, 2600); }
+  function buzz(){ try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} }
+  function pack(){ return store.pack || { catalogue: [], orders: [], tier: {}, terms: {}, client: {}, business: {} }; }
+  function moq(){ return (pack().terms && pack().terms.moq) || 25; }
+  function product(id){ return pack().catalogue.find(function(p){ return p.id === id; }); }
+  function isOpenOrder(o){ return ['quoted', 'booked', 'in_production', 'production_done', 'shipped'].indexOf(o.status) !== -1; }
+  function openRequests(){ return (store.requests || []).filter(function(q){ return q.status === 'open'; }); }
+  function totalDue(){ return pack().orders.reduce(function(s, o){ return s + (o.due || 0); }, 0); }
+  function cartCount(){ return store.cart.reduce(function(s, l){ return s + (l.qty || 0); }, 0); }
+  function isLive(){ return cloud.rtLive === 'SUBSCRIBED' || cloud.rtDb === 'SUBSCRIBED'; }
+  function friendlyErr(err){
+    var m = String((err && err.message) || err || '');
+    if(/does not exist|schema cache/i.test(m)) return 'Thread Tribe hasn’t switched this on yet.';
+    if(/fetch|network|Load failed/i.test(m)) return 'No internet — try again when you’re online.';
+    return m || 'Couldn’t send.';
+  }
+
+  function subscribe(){
+    if(channel || !sb) return;
+    try{
+      channel = sb.channel('tt-buyer-' + Math.random().toString(36).slice(2, 8))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'buyer_packs' }, function(){ refreshSoon(250); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'buyer_requests' }, function(){ refreshSoon(300); })
+        .subscribe(function(st){ cloud.rtDb = st; renderSync(); });
+    }catch(e){}
+    try{
+      live = sb.channel('tt-live', { config: { broadcast: { self: false } } })
+        .on('broadcast', { event: 'ping' }, function(m){ if(m && m.payload && m.payload.kind === 'buyers') refreshSoon(150); })
+        .subscribe(function(st){ cloud.rtLive = st; renderSync(); });
+    }catch(e){}
+  }
+  function ping(kind){ try{ if(live && cloud.rtLive === 'SUBSCRIBED') live.send({ type: 'broadcast', event: 'ping', payload: { kind: kind } }); }catch(e){} }
+  function refreshSoon(ms){ clearTimeout(cloud.refreshTimer); cloud.refreshTimer = setTimeout(refresh, ms || 0); }
+
+  async function refresh(){
+    if(!sb || !session) return;
+    var r = await sb.from('buyer_packs').select('client_id,pack,updated_at').order('client_id');
+    if(r.error){
+      cloud.missing = /does not exist|schema cache|relation/i.test(r.error.message || '');
+      cloud.status = /fetch|network|Load failed/i.test(r.error.message || '') || !navigator.onLine ? 'offline' : 'error';
+      renderAll(); return;
+    }
+    var rows = r.data || [];
+    cloud.unlinked = !rows.length;
+    if(!rows.length){ store.pack = null; save(); renderAll(); return; }
+    var row = rows.find(function(x){ return x.client_id === store.clientId; });
+    if(!row && rows.length > 1){ cloud.choosing = rows; store.pack = null; renderAll(); return; }
+    row = row || rows[0];
+    cloud.choosing = null;
+    var prev = store.clientId === row.client_id ? store.pack : null;
+    if(store.clientId && store.clientId !== row.client_id) store.cart = [];
+    store.clientId = row.client_id; store.pack = row.pack;
+    cloud.status = 'ok';
+    await loadRequests();
+    // Drop cart lines for products no longer offered; keep prices current.
+    store.cart = store.cart.filter(function(l){ return product(l.productId); });
+    save();
+    if(prev) notifyChanges(prev, row.pack);
+    renderAll();
+  }
+  async function loadRequests(){
+    var r = await sb.from('buyer_requests').select('id,kind,payload,status,reply,created_at,updated_at').eq('client_id', store.clientId).order('created_at', { ascending: false }).limit(100);
+    if(r.error) return;
+    var before = {};
+    (store.requests || []).forEach(function(q){ before[q.id] = q.status; });
+    var answered = (r.data || []).filter(function(q){ return before[q.id] === 'open' && q.status !== 'open' && q.status !== 'cancelled'; });
+    store.requests = r.data || [];
+    if(answered.length) toast('Thread Tribe replied' + (answered[0].reply ? ': ' + answered[0].reply : ''));
+  }
+  function notifyChanges(prev, next){
+    var before = {}, msgs = [];
+    (prev.orders || []).forEach(function(o){ before[o.id] = o; });
+    (next.orders || []).forEach(function(o){
+      var b = before[o.id];
+      if(b && b.status !== o.status) msgs.push((o.displayId || 'Order') + ' is now ' + (STATUS[o.status] || o.status).toLowerCase());
+    });
+    if(prev.tier && next.tier && prev.tier.name !== next.tier.name && next.tier.name) msgs.push('You’re now ' + next.tier.name + ' — ' + next.tier.pct + '% off');
+    if(msgs.length) toast(msgs.slice(0, 2).join(' · '));
+  }
+  async function submitRequest(kind, payload){
+    if(!session){ toast('Sign in again to send this'); return false; }
+    var r = await sb.rpc('buyer_submit_request', { p_client_id: store.clientId, p_kind: kind, p_payload: payload });
+    if(r.error){ toast(friendlyErr(r.error)); return false; }
+    ping('request');
+    await loadRequests();
+    save();
+    return true;
+  }
+
+  // ======================= sign in =======================
+  async function boot(){
+    load();
+    if(!window.supabase){ cloud.booting = false; renderAll(); return; }
+    sb = window.supabase.createClient(CLOUD_URL, CLOUD_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'tt-buyer-auth' } });
+    var s = await sb.auth.getSession();
+    session = s.data && s.data.session;
+    cloud.booting = false;
+    sb.auth.onAuthStateChange(function(ev, sess){ session = sess; if(ev === 'SIGNED_OUT'){ renderAll(); } });
+    if(session){ store.email = session.user.email || store.email; subscribe(); await refresh(); }
+    renderAll();
+    setInterval(function(){ if(!document.hidden && session) refresh(); }, 60000);
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden && session) refreshSoon(200); });
+  }
+  function renderSignin(){
+    var el = document.getElementById('signin');
+    if(!cloud.otpEmail){
+      el.innerHTML = '<div class="signin card"><h1>Sign in</h1><p class="muted" style="font-size:15px;">Use the email you gave Thread Tribe. We’ll send you a 6-digit code — no password.</p>' +
+        '<label>Email</label><input id="em" type="email" autocomplete="email" inputmode="email" value="' + esc(store.email || '') + '">' +
+        '<div class="btns"><button class="btn primary block" data-a="send-code">Send code</button></div><div class="err">' + esc(cloud.err) + '</div></div>';
+    } else {
+      el.innerHTML = '<div class="signin card"><h1>Check your email</h1><p class="muted" style="font-size:15px;">We sent a code to <b style="color:var(--text);">' + esc(cloud.otpEmail) + '</b>. Check spam if it’s not there in a minute.</p>' +
+        '<label>Code</label><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10">' +
+        '<div class="btns"><button class="btn primary block" data-a="verify">Sign in</button></div>' +
+        '<button class="link" data-a="restart">Use a different email</button><div class="err">' + esc(cloud.err) + '</div></div>';
+    }
+  }
+  async function sendCode(){
+    var email = (document.getElementById('em').value || '').trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ cloud.err = 'Enter a valid email.'; renderSignin(); return; }
+    cloud.err = '';
+    var r = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true } });
+    if(r.error){ cloud.err = friendlyErr(r.error); renderSignin(); return; }
+    cloud.otpEmail = email; store.email = email; save(); renderSignin();
+  }
+  async function verify(){
+    var code = (document.getElementById('code').value || '').trim();
+    if(!/^\d{6,10}$/.test(code)){ cloud.err = 'Enter the code from the email.'; renderSignin(); return; }
+    var v = await sb.auth.verifyOtp({ email: cloud.otpEmail, token: code, type: 'email' });
+    if(v.error){ cloud.err = 'That code didn’t work. Try again or ask for a new one.'; renderSignin(); return; }
+    session = v.data.session; cloud.otpEmail = ''; cloud.err = '';
+    subscribe(); await refresh(); renderAll();
+  }
+  async function signOut(){
+    try{ if(channel) await sb.removeChannel(channel); if(live) await sb.removeChannel(live); }catch(e){}
+    channel = null; live = null;
+    try{ await sb.auth.signOut(); }catch(e){}
+    session = null; store = { pack: null, clientId: '', email: store.email, cart: [], requests: [] }; save(); renderAll();
+  }
+
+  // ======================= render =======================
+  function renderSync(){
+    var el = document.getElementById('sync');
+    if(!session || !store.pack){ el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    el.className = 'sync ' + (cloud.status === 'offline' ? 'off' : isLive() ? 'live' : '');
+    document.getElementById('syncText').textContent = cloud.status === 'offline' ? 'Offline' : isLive() ? 'Live' : 'Synced';
+  }
+  function renderAll(){
+    var signin = document.getElementById('signin'), screen = document.getElementById('screen'), nav = document.getElementById('nav');
+    renderSync();
+    if(cloud.booting){ signin.classList.add('hidden'); screen.classList.add('hidden'); nav.classList.add('hidden'); return; }
+    if(!session){
+      document.getElementById('title').textContent = 'Welcome';
+      signin.classList.remove('hidden'); screen.classList.add('hidden'); nav.classList.add('hidden');
+      renderSignin(); return;
+    }
+    signin.classList.add('hidden'); screen.classList.remove('hidden');
+    if(cloud.choosing){
+      nav.classList.add('hidden');
+      document.getElementById('title').textContent = 'Choose account';
+      screen.innerHTML = '<p class="hello">This email is linked to more than one business.</p>' + cloud.choosing.map(function(r){
+        return '<button class="item" data-a="choose" data-id="' + esc(r.client_id) + '"><div class="body"><div class="t">' + esc((r.pack && r.pack.client && r.pack.client.name) || 'Account') + '</div></div><span class="chev">›</span></button>';
+      }).join('');
+      return;
+    }
+    if(!store.pack){
+      nav.classList.add('hidden');
+      document.getElementById('title').textContent = 'Almost there';
+      screen.innerHTML = '<div class="card empty"><b>' + (cloud.missing ? 'Not switched on yet' : 'No trade account for this email') + '</b>' +
+        (cloud.missing ? 'Thread Tribe is still setting up the trade app.' : 'You’re signed in as <b>' + esc((session.user && session.user.email) || '') + '</b>. Ask Thread Tribe to turn on trade-app access for this email.') +
+        '<div class="btns" style="justify-content:center;"><button class="btn small" data-a="refresh">Check again</button><button class="btn small" data-a="signout">Sign out</button></div></div>';
+      return;
+    }
+    nav.classList.remove('hidden');
+    nav.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-tab') === tab); });
+    var cb = nav.querySelector('[data-tab="cart"]'), n = store.cart.length;
+    var badge = cb.querySelector('.badge');
+    if(n){ if(!badge){ badge = document.createElement('span'); badge.className = 'badge'; cb.appendChild(badge); } badge.textContent = n; } else if(badge) badge.remove();
+    document.getElementById('eyebrow').textContent = pack().client.name || 'Thread Tribe Trade';
+    var titles = { home: 'Home', shop: 'Shop', cart: 'Cart', orders: 'Orders', account: 'Account' };
+    document.getElementById('title').textContent = titles[tab];
+    screen.innerHTML = ({ home: renderHome, shop: renderShop, cart: renderCart, orders: renderOrders, account: renderAccount })[tab]();
+  }
+
+  function tierCard(){
+    var t = pack().tier || {};
+    var nx = t.next;
+    var pctTo = nx && nx.minRevenue ? Math.min(100, Math.round(100 * (t.spend || 0) / nx.minRevenue)) : 100;
+    return '<div class="card tier"><div class="muted">Your tier · last ' + (t.days || 30) + ' days</div>' +
+      '<div class="name">' + esc(t.name || 'Standard') + (t.pct ? ' <span class="pct">' + t.pct + '% off</span>' : '') + '</div>' +
+      '<div class="muted">You’ve ordered ' + money(t.spend) + ' in the last ' + (t.days || 30) + ' days (toys and lamps together).</div>' +
+      (nx ? '<div class="bar"><span style="width:' + pctTo + '%"></span></div><div class="hint">' + money(nx.need) + ' more to reach <b>' + esc(nx.name) + '</b> — ' + nx.pct + '% off everything.</div>'
+          : '<div class="hint">You’re on our top tier.</div>') +
+      '</div>';
+  }
+  function renderHome(){
+    var p = pack(), open = p.orders.filter(isOpenOrder), due = totalDue(), reqs = openRequests();
+    var html = '<p class="hello">Hi ' + esc(p.client.contact || p.client.name || 'there') + '.</p>' + tierCard() +
+      '<div class="stats"><button class="stat" data-go="orders"><div class="k">Open orders</div><div class="v">' + open.length + '</div></button>' +
+      '<button class="stat" data-go="account"><div class="k">Amount due</div><div class="v">' + money(due) + '</div></button></div>';
+    if(reqs.length){
+      html += '<div class="h2">Waiting for Thread Tribe <span class="count">' + reqs.length + '</span></div>' + reqs.map(requestItem).join('');
+    }
+    html += '<div class="h2">Open orders</div>' + (open.length ? open.map(orderItem).join('') : '<div class="card empty"><b>No open orders</b>Browse the shop to place one.<div class="btns" style="justify-content:center;"><button class="btn primary small" data-go="shop">Open shop</button></div></div>');
+    return html;
+  }
+  function requestItem(q){
+    var lines = (q.payload && q.payload.lines) || [];
+    var title = q.kind === 'order' ? 'Order request · ' + lines.reduce(function(s, l){ return s + (l.qty || 0); }, 0) + ' pcs' : q.kind === 'profile' ? 'Details change' : 'Message';
+    var chip = q.status === 'open' ? '<span class="chip soon">Waiting</span>' : q.status === 'accepted' || q.status === 'done' ? '<span class="chip ok">' + (q.status === 'accepted' ? 'Confirmed' : 'Done') + '</span>' : q.status === 'declined' ? '<span class="chip bad">Declined</span>' : '<span class="chip">' + esc(q.status) + '</span>';
+    return '<div class="item" style="cursor:default"><div class="body"><div class="t">' + esc(title) + '</div><div class="s">' + fmtDate(q.created_at) + (q.reply ? ' · ' + esc(q.reply) : '') + '</div></div>' + chip +
+      (q.status === 'open' ? '<button class="btn small" data-a="cancel-req" data-id="' + q.id + '">Cancel</button>' : '') + '</div>';
+  }
+  function orderItem(o){
+    var qty = o.lines.reduce(function(s, l){ return s + l.qty; }, 0), made = o.lines.reduce(function(s, l){ return s + l.made; }, 0);
+    var chip = o.status === 'delivered' ? 'ok' : o.status === 'cancelled' ? 'bad' : o.status === 'quoted' ? '' : 'new';
+    return '<button class="item" data-a="order" data-id="' + esc(o.id) + '"><div class="body"><div class="t">' + esc(o.displayId) + ' · ' + esc(o.name || 'Order') + '</div>' +
+      '<div class="s">' + (o.status === 'in_production' ? made + ' of ' + qty + ' made' : qty + ' pcs') + ' · ' + money(o.total) + (o.due ? ' · ' + money(o.due) + ' due' : '') + '</div></div>' +
+      '<span class="chip ' + chip + '">' + esc(STATUS[o.status] || o.status) + '</span><span class="chev">›</span></button>';
+  }
+
+  function renderShop(){
+    var cat = pack().catalogue;
+    var toys = cat.filter(function(p){ return p.kind === 'toy'; }).length, lamps = cat.filter(function(p){ return p.kind === 'lamp'; }).length;
+    var q = shopQuery.toLowerCase();
+    var list = cat.filter(function(p){ return (shopSeg === 'all' || p.kind === shopSeg) && (!q || (p.name + ' ' + p.category + ' ' + p.color).toLowerCase().indexOf(q) !== -1); });
+    var t = pack().tier || {};
+    return '<div class="seg"><button data-seg="all" class="' + (shopSeg === 'all' ? 'on' : '') + '">All<span class="n">' + cat.length + '</span></button>' +
+      '<button data-seg="toy" class="' + (shopSeg === 'toy' ? 'on' : '') + '">Toys<span class="n">' + toys + '</span></button>' +
+      '<button data-seg="lamp" class="' + (shopSeg === 'lamp' ? 'on' : '') + '">Lamps<span class="n">' + lamps + '</span></button></div>' +
+      '<input class="search" id="q" type="search" placeholder="Search products" value="' + esc(shopQuery) + '">' +
+      '<p class="muted" style="margin:0 4px 10px;">Your ' + esc(t.name || 'trade') + ' prices' + (t.pct ? ' (' + t.pct + '% off)' : '') + ', per piece, ex-GST. Minimum ' + moq() + ' per product.</p>' +
+      (list.length ? '<div class="grid">' + list.map(function(p){
+        return '<button class="prod" data-a="product" data-id="' + esc(p.id) + '"><div class="ph">' + (p.photo ? '<img loading="lazy" alt="" src="' + esc(p.photo) + '">' : (p.kind === 'lamp' ? '💡' : '🧸')) + '</div>' +
+          '<div class="b"><div class="n">' + esc(p.name) + '</div><div class="w">' + esc([p.weight ? Math.round(p.weight) + ' g' : '', p.color].filter(Boolean).join(' · ')) + '</div>' +
+          '<div class="p">' + money(p.price) + (p.price < p.base ? '<s>' + money(p.base) + '</s>' : '') + '</div></div></button>';
+      }).join('') + '</div>' : '<div class="card empty"><b>Nothing found</b>Try another search.</div>');
+  }
+
+  function productSheet(id){
+    var p = product(id); if(!p) return;
+    var inCart = store.cart.find(function(l){ return l.productId === id; });
+    var qty = inCart ? inCart.qty : moq();
+    openSheet('<div class="sheet-h"><div class="t">' + esc(p.name) + '</div><button class="x" data-a="close">✕</button></div>' +
+      '<div class="hero">' + (p.photo ? '<img alt="" src="' + esc(p.photo) + '">' : (p.kind === 'lamp' ? '💡' : '🧸')) + '</div>' +
+      '<div class="card"><div class="row"><span>Your price</span><span class="r">' + money(p.price) + ' <span class="muted">/ pc</span></span></div>' +
+      (p.price < p.base ? '<div class="row"><span class="muted">Standard trade price</span><span class="r muted"><s>' + money(p.base) + '</s></span></div>' : '') +
+      (p.weight ? '<div class="row"><span class="muted">Weight</span><span class="r">' + Math.round(p.weight) + ' g</span></div>' : '') +
+      (p.hours ? '<div class="row"><span class="muted">Print time</span><span class="r">' + p.hours + ' hrs / pc</span></div>' : '') +
+      (p.size ? '<div class="row"><span class="muted">Size</span><span class="r">' + esc(p.size) + '</span></div>' : '') +
+      (p.material ? '<div class="row"><span class="muted">Material</span><span class="r">' + esc(p.material) + '</span></div>' : '') + '</div>' +
+      '<label>Quantity (minimum ' + moq() + ')</label><div class="qty"><button data-a="qty-" type="button">−</button><input id="pq" type="number" inputmode="numeric" min="' + moq() + '" step="1" value="' + qty + '"><button data-a="qty+" type="button">+</button></div>' +
+      '<label>Colour (optional)</label><input id="pc" placeholder="' + esc(p.color || 'e.g. Pastel blue') + '" value="' + esc(inCart ? inCart.color || '' : '') + '">' +
+      '<div class="hint" id="pline">' + money(p.price * qty) + ' for ' + qty + ' pcs, ex-GST</div>' +
+      '<div class="btns"><button class="btn primary block" data-a="add" data-id="' + esc(p.id) + '">' + (inCart ? 'Update cart' : 'Add to cart') + '</button></div>');
+  }
+  function addToCart(id){
+    var p = product(id); if(!p) return;
+    var qty = Math.round(parseFloat(document.getElementById('pq').value) || 0);
+    if(qty < moq()){ toast('Minimum ' + moq() + ' pieces per product'); return; }
+    var color = (document.getElementById('pc').value || '').trim().slice(0, 60);
+    var l = store.cart.find(function(x){ return x.productId === id; });
+    if(l){ l.qty = qty; l.color = color; } else store.cart.push({ productId: id, qty: qty, color: color });
+    save(); closeSheet(); buzz(); toast(p.name + ' · ' + qty + ' pcs in cart'); renderAll();
+  }
+
+  function renderCart(){
+    if(!store.cart.length) return '<div class="card empty"><b>Your cart is empty</b>Add products from the shop, or repeat a past order from Orders.<div class="btns" style="justify-content:center;"><button class="btn primary small" data-go="shop">Open shop</button></div></div>';
+    var sub = 0, gstRate = pack().business.gstRate || 0;
+    var rows = store.cart.map(function(l, i){
+      var p = product(l.productId), line = p ? p.price * l.qty : 0;
+      sub += line;
+      return '<div class="row"><div style="min-width:0"><div style="font-weight:600">' + esc(p ? p.name : 'Unavailable') + '</div><div class="muted">' + l.qty + ' × ' + money(p ? p.price : 0) + (l.color ? ' · ' + esc(l.color) : '') + '</div>' +
+        '<button class="link" data-a="product" data-id="' + esc(l.productId) + '">Change</button> <button class="link" style="color:var(--red)" data-a="remove" data-i="' + i + '">Remove</button></div><span class="r">' + money(line) + '</span></div>';
+    }).join('');
+    var gst = Math.round(sub * gstRate) / 100;
+    return '<div class="card">' + rows + '</div>' +
+      '<div class="card"><div class="row"><span>Subtotal (ex-GST)</span><span class="r">' + money(sub) + '</span></div>' +
+      (gstRate ? '<div class="row"><span class="muted">GST ' + gstRate + '%</span><span class="r muted">' + money(gst) + '</span></div><div class="row"><span>Estimated total</span><span class="r">' + money(sub + gst) + '</span></div>' : '') + '</div>' +
+      '<label>Your reference (optional)</label><input id="cref" maxlength="60" placeholder="e.g. PO number or store name">' +
+      '<label>Notes for Thread Tribe (optional)</label><textarea id="cnotes" maxlength="1000" placeholder="Delivery date, colour mix, packing…"></textarea>' +
+      '<div class="note info">Thread Tribe confirms every order before production starts, and will tell you the delivery date. Prices are checked again at confirmation.</div>' +
+      '<div class="btns"><button class="btn primary block" data-a="place"' + (cloud.sending ? ' disabled' : '') + '>Send order request</button></div>';
+  }
+  async function placeOrder(){
+    if(cloud.sending || !store.cart.length) return;
+    var lines = store.cart.map(function(l){ var p = product(l.productId); return p ? { productId: p.id, name: p.name, qty: l.qty, unitPrice: p.price, color: l.color || '' } : null; }).filter(Boolean);
+    if(lines.some(function(l){ return l.qty < moq(); })){ toast('Minimum ' + moq() + ' pieces per product'); return; }
+    cloud.sending = true; renderAll();
+    var ok = await submitRequest('order', {
+      lines: lines, reference: (document.getElementById('cref').value || '').trim(), notes: (document.getElementById('cnotes').value || '').trim(),
+      total: lines.reduce(function(s, l){ return s + l.qty * l.unitPrice; }, 0), reorderOf: store.reorderOf || ''
+    });
+    cloud.sending = false;
+    if(ok){ store.cart = []; store.reorderOf = ''; save(); tab = 'home'; toast('Order request sent'); }
+    renderAll();
+  }
+
+  function renderOrders(){
+    var all = pack().orders, active = all.filter(isOpenOrder), past = all.filter(function(o){ return !isOpenOrder(o); }), reqs = store.requests || [];
+    var list = orderSeg === 'active' ? active : orderSeg === 'past' ? past : null;
+    return '<div class="seg"><button data-oseg="active" class="' + (orderSeg === 'active' ? 'on' : '') + '">Active<span class="n">' + active.length + '</span></button>' +
+      '<button data-oseg="past" class="' + (orderSeg === 'past' ? 'on' : '') + '">Past<span class="n">' + past.length + '</span></button>' +
+      '<button data-oseg="requests" class="' + (orderSeg === 'requests' ? 'on' : '') + '">Requests<span class="n">' + reqs.length + '</span></button></div>' +
+      (list ? (list.length ? list.map(orderItem).join('') : '<div class="card empty"><b>Nothing here yet</b></div>')
+            : (reqs.length ? reqs.map(requestItem).join('') : '<div class="card empty"><b>No requests yet</b></div>'));
+  }
+  function stepper(o){
+    if(o.status === 'quoted' || o.status === 'cancelled') return '';
+    var i = FLOW.indexOf(o.status);
+    return '<div class="steps">' + FLOW.map(function(s, k){
+      return '<div class="st ' + (k < i || (k === i && s === 'delivered') ? 'done' : k === i ? 'now' : '') + '"><b>' + (k < i || (k === i && s === 'delivered') ? '✓' : k + 1) + '</b>' + STATUS[s] + '</div>';
+    }).join('') + '</div>';
+  }
+  function productionBox(o){
+    var p = o.production, qty = o.lines.reduce(function(s, l){ return s + l.qty; }, 0), made = o.lines.reduce(function(s, l){ return s + l.made; }, 0);
+    if(['booked', 'in_production', 'production_done'].indexOf(o.status) === -1 && !p) return '';
+    var cells = '<div><div class="k">Pieces made</div><div class="v">' + made + ' / ' + qty + '</div></div>';
+    if(p && p.printerCount) cells += '<div><div class="k">Printers on your order</div><div class="v">' + p.printerCount + (p.printingNow ? ' <span class="muted" style="font-size:13px">· ' + p.printingNow + ' printing now</span>' : '') + '</div></div>';
+    if(p && p.printHours) cells += '<div><div class="k">Print time so far</div><div class="v">' + p.printHours + ' hrs</div></div>';
+    if(o.reservedHours) cells += '<div><div class="k">Print time reserved</div><div class="v">' + o.reservedHours + ' hrs</div></div>';
+    var plates = p ? p.platesDone + p.platesFailed : 0;
+    if(p && plates >= 3) cells += '<div><div class="k">Quality pass rate</div><div class="v">' + Math.round(100 * p.platesDone / plates) + '%</div></div>';
+    return '<div class="h2">Production</div><div class="prodbox">' + cells + '</div>';
+  }
+  function orderSheet(id){
+    var o = pack().orders.find(function(x){ return x.id === id; }); if(!o) return;
+    var canReorder = o.lines.some(function(l){ return l.catalogId && product(l.catalogId); });
+    openSheet('<div class="sheet-h"><div><div class="muted">' + esc(o.displayId) + '</div><div class="t">' + esc(o.name || 'Order') + '</div></div><button class="x" data-a="close">✕</button></div>' +
+      '<span class="chip ' + (o.status === 'delivered' ? 'ok' : o.status === 'cancelled' ? 'bad' : 'new') + '">' + esc(STATUS[o.status] || o.status) + '</span>' +
+      stepper(o) + productionBox(o) +
+      '<div class="h2">Items</div><div class="card">' + o.lines.map(function(l){
+        return '<div class="row"><div><div style="font-weight:600">' + esc(l.name) + '</div><div class="muted">' + l.qty + ' × ' + money2(l.unitPrice) + (l.color ? ' · ' + esc(l.color) : '') +
+          (o.status === 'in_production' ? ' · ' + l.made + ' made' : '') + '</div></div><span class="r">' + money(l.qty * l.unitPrice) + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="card"><div class="row"><span class="muted">Ordered</span><span class="r">' + (fmtDate(o.orderedDate) || '—') + '</span></div>' +
+      (o.dueDate ? '<div class="row"><span class="muted">Due</span><span class="r">' + fmtDate(o.dueDate) + '</span></div>' : '') +
+      (o.deliveryDate ? '<div class="row"><span class="muted">Delivered</span><span class="r">' + fmtDate(o.deliveryDate) + '</span></div>' : '') +
+      '<div class="row"><span class="muted">Total incl. GST</span><span class="r">' + money2(o.total) + '</span></div>' +
+      '<div class="row"><span class="muted">Payment</span><span class="r">' + esc(PAY[o.paymentStatus] || o.paymentStatus) + (o.due ? ' · ' + money2(o.due) + ' due' : '') + '</span></div></div>' +
+      '<div class="btns">' + (o.invoiceNumber ? '<button class="btn" data-a="invoice" data-id="' + esc(o.id) + '">View invoice ' + esc(o.invoiceNumber) + '</button>' : '') +
+      (canReorder ? '<button class="btn primary" data-a="reorder" data-id="' + esc(o.id) + '">Order again</button>' : '') + '</div>');
+  }
+  function reorder(id){
+    var o = pack().orders.find(function(x){ return x.id === id; }); if(!o) return;
+    var added = 0, missing = 0;
+    o.lines.forEach(function(l){
+      var p = l.catalogId && product(l.catalogId);
+      if(!p){ missing++; return; }
+      var qty = Math.max(moq(), l.qty);
+      var c = store.cart.find(function(x){ return x.productId === p.id; });
+      if(c) c.qty = Math.max(c.qty, qty); else store.cart.push({ productId: p.id, qty: qty, color: l.color || '' });
+      added++;
+    });
+    store.reorderOf = o.displayId || '';
+    save(); closeSheet(); tab = 'cart'; renderAll();
+    toast(added + ' item' + (added === 1 ? '' : 's') + ' added at today’s prices' + (missing ? ' · ' + missing + ' no longer available' : ''));
+  }
+
+  function renderAccount(){
+    var p = pack(), c = p.client, invoices = p.orders.filter(function(o){ return o.invoiceNumber; }), due = p.orders.filter(function(o){ return o.due > 0; });
+    return '<div class="card big"><div class="k">Amount due</div><div class="v">' + money(totalDue()) + '</div><div class="muted">across ' + due.length + ' order' + (due.length === 1 ? '' : 's') + ' · pay on delivery</div></div>' +
+      (due.length ? '<div class="card">' + due.map(function(o){ return '<div class="row"><span>' + esc(o.displayId) + ' · ' + esc(PAY[o.paymentStatus] || '') + '</span><span class="r">' + money2(o.due) + '</span></div>'; }).join('') + '</div>' : '') +
+      '<div class="h2">Invoices <span class="count">' + invoices.length + '</span></div>' +
+      (invoices.length ? '<div class="card">' + invoices.map(function(o){
+        return '<div class="row" style="cursor:pointer" data-a="invoice" data-id="' + esc(o.id) + '"><div><div style="font-weight:600">' + esc(o.invoiceNumber) + '</div><div class="muted">' + esc(o.displayId) + ' · ' + fmtDate(o.orderedDate) + '</div></div><span class="r">' + money2(o.total) + ' ›</span></div>';
+      }).join('') + '</div>' : '<div class="card empty"><b>No invoices yet</b></div>') +
+      '<div class="h2">Your details</div><div class="card">' +
+      [['Business', c.name], ['Contact', c.contact], ['Phone', c.phone], ['Email', c.email], ['GSTIN', c.gstin], ['Address', [c.address, c.city, c.state].filter(Boolean).join(', ')]].map(function(r){
+        return '<div class="row"><span class="muted">' + r[0] + '</span><span class="r" style="white-space:normal">' + esc(r[1] || '—') + '</span></div>';
+      }).join('') + '<div class="btns"><button class="btn small" data-a="edit-profile">Request a change</button><button class="btn small" data-a="message">Message Thread Tribe</button></div></div>' +
+      '<div class="btns"><button class="btn small danger" data-a="signout">Sign out</button></div>';
+  }
+  function profileSheet(){
+    var c = pack().client;
+    openSheet('<div class="sheet-h"><div class="t">Update your details</div><button class="x" data-a="close">✕</button></div>' +
+      '<p class="muted">Thread Tribe checks changes before they apply.</p>' +
+      '<label>Contact name</label><input id="f-contact" value="' + esc(c.contact) + '">' +
+      '<label>Phone</label><input id="f-phone" inputmode="tel" value="' + esc(c.phone) + '">' +
+      '<label>GSTIN</label><input id="f-gstin" value="' + esc(c.gstin) + '" maxlength="15" style="text-transform:uppercase">' +
+      '<label>Address</label><textarea id="f-address">' + esc(c.address) + '</textarea>' +
+      '<div class="grid2"><div><label>City</label><input id="f-city" value="' + esc(c.city) + '"></div><div><label>State</label><input id="f-state" value="' + esc(c.state) + '"></div></div>' +
+      '<div class="btns"><button class="btn primary block" data-a="send-profile">Send for approval</button></div>');
+  }
+  async function sendProfile(){
+    var c = pack().client, out = {}, any = false;
+    ['contact', 'phone', 'gstin', 'address', 'city', 'state'].forEach(function(f){
+      var v = (document.getElementById('f-' + f).value || '').trim();
+      if(f === 'gstin') v = v.toUpperCase();
+      if(v && v !== (c[f] || '')){ out[f] = v.slice(0, 300); any = true; }
+    });
+    if(!any){ toast('Nothing changed'); return; }
+    if(await submitRequest('profile', out)){ closeSheet(); toast('Sent to Thread Tribe'); renderAll(); }
+  }
+  function messageSheet(){
+    openSheet('<div class="sheet-h"><div class="t">Message Thread Tribe</div><button class="x" data-a="close">✕</button></div>' +
+      '<textarea id="msg" maxlength="2000" placeholder="Question about an order, a product, delivery…"></textarea>' +
+      '<div class="btns"><button class="btn primary block" data-a="send-msg">Send</button></div>');
+  }
+
+  function showInvoice(id){
+    var p = pack(), o = p.orders.find(function(x){ return x.id === id; }); if(!o) return;
+    var b = p.business, c = p.client, sub = o.lines.reduce(function(s, l){ return s + l.qty * l.unitPrice; }, 0);
+    var el = document.getElementById('inv');
+    el.innerHTML = '<div class="bar2"><button class="btn small" data-a="print">Print / Save PDF</button><button class="btn small" data-a="close-inv">Close</button></div><div class="doc">' +
+      '<h1>Tax invoice ' + esc(o.invoiceNumber) + '</h1><div>Order ' + esc(o.displayId) + ' · ' + fmtDate(o.orderedDate) + '</div>' +
+      '<div class="meta"><div><b>' + esc(b.name) + '</b><br>' + esc(b.address).replace(/\n/g, '<br>') + (b.gst ? '<br>GSTIN ' + esc(b.gst) : '') + (b.phone ? '<br>' + esc(b.phone) : '') + '</div>' +
+      '<div><b>Bill to</b><br>' + esc(c.name) + '<br>' + esc([c.address, c.city, c.state].filter(Boolean).join(', ')) + (c.gstin ? '<br>GSTIN ' + esc(c.gstin) : '') + '</div></div>' +
+      '<table><tr><th>Item</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Amount</th></tr>' +
+      o.lines.map(function(l){ return '<tr><td>' + esc(l.name) + (l.color ? ' (' + esc(l.color) + ')' : '') + '</td><td class="n">' + l.qty + '</td><td class="n">' + money2(l.unitPrice) + '</td><td class="n">' + money2(l.qty * l.unitPrice) + '</td></tr>'; }).join('') +
+      '</table><table class="tot">' +
+      (Math.round(sub) !== Math.round(o.subtotal) ? '<tr><td>Order discount</td><td class="n">−' + money2(sub - o.subtotal) + '</td></tr>' : '') +
+      '<tr><td>Taxable value</td><td class="n">' + money2(o.subtotal) + '</td></tr>' +
+      (o.gstRate ? '<tr><td>GST ' + o.gstRate + '%</td><td class="n">' + money2(o.gst) + '</td></tr>' : '') +
+      '<tr><td><b>Total</b></td><td class="n"><b>' + money2(o.total) + '</b></td></tr>' +
+      '<tr><td>Paid</td><td class="n">' + money2(o.paid) + '</td></tr><tr><td><b>Balance due</b></td><td class="n"><b>' + money2(o.due) + '</b></td></tr></table>' +
+      '<p style="color:#666;font-size:12px">Copy of the invoice issued by ' + esc(b.name) + '. For the GST-filed original, ask Thread Tribe.</p></div>';
+    el.classList.remove('hidden');
+  }
+
+  // ======================= sheet =======================
+  function openSheet(html){
+    document.getElementById('sheetBody').innerHTML = html;
+    var s = document.getElementById('sheet'), sc = document.getElementById('scrim');
+    s.classList.remove('hidden'); sc.classList.remove('hidden');
+    requestAnimationFrame(function(){ s.classList.add('show'); sc.classList.add('show'); });
+  }
+  function closeSheet(){
+    var s = document.getElementById('sheet'), sc = document.getElementById('scrim');
+    s.classList.remove('show'); sc.classList.remove('show');
+    setTimeout(function(){ s.classList.add('hidden'); sc.classList.add('hidden'); }, 220);
+  }
+  function updateLine(){
+    var el = document.getElementById('pline'), q = document.getElementById('pq'), b = document.querySelector('#sheetBody [data-a="add"]');
+    if(!el || !q || !b) return;
+    var p = product(b.getAttribute('data-id')), n = Math.round(parseFloat(q.value) || 0);
+    el.textContent = p ? money(p.price * n) + ' for ' + n + ' pcs, ex-GST' + (n < moq() ? ' — minimum is ' + moq() : '') : '';
+  }
+
+  // ======================= events =======================
+  document.addEventListener('click', async function(e){
+    var go = e.target.closest('[data-go]');
+    if(go){ tab = go.getAttribute('data-go'); renderAll(); window.scrollTo(0, 0); return; }
+    var nb = e.target.closest('#nav [data-tab]');
+    if(nb){ tab = nb.getAttribute('data-tab'); renderAll(); window.scrollTo(0, 0); return; }
+    var sg = e.target.closest('[data-seg]');
+    if(sg){ shopSeg = sg.getAttribute('data-seg'); renderAll(); return; }
+    var os = e.target.closest('[data-oseg]');
+    if(os){ orderSeg = os.getAttribute('data-oseg'); renderAll(); return; }
+    if(e.target.id === 'scrim'){ closeSheet(); return; }
+    if(e.target.closest('#sync')){ refreshSoon(0); toast('Refreshing…'); return; }
+    var a = e.target.closest('[data-a]');
+    if(!a) return;
+    var act = a.getAttribute('data-a'), id = a.getAttribute('data-id');
+    if(act === 'send-code') sendCode();
+    else if(act === 'verify') verify();
+    else if(act === 'restart'){ cloud.otpEmail = ''; cloud.err = ''; renderSignin(); }
+    else if(act === 'signout'){ if(confirm('Sign out of the Thread Tribe trade app?')) signOut(); }
+    else if(act === 'refresh') refresh();
+    else if(act === 'choose'){ store.clientId = id; cloud.choosing = null; save(); refresh(); }
+    else if(act === 'product') productSheet(id);
+    else if(act === 'qty-' || act === 'qty+'){ var q = document.getElementById('pq'); q.value = Math.max(moq(), (Math.round(parseFloat(q.value) || 0)) + (act === 'qty+' ? 5 : -5)); updateLine(); }
+    else if(act === 'add') addToCart(id);
+    else if(act === 'remove'){ store.cart.splice(parseInt(a.getAttribute('data-i'), 10), 1); save(); renderAll(); }
+    else if(act === 'place') placeOrder();
+    else if(act === 'order') orderSheet(id);
+    else if(act === 'reorder') reorder(id);
+    else if(act === 'invoice'){ closeSheet(); showInvoice(id); }
+    else if(act === 'print') window.print();
+    else if(act === 'close-inv') document.getElementById('inv').classList.add('hidden');
+    else if(act === 'close') closeSheet();
+    else if(act === 'edit-profile') profileSheet();
+    else if(act === 'send-profile') sendProfile();
+    else if(act === 'message') messageSheet();
+    else if(act === 'send-msg'){
+      var txt = (document.getElementById('msg').value || '').trim();
+      if(!txt){ toast('Write a message first'); return; }
+      if(await submitRequest('message', { text: txt.slice(0, 2000) })){ closeSheet(); toast('Sent to Thread Tribe'); renderAll(); }
+    }
+    else if(act === 'cancel-req'){
+      if(!confirm('Cancel this request?')) return;
+      var r = await sb.rpc('buyer_cancel_request', { p_id: id });
+      if(r.error) toast(friendlyErr(r.error)); else { ping('request'); await loadRequests(); save(); renderAll(); }
+    }
+  });
+  document.addEventListener('input', function(e){
+    if(e.target.id === 'q'){
+      shopQuery = e.target.value;
+      var pos = e.target.selectionStart;
+      renderAll();
+      var q = document.getElementById('q'); if(q){ q.focus(); try{ q.setSelectionRange(pos, pos); }catch(err){} }
+    } else if(e.target.id === 'pq') updateLine();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    if(e.target.id === 'em') sendCode();
+    else if(e.target.id === 'code') verify();
+  });
+
+  if('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function(){});
+  boot();
+})();
+</script>
+</body>
+</html>

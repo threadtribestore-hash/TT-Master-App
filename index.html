@@ -1726,6 +1726,7 @@
       <button class="tab-btn" data-tab="expenses">Expenses</button>
       <button class="tab-btn" data-tab="invoices">Invoices</button>
       <button class="tab-btn" data-tab="partners">Partner Network</button>
+      <button class="tab-btn" data-tab="buyers">Buyer App</button>
       <div class="tab-group-label">Inventory &amp; Production</div>
       <button class="tab-btn" data-tab="filament">Filament Inventory</button>
       <button class="tab-btn" data-tab="products">Product Catalog</button>
@@ -2501,6 +2502,8 @@
     </div>
   </div>
 
+  <div id="tabBuyers" style="display:none;"><div id="buyerRoot"></div></div>
+
   <div id="tabPartners" style="display:none;">
     <div class="panel" style="padding:14px 16px;">
       <div class="pon-head">
@@ -3025,6 +3028,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     document.getElementById('tabExpDash').style.display = target === 'expDash' ? '' : 'none';
     document.getElementById('tabInvoices').style.display = target === 'invoices' ? '' : 'none';
     document.getElementById('tabPartners').style.display = target === 'partners' ? '' : 'none';
+    document.getElementById('tabBuyers').style.display = target === 'buyers' ? '' : 'none';
     document.getElementById('tabPricingSim').style.display = target === 'pricingSim' ? '' : 'none';
     document.getElementById('tabScheduler').style.display = target === 'scheduler' ? '' : 'none';
     document.getElementById('tabSettings').style.display = target === 'settings' ? '' : 'none';
@@ -3039,6 +3043,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     if(target === 'expDash') renderExpenseDashboard();
     if(target === 'invoices') renderInvoiceList();
     if(target === 'partners') renderPartners();
+    if(target === 'buyers' && typeof renderBuyers === 'function') renderBuyers();
     if(target === 'filament' && typeof renderFilament === 'function') renderFilament();
     if(target === 'pricingSim') renderPricingSimulator();
     if(target === 'scheduler') renderScheduler();
@@ -17817,6 +17822,7 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
+<script src="buyers-admin.js"></script>
 
 
 <datalist id="indianStatesList">

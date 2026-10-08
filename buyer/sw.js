@@ -1,7 +1,7 @@
-// Offline support for Thread Tribe Studio.
+// Offline support for the Thread Tribe Buyer app.
 // Bump VERSION whenever index.html changes so phones pick up the new build.
-const VERSION = 'tt-studio-202610091300';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './config.js', './buyers-admin.js', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
+const VERSION = 'tt-buyer-202610091200';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './config.js', './vendor/supabase.js'];
 const THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];
 
 self.addEventListener('install', function(e){
@@ -10,7 +10,7 @@ self.addEventListener('install', function(e){
 
 self.addEventListener('activate', function(e){
   e.waitUntil(caches.keys().then(function(keys){
-    return Promise.all(keys.filter(function(k){ return k.indexOf('tt-studio-') === 0 && k !== VERSION; }).map(function(k){ return caches.delete(k); }));
+    return Promise.all(keys.filter(function(k){ return k.indexOf('tt-buyer-') === 0 && k !== VERSION; }).map(function(k){ return caches.delete(k); }));
   }).then(function(){ return self.clients.claim(); }));
 });
 
