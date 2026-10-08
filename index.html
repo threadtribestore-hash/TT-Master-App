@@ -17833,6 +17833,8 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <style>
   #ttf-open{position:fixed;left:18px;bottom:18px;z-index:9998;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:10px 16px;font:600 13px 'JetBrains Mono',monospace;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18)}
   #ttf-open:hover{border-color:var(--cyan)}
+  /* Where Studio has a bottom tab bar, the panel lives in its More sheet instead. */
+  @media (max-width: 760px){ .ttf-has-mnav #ttf-open{display:none} }
   #ttf-back{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto}
   #ttf-back.on{display:flex}
   #ttf{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;width:min(1100px,100%);font:13px 'JetBrains Mono',monospace;box-shadow:0 10px 40px rgba(0,0,0,.35)}
@@ -17890,6 +17892,18 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   var MAP_KEY = 'tt-bambuddy-map-v1';
   var HOLD_KEY = 'tt-bambuddy-hold-v1';
   var ACTIVE = { booked: 'Booked', in_production: 'In production' };
+
+  // Phone layout: add "Print farm" to Studio's More sheet (Studio closes the sheet itself on click).
+  if (document.getElementById('mobileNav')) {
+    document.documentElement.classList.add('ttf-has-mnav');
+    var grids = document.querySelectorAll('#moreSheetList .msheet-grid');
+    if (grids.length) {
+      var item = document.createElement('button');
+      item.className = 'msheet-item'; item.type = 'button'; item.textContent = '🖨 Print farm';
+      item.addEventListener('click', function(){ open(); });
+      grids[grids.length - 1].appendChild(item);
+    }
+  }
 
   var tab = 'orders', library = null, printers = null, connErr = null, statusByOrder = {}, plateCache = {};
 
