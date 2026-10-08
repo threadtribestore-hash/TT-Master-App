@@ -288,7 +288,56 @@
     return { minPerProduct: t.minPerProduct || 10, minOrder: t.minOrder || 25, maxDiscount: t.maxDiscount == null ? 20 : t.maxDiscount,
       slabs: Array.isArray(t.slabs) ? t.slabs : [], tierPct: t.tierPct || 0 };
   }
-  function catalogue(){ return pack().catalogue.filter(function(p){ return !p.kind || p.kind === 'toy'; }); }
+  // ---------- website toys ----------
+  // The app also reads threadtribe.co directly, so every toy on the store shows even
+  // before Thread Tribe's Studio has republished this buyer's pack. Toys the pack
+  // prices keep that price; the rest are "price on request".
+  var SHOP_URL = 'https://threadtribe.co', SHOP_TYPES = ['Flexi Toys', 'Fidget Clickers'], WEB_KEY = 'tt-buyer-web-toys-v1';
+  var WEB = { items: [], at: 0, loading: false };
+  try{ var wc = JSON.parse(localStorage.getItem(WEB_KEY)); if(wc && Array.isArray(wc.items)){ WEB.items = wc.items; WEB.at = wc.at || 0; } }catch(e){}
+  function cleanName(t){ return String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim(); }
+  function nameKey(t){ return cleanName(t).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  async function loadWebToys(){
+    if(WEB.loading || (WEB.at && Date.now() - WEB.at < 3 * 3600 * 1000)) return;
+    WEB.loading = true;
+    try{
+      var all = [];
+      for(var page = 1; page <= 4; page++){
+        var r = await fetch(SHOP_URL + '/products.json?limit=250&page=' + page);
+        if(!r.ok) break;
+        var ps = ((await r.json()) || {}).products || [];
+        all = all.concat(ps);
+        if(ps.length < 250) break;
+      }
+      var items = all.filter(function(x){ return SHOP_TYPES.indexOf(x.product_type) !== -1; }).map(function(x){
+        var img = x.images && x.images[0] ? x.images[0].src : '';
+        var prices = (x.variants || []).map(function(v){ return parseFloat(v.price) || 0; }).filter(function(v){ return v > 0; });
+        return { handle: x.handle, name: cleanName(x.title), category: x.product_type, retail: prices.length ? Math.min.apply(null, prices) : 0,
+          photo: img ? img + (img.indexOf('?') === -1 ? '?' : '&') + 'width=600' : '' };
+      });
+      if(items.length){ WEB.items = items; WEB.at = Date.now(); try{ localStorage.setItem(WEB_KEY, JSON.stringify({ items: items, at: WEB.at })); }catch(e){} }
+    }catch(e){}
+    WEB.loading = false;
+  }
+  var catCache = { key: '', list: [] };
+  function catalogue(){
+    var base = pack().catalogue.filter(function(p){ return !p.kind || p.kind === 'toy'; });
+    var key = base.length + '|' + WEB.at + '|' + (store.pack && store.pack.generatedAt);
+    if(catCache.key === key) return catCache.list;
+    var byName = {}, ids = {};
+    base.forEach(function(p){ byName[nameKey(p.name)] = p; ids[p.id] = 1; });
+    var out = base.map(function(p){
+      var w = WEB.items.find(function(x){ return nameKey(x.name) === nameKey(p.name); });
+      if(!w || (p.photo && p.retail)) return p;
+      return Object.assign({}, p, { photo: p.photo || w.photo, retail: p.retail || w.retail, category: p.category || w.category });
+    });
+    WEB.items.forEach(function(w){
+      if(ids['web:' + w.handle] || byName[nameKey(w.name)]) return;
+      out.push({ id: 'web:' + w.handle, name: w.name, category: w.category, kind: 'toy', weight: 0, hours: 0, color: '', size: '', material: '', photo: w.photo, base: 0, price: 0, retail: w.retail, onRequest: true });
+    });
+    catCache = { key: key, list: out };
+    return out;
+  }
   function product(id){ return catalogue().find(function(p){ return p.id === id; }); }
   function isOpenOrder(o){ return ['quoted', 'booked', 'in_production', 'production_done', 'shipped'].indexOf(o.status) !== -1; }
   function realOrders(){ return pack().orders.filter(function(o){ return o.status !== 'quoted' && o.status !== 'cancelled'; }); }
@@ -480,6 +529,7 @@
     session = s.data && s.data.session;
     cloud.booting = false;
     sb.auth.onAuthStateChange(function(ev, sess){ session = sess; if(ev === 'SIGNED_OUT') renderAll(); });
+    loadWebToys().then(function(){ if(store.pack) renderAll(); });
     if(session){ store.email = session.user.email || store.email; subscribe(); await refresh(); }
     renderAll();
     setInterval(function(){ if(!document.hidden && session) refresh(); }, 60000);
