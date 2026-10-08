@@ -117,15 +117,67 @@
     if(/^https?:\/\//.test(item.photo)) return item.photo;
     return B.thumbs[thumbKey(item)] || '';
   }
+  // ---------- website toys (threadtribe.co) ----------
+  // Every toy on the store shows in the Buyer app with its photo and retail price.
+  // Toys also in Studio's catalogue with a weight are priced from it (weight x Rs 4);
+  // the rest are "price on request" until they get a weight, and Studio sets their
+  // price when it confirms the order.
+  const SHOP_URL = 'https://threadtribe.co', SHOP_TYPES = ['Flexi Toys', 'Fidget Clickers'], WEB_KEY = 'tt-buyer-web-toys-v1';
+  const WEB = { items: [], at: 0, loading: null };
+  try{ const c = JSON.parse(localStorage.getItem(WEB_KEY)); if(c && Array.isArray(c.items)){ WEB.items = c.items; WEB.at = c.at || 0; } }catch(e){}
+  function cleanName(t){ return String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim(); }
+  function nameKey(t){ return cleanName(t).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function loadWebToys(force){
+    if(WEB.loading) return WEB.loading;
+    if(!force && WEB.at && Date.now() - WEB.at < 6 * 3600 * 1000) return Promise.resolve();
+    WEB.loading = (async function(){
+      try{
+        let all = [];
+        for(let page = 1; page <= 4; page++){
+          const r = await fetch(SHOP_URL + '/products.json?limit=250&page=' + page);
+          if(!r.ok) break;
+          const ps = ((await r.json()) || {}).products || [];
+          all = all.concat(ps);
+          if(ps.length < 250) break;
+        }
+        const items = all.filter(function(x){ return SHOP_TYPES.indexOf(x.product_type) !== -1; }).map(function(x){
+          const img = x.images && x.images[0] ? x.images[0].src : '';
+          const prices = (x.variants || []).map(function(v){ return parseFloat(v.price) || 0; }).filter(function(v){ return v > 0; });
+          return { handle: x.handle, name: cleanName(x.title), category: x.product_type, retail: prices.length ? Math.min.apply(null, prices) : 0,
+            photo: img ? img + (img.indexOf('?') === -1 ? '?' : '&') + 'width=600' : '' };
+        });
+        if(items.length){ WEB.items = items; WEB.at = Date.now(); try{ localStorage.setItem(WEB_KEY, JSON.stringify({ items: items, at: WEB.at })); }catch(e){} }
+      }catch(e){ console.warn('[buyers] website toys', e); }
+      finally{ WEB.loading = null; }
+    })();
+    return WEB.loading;
+  }
+  function webItem(productId){
+    const h = /^web:/.test(productId || '') ? productId.slice(4) : null;
+    return h ? WEB.items.find(function(w){ return w.handle === h; }) : null;
+  }
+  function studioToys(){ return (state.productCatalog || []).filter(function(i){ return (i.name || '').trim() && kindOf(i) === 'toy'; }); }
+
   function catalogue(pct){
-    return (state.productCatalog || []).filter(function(i){ return (i.name || '').trim() && basePrice(i) > 0; }).map(function(i){
-      const base = basePrice(i);
-      // Suggested retail only when set by hand: the auto D2C formula is lamp-only and
-      // would put a 10 g clicker at Rs 500, which would mislead a reseller.
-      const retail = i.d2cPrice != null ? (parseFloat(i.d2cPrice) || 0) : 0;
-      return { id: i.id, name: i.name.trim(), category: i.category || '', kind: kindOf(i), weight: parseFloat(i.weight) || 0, hours: parseFloat(i.hours) || 0,
-        color: i.color || '', size: i.size || '', material: i.material || '', photo: photoOf(i), base: base, price: tierPrice(base, pct), retail: retail };
-    }).sort(function(a, b){ return a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name); });
+    const web = {};
+    WEB.items.forEach(function(w){ web[nameKey(w.name)] = w; });
+    const used = {};
+    const out = studioToys().map(function(i){
+      const base = basePrice(i), w = web[nameKey(i.name)];
+      if(w) used[w.handle] = 1;
+      // Suggested retail: a D2C price set by hand, else the website price. The auto D2C
+      // formula is lamp-only and would put a 10 g clicker at Rs 500.
+      const retail = i.d2cPrice != null ? (parseFloat(i.d2cPrice) || 0) : (w ? w.retail : 0);
+      return { id: i.id, name: i.name.trim(), category: i.category || (w && w.category) || '', kind: 'toy', weight: parseFloat(i.weight) || 0, hours: parseFloat(i.hours) || 0,
+        color: i.color || '', size: i.size || '', material: i.material || '', photo: photoOf(i) || (w ? w.photo : ''),
+        base: base, price: tierPrice(base, pct), retail: retail, onRequest: base <= 0 };
+    });
+    WEB.items.forEach(function(w){
+      if(used[w.handle]) return;
+      out.push({ id: 'web:' + w.handle, name: w.name, category: w.category, kind: 'toy', weight: 0, hours: 0, color: '', size: '', material: '',
+        photo: w.photo, base: 0, price: 0, retail: w.retail, onRequest: true });
+    });
+    return out.sort(function(a, b){ return a.name.localeCompare(b.name); });
   }
   function catalogIdFor(line){
     if(line.catalogId) return line.catalogId;
@@ -185,6 +237,7 @@
         B.known = {};
         (r.data || []).forEach(function(x){ B.known[x.client_id] = 1; });
       }
+      await loadWebToys();
       await ensureThumbs();
       const want = {};
       (state.clients || []).forEach(function(c){
@@ -267,10 +320,13 @@
     const c = client(q.client_id), tierPct = c ? tierOf(c.id).pct : 0;
     const rows = ((q.payload && q.payload.lines) || []).map(function(l){
       const item = (state.productCatalog || []).find(function(i){ return i.id === l.productId; });
+      const web = item ? null : webItem(l.productId);
       const base = item ? basePrice(item) : 0;
-      return { line: l, item: item, qty: Math.max(0, Math.round(parseFloat(l.qty) || 0)), base: base, seen: parseFloat(l.unitPrice) || 0 };
+      return { line: l, item: item, web: web, name: item ? item.name : web ? web.name : (l.name || '?'), offered: item ? kindOf(item) === 'toy' : !!web || /^web:/.test(l.productId || ''),
+        qty: Math.max(0, Math.round(parseFloat(l.qty) || 0)), base: base, seen: parseFloat(l.unitPrice) || 0 };
     });
-    const total = rows.reduce(function(s, x){ return s + (x.base > 0 ? x.qty : 0); }, 0);
+    // Every toy counts toward the order size, priced or on request.
+    const total = rows.reduce(function(s, x){ return s + (x.offered ? x.qty : 0); }, 0);
     const pct = orderDiscount(tierPct, total);
     rows.forEach(function(x){ x.price = tierPrice(x.base, pct); });
     rows.pct = pct; rows.tierPct = tierPct; rows.slabPct = slabPct(total); rows.totalQty = total;
@@ -281,8 +337,9 @@
     const q = B.requests.find(function(x){ return x.id === id; });
     const c = q && client(q.client_id);
     if(!q || !c){ showNoticeModal('That client no longer exists in Studio.'); return; }
-    const lines = priced(q).filter(function(x){ return x.item && x.qty > 0 && x.base > 0; });
-    if(!lines.length){ showNoticeModal('None of the products in this request are in the catalogue any more. Decline it with a note instead.'); return; }
+    const lines = priced(q).filter(function(x){ return x.offered && x.qty > 0; });
+    if(!lines.length){ showNoticeModal('None of the toys in this request are offered any more. Decline it with a note instead.'); return; }
+    const onRequest = lines.filter(function(x){ return x.base <= 0; });
     const order = newOrderShell('booked');
     Object.assign(order, {
       name: 'Buyer app order' + (q.payload.reference ? ' · ' + String(q.payload.reference).slice(0, 60) : ''),
@@ -291,13 +348,17 @@
       buyerRequestId: q.id
     });
     order.products = lines.map(function(x){
-      return { id: newId(), name: x.item.name || '', qty: x.qty, already: 0, failed: 0, hrs: x.item.hours || 0, fil: x.item.weight || 0,
-        color: x.line.color || x.item.color || '', colorHex: '', material: (x.item.material || '').trim() || 'PLA', listPrice: x.base, actualPrice: x.price, catalogId: x.item.id };
+      const it = x.item || {};
+      return { id: newId(), name: x.name || '', qty: x.qty, already: 0, failed: 0, hrs: it.hours || 0, fil: it.weight || 0,
+        color: x.line.color || it.color || '', colorHex: '', material: (it.material || '').trim() || 'PLA', listPrice: x.base, actualPrice: x.price, catalogId: it.id || '' };
     });
     state.orders.push(order);
     renderOrders(); recalcQueue(); renderInventory(); scheduleSave();
-    reply(q.id, 'accepted', 'Confirmed as order ' + order.displayId + '. We’ll update you as it moves through production.');
-    showToast('Order ' + order.displayId + ' created for ' + (c.name || 'client'));
+    reply(q.id, 'accepted', 'Confirmed as order ' + order.displayId + '.' +
+      (onRequest.length ? ' We’ll confirm the price of ' + onRequest.length + ' toy' + (onRequest.length === 1 ? '' : 's') + ' shortly.' : ' We’ll update you as it moves through production.'));
+    if(onRequest.length) showNoticeModal('Order ' + order.displayId + ' created. ' + onRequest.length + ' toy' + (onRequest.length === 1 ? ' is' : 's are') + ' price on request (' +
+      onRequest.map(function(x){ return x.name; }).join(', ') + '): open the order in Orders and set the price — and add a weight in the Product Catalog so it’s priced automatically next time.');
+    else showToast('Order ' + order.displayId + ' created for ' + (c.name || 'client'));
   }
 
   function applyProfile(id){
@@ -337,10 +398,12 @@
       body = '<table class="ba-table"><tr><th>Product</th><th class="num">Qty</th><th class="num">Price now</th><th class="num">Buyer saw</th><th class="num">Line</th></tr>' +
         rows.map(function(x){
           total += x.price * x.qty;
-          const warn = !x.item || !x.base ? ' <span class="ba-pill bad">not offered</span>' : x.qty < terms().minPerProduct ? ' <span class="ba-pill warn">below ' + terms().minPerProduct + ' per product</span>' : '';
+          const warn = !x.offered ? ' <span class="ba-pill bad">not offered</span>' : (x.base <= 0 ? ' <span class="ba-pill warn">price on request</span>' : '') +
+            (x.qty < terms().minPerProduct ? ' <span class="ba-pill warn">below ' + terms().minPerProduct + ' per product</span>' : '');
           const diff = x.item && x.seen && Math.round(x.seen) !== x.price ? ' class="ba-warn"' : '';
-          return '<tr><td>' + esc((x.item && x.item.name) || x.line.name || '?') + (x.line.color ? ' · ' + esc(x.line.color) : '') + warn + '</td><td class="num">' + x.qty +
-            '</td><td class="num">' + money(x.price) + '</td><td class="num"' + diff + '>' + money(x.seen) + '</td><td class="num">' + money(x.price * x.qty) + '</td></tr>';
+          const por = x.offered && x.base <= 0;
+          return '<tr><td>' + esc(x.name) + (x.line.color ? ' · ' + esc(x.line.color) : '') + warn + '</td><td class="num">' + x.qty +
+            '</td><td class="num">' + (por ? 'on request' : money(x.price)) + '</td><td class="num"' + diff + '>' + (por ? '—' : money(x.seen)) + '</td><td class="num">' + (por ? '—' : money(x.price * x.qty)) + '</td></tr>';
         }).join('') +
         '<tr><td colspan="4"><b>Total (ex-GST)</b> <span class="ba-dim">' + rows.totalQty + ' pcs · ' + rows.pct + '% off (tier ' + rows.tierPct + '% + quantity ' + rows.slabPct + '%' + (rows.tierPct + rows.slabPct > rows.pct ? ', capped' : '') + ')' +
           (rows.totalQty < terms().minOrder ? ' · <span class="ba-warn">below ' + terms().minOrder + ' pcs order minimum</span>' : '') + '</span></td><td class="num"><b>' + money(total) + '</b></td></tr></table>' +
@@ -418,10 +481,13 @@
 
     html += '<div class="panel"><div class="panel-title">Resale · last 90 days</div>' + resaleHtml() + '</div>';
 
-    html += '<div class="panel"><div class="panel-title">Price check</div><p class="ba-dim">The Buyer app sells toys only. ' + priced.length + ' of ' + cat.length + ' toys have a trade price (₹' + TOY_RATE + '/g, before discounts, ex-GST). ' +
-      'Suggested retail comes from the D2C price, so import the website prices to show resellers their margin.</p>' +
-      (unpriced.length ? '<p class="ba-dim"><b>Not shown to buyers</b> — needs a weight in grams:</p><ul class="ba-list">' +
-        unpriced.slice(0, 60).map(function(i){ return '<li>' + esc(i.name) + ' <span class="ba-dim">(' + esc(i.category || 'no category') + ', ' + (parseFloat(i.weight) || 0) + ' g)</span></li>'; }).join('') + '</ul>' : '') + '</div>';
+    const webOnly = catalogue(0).filter(function(x){ return /^web:/.test(x.id); });
+    html += '<div class="panel"><div class="panel-title">Price check</div><p class="ba-dim">The Buyer app shows every toy on threadtribe.co (' + WEB.items.length + ') plus the toys in your Product Catalog. ' +
+      priced.length + ' have a trade price (₹' + TOY_RATE + '/g, before discounts, ex-GST); the rest show as <b>price on request</b> and you set their price when you confirm the order.</p>' +
+      (webOnly.length ? '<p class="ba-dim"><b>On the website but not in your Product Catalog</b> — import them with weights to price them automatically:</p><ul class="ba-list">' +
+        webOnly.map(function(x){ return '<li>' + esc(x.name) + ' <span class="ba-dim">(' + esc(x.category) + ', retail ' + money(x.retail) + ')</span></li>'; }).join('') + '</ul>' : '') +
+      (unpriced.length ? '<p class="ba-dim"><b>In your catalogue without a weight</b>:</p><ul class="ba-list">' +
+        unpriced.slice(0, 60).map(function(i){ return '<li>' + esc(i.name) + ' <span class="ba-dim">(' + esc(i.category || 'no category') + ')</span></li>'; }).join('') + '</ul>' : '') + '</div>';
 
     root.innerHTML = html;
   }
@@ -454,6 +520,7 @@
   }
 
   window.renderBuyers = function(){
+    if(!WEB.at) loadWebToys().then(function(){ refreshViews(); });
     if(!R.at || Date.now() - R.at > 300000) loadResale(); render(); if(typeof cloudIsOn === 'function' && cloudIsOn() && !B.at) pull().catch(function(e){ console.warn('[buyers]', e); }); };
 
   document.addEventListener('click', function(e){

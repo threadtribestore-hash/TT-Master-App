@@ -101,6 +101,7 @@
   .prod .p{ font-weight:700; margin-top:6px; }
   .prod .p s{ color:var(--dim); font-weight:500; font-size:12.5px; margin-left:4px; }
   .prod .mg{ font-size:12px; color:var(--green); font-weight:600; margin-top:2px; }
+  .prod .p.por{ color:var(--accent); font-size:14px; }
   .search{ margin-bottom:10px; }
   .tools{ display:flex; gap:8px; margin-bottom:10px; }
   .tools select{ flex:1; padding:10px 12px; font-size:15px; }
@@ -305,6 +306,8 @@
   function slabFor(total){ var p = 0; T().slabs.forEach(function(s){ if(total >= s.min) p = s.pct; }); return p; }
   function orderPct(total){ var t = T(); return Math.min(t.maxDiscount, t.tierPct + slabFor(total)); }
   function priceAt(p, pct){ return Math.round(p.base * (1 - pct / 100)); }
+  // Toys without a weight yet: shown and orderable, priced by Thread Tribe at confirmation.
+  function onRequest(p){ return !p || !(p.base > 0); }
   function nextSlab(total){
     var t = T(), cur = orderPct(total);
     for(var i = 0; i < t.slabs.length; i++){
@@ -317,8 +320,8 @@
     var lines = store.cart.map(function(l){ return { l: l, p: product(l.productId) }; }).filter(function(x){ return x.p; });
     var qty = lines.reduce(function(s, x){ return s + x.l.qty; }, 0), pct = orderPct(qty);
     var sub = 0, list = 0;
-    lines.forEach(function(x){ x.price = priceAt(x.p, pct); x.amount = x.price * x.l.qty; sub += x.amount; list += x.p.base * x.l.qty; });
-    return { lines: lines, qty: qty, pct: pct, sub: sub, saved: list - sub, next: nextSlab(qty) };
+    lines.forEach(function(x){ x.por = onRequest(x.p); x.price = x.por ? 0 : priceAt(x.p, pct); x.amount = x.price * x.l.qty; sub += x.amount; list += (x.p.base || 0) * x.l.qty; });
+    return { lines: lines, qty: qty, pct: pct, sub: sub, saved: list - sub, next: nextSlab(qty), por: lines.filter(function(x){ return x.por; }).length };
   }
 
   // ---------- sync: pack, requests ----------
@@ -442,6 +445,7 @@
   function sellPrice(p){
     var o = store.docs.prices[p.id];
     if(o && o.sell > 0) return o.sell;
+    if(onRequest(p)) return p.retail || 0;
     return Math.round(costOf(p) * (1 + num(settings().markup) / 100));
   }
   function custSlabFor(total){ var p = 0; (settings().custSlabs || []).forEach(function(s){ if(total >= s.min) p = s.pct; }); return p; }
@@ -698,6 +702,7 @@
       var price = costOf(p);
       if(shopSeg !== 'all' && (p.category || 'Other') !== shopSeg) return false;
       if(q && (p.name + ' ' + p.category + ' ' + p.color).toLowerCase().indexOf(q) === -1) return false;
+      if((isFinite(min) || isFinite(max)) && onRequest(p)) return false;
       if(isFinite(min) && price < min) return false;
       if(isFinite(max) && price > max) return false;
       if(f.ordered && !ordered[p.id]) return false;
@@ -706,7 +711,7 @@
     });
     var by = {
       recommended: function(a, b){ return (ordered[b.id] || 0) - (ordered[a.id] || 0) || a.name.localeCompare(b.name); },
-      price_asc: function(a, b){ return a.base - b.base; }, price_desc: function(a, b){ return b.base - a.base; },
+      price_asc: function(a, b){ return (a.base || 1e9) - (b.base || 1e9); }, price_desc: function(a, b){ return (b.base || 0) - (a.base || 0); },
       margin: function(a, b){ return margin(b) - margin(a) || a.base - b.base; },
       name: function(a, b){ return a.name.localeCompare(b.name); },
       light: function(a, b){ return (a.weight || 1e9) - (b.weight || 1e9); }, heavy: function(a, b){ return (b.weight || 0) - (a.weight || 0); },
@@ -736,8 +741,9 @@
         var price = costOf(p), m = margin(p);
         return '<button class="prod" data-a="product" data-id="' + esc(p.id) + '"><div class="ph">' + (p.photo ? '<img loading="lazy" alt="" src="' + esc(p.photo) + '">' : '🧸') + '</div>' +
           '<div class="b"><div class="n">' + esc(p.name) + '</div><div class="w">' + esc([p.weight ? Math.round(p.weight) + ' g' : '', p.color].filter(Boolean).join(' · ')) + '</div>' +
-          '<div class="p">' + money(price) + (price < p.base ? '<s>' + money(p.base) + '</s>' : '') + '</div>' +
-          (m ? '<div class="mg">Retail ' + money(p.retail) + ' · ' + m.toFixed(1) + '× margin</div>' : '') + '</div></button>';
+          (onRequest(p) ? '<div class="p por">Price on request</div>' + (p.retail ? '<div class="w">Retail ' + money(p.retail) + '</div>' : '')
+            : '<div class="p">' + money(price) + (price < p.base ? '<s>' + money(p.base) + '</s>' : '') + '</div>' +
+              (m ? '<div class="mg">Retail ' + money(p.retail) + ' · ' + m.toFixed(1) + '× margin</div>' : '')) + '</div></button>';
       }).join('') + '</div>' : '<div class="card empty"><b>Nothing matches</b>Try another search or clear the filters.' + (n ? '<div class="btns" style="justify-content:center;"><button class="btn small" data-a="clear-filters">Clear filters</button></div>' : '') + '</div>');
   }
   function filterSheet(){
@@ -771,13 +777,14 @@
       (p.weight ? '<div class="row"><span class="muted">Weight</span><span class="r">' + Math.round(p.weight) + ' g</span></div>' : '') +
       (p.hours ? '<div class="row"><span class="muted">Print time</span><span class="r">' + p.hours + ' hrs / pc</span></div>' : '') +
       (p.size ? '<div class="row"><span class="muted">Size</span><span class="r">' + esc(p.size) + '</span></div>' : '') +
-      (p.retail ? '<div class="row"><span class="muted">Suggested retail</span><span class="r">' + money(p.retail) + ' <span class="muted">· ' + margin(p).toFixed(1) + '× your price</span></span></div>' : '') +
+      (p.retail ? '<div class="row"><span class="muted">Suggested retail</span><span class="r">' + money(p.retail) + (margin(p) ? ' <span class="muted">· ' + margin(p).toFixed(1) + '× your price</span>' : '') + '</span></div>' : '') +
       '</div>' +
-      '<div class="card"><div class="muted" style="margin-bottom:4px">Your price per piece — counts every toy in the order together</div><table class="slabs">' +
+      (onRequest(p) ? '<div class="note info"><b>Price on request.</b> Thread Tribe confirms this toy’s price when they confirm your order. Its pieces still count toward your order-size discount.</div>'
+      : '<div class="card"><div class="muted" style="margin-bottom:4px">Your price per piece — counts every toy in the order together</div><table class="slabs">' +
       slabRows.map(function(s, i){
         var nextMin = slabRows[i + 1] ? slabRows[i + 1].min : null, on = curTotal >= s.min && (nextMin === null || curTotal < nextMin);
         return '<tr class="' + (on ? 'on' : '') + '"><td>' + s.min + (nextMin ? '–' + (nextMin - 1) : '+') + ' pcs' + (s.pct ? ' · ' + s.pct + '% off' : '') + '</td><td>' + money(priceAt(p, s.pct)) + '</td></tr>';
-      }).join('') + '</table></div>' +
+      }).join('') + '</table></div>') +
       '<label>Quantity (min ' + t.minPerProduct + ')</label><div class="qty"><button data-a="qty-" type="button">−</button><input id="pq" type="number" inputmode="numeric" min="' + t.minPerProduct + '" step="1" value="' + qty + '"><button data-a="qty+" type="button">+</button></div>' +
       '<label>Colour (optional)</label><input id="pc" placeholder="' + esc(p.color || 'e.g. Pastel blue') + '" value="' + esc(inCart ? inCart.color || '' : '') + '">' +
       '<div class="hint" id="pline" data-cartqty="' + cartQty + '"></div>' +
@@ -790,6 +797,7 @@
     if(!el || !q || !b) return;
     var p = product(b.getAttribute('data-id')), n = Math.round(num(q.value)), total = num(el.getAttribute('data-cartqty')) + n, pct = orderPct(total);
     if(!p) return;
+    if(onRequest(p)){ el.innerHTML = n + ' pcs · price confirmed by Thread Tribe' + (n < T().minPerProduct ? ' — <b>minimum is ' + T().minPerProduct + '</b>' : ''); return; }
     el.innerHTML = money(priceAt(p, pct) * n) + ' for ' + n + ' pcs at ' + money(priceAt(p, pct)) + ' each' + (pct ? ' (' + pct + '% off on a ' + total + '-piece order)' : '') + ', ex-GST' +
       (n < T().minPerProduct ? ' — <b>minimum is ' + T().minPerProduct + '</b>' : '');
   }
@@ -809,9 +817,9 @@
     var t = T(), ct = cartTotals(), gstRate = pack().business.gstRate || 0;
     var rows = ct.lines.map(function(x, i){
       var low = x.l.qty < t.minPerProduct;
-      return '<div class="row"><div style="min-width:0"><div style="font-weight:600">' + esc(x.p.name) + '</div><div class="muted">' + x.l.qty + ' × ' + money(x.price) + (x.l.color ? ' · ' + esc(x.l.color) : '') +
+      return '<div class="row"><div style="min-width:0"><div style="font-weight:600">' + esc(x.p.name) + '</div><div class="muted">' + x.l.qty + ' × ' + (x.por ? 'price on request' : money(x.price)) + (x.l.color ? ' · ' + esc(x.l.color) : '') +
         (low ? ' · <span style="color:var(--red)">min ' + t.minPerProduct + '</span>' : '') + '</div>' +
-        '<button class="link" data-a="product" data-id="' + esc(x.p.id) + '">Change</button> <button class="link" style="color:var(--red)" data-a="remove" data-i="' + i + '">Remove</button></div><span class="r">' + money(x.amount) + '</span></div>';
+        '<button class="link" data-a="product" data-id="' + esc(x.p.id) + '">Change</button> <button class="link" style="color:var(--red)" data-a="remove" data-i="' + i + '">Remove</button></div><span class="r">' + (x.por ? '—' : money(x.amount)) + '</span></div>';
     }).join('');
     var gst = Math.round(ct.sub * gstRate) / 100;
     var problems = [];
@@ -821,7 +829,7 @@
       (ct.next ? '<div class="note info">Add <b>' + ct.next.need + ' more pieces</b> of any toys to get <b>' + ct.next.pct + '% off</b> the whole order.</div>' : '') +
       '<div class="card sum" style="margin-top:12px"><div class="row"><span>' + ct.qty + ' pieces</span><span class="r">' + (ct.pct ? ct.pct + '% off' : '') + '</span></div>' +
       (ct.saved > 0 ? '<div class="row"><span class="muted">You save</span><span class="r" style="color:var(--green)">' + money(ct.saved) + '</span></div>' : '') +
-      '<div class="row"><span>Subtotal (ex-GST)</span><span class="r">' + money(ct.sub) + '</span></div>' +
+      '<div class="row"><span>Subtotal (ex-GST)' + (ct.por ? ' <span class="muted">· ' + ct.por + ' on request not included</span>' : '') + '</span><span class="r">' + money(ct.sub) + '</span></div>' +
       (gstRate ? '<div class="row"><span class="muted">GST ' + gstRate + '%</span><span class="r muted">' + money(gst) + '</span></div><div class="row"><span>Estimated total</span><span class="r">' + money(ct.sub + gst) + '</span></div>' : '') + '</div>' +
       (problems.length ? '<div class="note warn">' + problems.join(' ') + '</div>' : '') +
       '<label>Your reference (optional)</label><input id="cref" maxlength="60" placeholder="e.g. PO number or store name">' +
@@ -835,7 +843,7 @@
     if(ct.qty < t.minOrder || ct.lines.some(function(x){ return x.l.qty < t.minPerProduct; })){ toast('Check the minimums first'); return; }
     cloud.sending = true; renderAll();
     var ok = await submitRequest('order', {
-      lines: ct.lines.map(function(x){ return { productId: x.p.id, name: x.p.name, qty: x.l.qty, unitPrice: x.price, color: x.l.color || '' }; }),
+      lines: ct.lines.map(function(x){ return { productId: x.p.id, name: x.p.name, qty: x.l.qty, unitPrice: x.price, color: x.l.color || '', onRequest: x.por }; }),
       reference: val('cref'), notes: val('cnotes'), totalQty: ct.qty, discountPct: ct.pct, total: ct.sub, reorderOf: store.reorderOf || ''
     });
     cloud.sending = false;
