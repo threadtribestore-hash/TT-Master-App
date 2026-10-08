@@ -17866,6 +17866,9 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   #ttf .ttf-bar i{display:block;height:100%;background:var(--green)}
   #ttf label.ttf-check{display:flex;gap:8px;align-items:center;color:var(--dim)}
   #ttf .ttf-wrap{overflow-x:auto}
+  #ttf .ttf-fil{color:var(--dim);font-size:12px;white-space:nowrap}
+  #ttf .ttf-fil .bad{color:var(--red)}
+  #ttf h3.ttf-h{margin:18px 0 8px;font-size:14px}
   #ttf .ttf-keyform{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 6px}
   #ttf .ttf-keyform input{flex:1;min-width:220px;background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 8px;font:inherit}
   #ttf .ttf-msg{min-height:1.2em;margin:6px 0 0}
@@ -17876,7 +17879,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   <div id="ttf">
     <header>
       <h2>Print farm · Bambuddy</h2>
-      <span class="ttf-tabs"><button data-tab="orders" class="on">Orders</button> <button data-tab="products">Products</button></span>
+      <span class="ttf-tabs"><button data-tab="orders" class="on">Orders</button> <button data-tab="products">Products</button> <button data-tab="waste">Waste</button></span>
       <button class="ttf-btn" id="ttf-key" type="button" title="Bridge address, passcode and API key">⚙ Setup</button>
       <button class="ttf-btn" id="ttf-close" type="button">Close</button>
     </header>
@@ -17906,6 +17909,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     }
   }
 
+  var waste = null;
   var tab = 'orders', library = null, printers = null, connErr = null, statusByOrder = {}, plateCache = {}, isLocal = null;
 
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -17958,13 +17962,55 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     return '<div class="ttf-banner err"><b>Couldn\'t reach Bambuddy:</b> ' + esc(connErr.message) + ' <button class="ttf-btn" data-act="retry">Retry</button></div>';
   }
 
-  function progressCell(st){
+  function g(n){ if (n == null) return '—'; return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + ' kg' : Math.round(n) + ' g'; }
+  function pct(part, whole){ return whole > 0 ? Math.round(100 * part / whole) + '%' : '—'; }
+  function catalogWeight(name){ var c = (studio().productCatalog || []).filter(function(p){ return norm(p.name) === norm(name); })[0]; return c && +c.weight ? +c.weight : null; }
+
+  function filamentCell(st){
+    if (!st || st.plateGrams == null) return '<span class="ttf-fil">—</span>';
+    var h = 'planned ' + g(st.plannedGrams);
+    if (st.usedGrams) h += '<br>used ' + g(st.usedGrams);
+    if (st.wastedGrams) h += ' · <span class="bad">wasted ' + g(st.wastedGrams) + '</span>';
+    return '<span class="ttf-fil">' + h + '</span>';
+  }
+
+  function renderWaste(){
+    if (!waste) return '<p class="ttf-note">Loading…</p>';
+    var map = getMap();
+    var h = '<p class="ttf-note"><b>Used</b> is what came off the spools; Bambuddy counts a failed print only up to where it stopped. <b>Wasted</b> is filament that went into failed or cancelled prints. <b>Sliced/unit</b> vs <b>catalogue weight</b> shows extra filament each unit takes for supports, brims and purge.</p>';
+    h += '<h3 class="ttf-h">By product (orders sent from Studio)</h3>';
+    if (!waste.products.length) h += '<p class="ttf-note">No orders sent to the farm yet.</p>';
+    else {
+      h += '<div class="ttf-wrap"><table><thead><tr><th>Product</th><th class="num">Plates done</th><th class="num">Failed</th><th class="num">Sliced/unit</th><th class="num">Catalogue wt</th><th class="num">Overhead</th><th class="num">Used</th><th class="num">Wasted</th><th class="num">Waste %</th></tr></thead><tbody>';
+      waste.products.forEach(function(p){
+        var m = map[norm(p.product)], per = p.plateGrams != null ? p.plateGrams / Math.max(+((m && m.unitsPerPlate) || 1), 1) : null, cw = catalogWeight(p.product);
+        h += '<tr><td>' + esc(p.product) + '</td><td class="num">' + p.plates + '</td><td class="num">' + (p.failed ? '<span style="color:var(--red)">' + p.failed + '</span>' : 0) + '</td>' +
+          '<td class="num">' + g(per) + '</td><td class="num">' + g(cw) + '</td><td class="num">' + (per && cw ? pct(per - cw, per) : '—') + '</td>' +
+          '<td class="num">' + g(p.usedGrams) + '</td><td class="num">' + g(p.wastedGrams) + '</td><td class="num">' + pct(p.wastedGrams, p.usedGrams) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '<h3 class="ttf-h">By printer (every print in Bambuddy)</h3>';
+    if (!waste.printers.length) h += '<p class="ttf-note">No prints logged yet.</p>';
+    else {
+      h += '<div class="ttf-wrap"><table><thead><tr><th>Printer</th><th class="num">Prints</th><th class="num">Failed</th><th class="num">Fail rate</th><th class="num">Used</th><th class="num">Wasted</th><th class="num">Waste %</th></tr></thead><tbody>';
+      waste.printers.forEach(function(p){
+        h += '<tr><td>' + esc(p.printer) + '</td><td class="num">' + p.prints + '</td><td class="num">' + p.failed + '</td><td class="num">' + pct(p.failed, p.prints) + '</td>' +
+          '<td class="num">' + g(p.usedGrams) + '</td><td class="num">' + g(p.wastedGrams) + '</td><td class="num">' + pct(p.wastedGrams, p.usedGrams) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    return h + '<p class="ttf-note" style="margin-top:12px">Real usage needs spools assigned to each printer\'s slots in Bambuddy → Inventory; without that, figures fall back to the sliced estimates.</p>';
+  }
+
+  function progressCell(st, orderId, lineId){
     if (!st) return '<span class="ttf-pill">Not sent</span>';
+    var undo = (st.pending || st.remaining) ? ' <a href="#" data-act="undo" data-order="' + esc(orderId) + '" data-line="' + esc(lineId) + '" style="color:var(--dim);font-size:12px">Undo send</a>' : '';
     var pct = st.target ? Math.round(100 * st.completed / st.target) : 0;
     var bits = st.completed + '/' + st.target + ' plates';
     if (st.printing) bits += ' · ' + st.printing + ' printing';
     if (st.failed) bits += ' · <span style="color:var(--red)">' + st.failed + ' failed</span>';
-    return '<div class="ttf-bar"><i style="width:' + pct + '%"></i></div><div style="margin-top:4px">' + bits + '</div>';
+    return '<div class="ttf-bar"><i style="width:' + pct + '%"></i></div><div style="margin-top:4px">' + bits + undo + '</div>';
   }
 
   function renderOrders(){
@@ -17974,20 +18020,22 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     var h = '<p class="ttf-note">Each product line becomes an order batch in Bambuddy, split across free printers of the right model. Units already made (the "already" count) are subtracted. Sending twice won\'t duplicate anything.</p>';
     h += '<label class="ttf-check" style="margin-bottom:14px"><input type="checkbox" id="ttf-hold"' + (hold ? ' checked' : '') + '> Hold sent jobs in Bambuddy until someone presses Start</label>';
     orders.forEach(function(o){
-      var st = statusByOrder[o.id] || {}, sendable = 0, unmapped = 0;
+      var st = statusByOrder[o.id] || {}, sendable = 0, unmapped = 0, used = 0, wasted = 0;
+      Object.keys(st).forEach(function(k){ used += st[k].usedGrams || 0; wasted += st[k].wastedGrams || 0; });
       var rows = (o.products || []).map(function(p){
         var m = map[norm(p.name)], f = m && fileById(m.fileId), left = linesLeft(p), lineSt = st[p.id];
         if (!m || !f) unmapped++; else if (!lineSt && left > 0) sendable++;
         return '<tr><td>' + esc(p.name) + '</td><td class="num">' + left + '</td>' +
           '<td>' + (f ? esc(f.name) + (m.plateId ? ' · plate ' + m.plateId : '') : '<a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--amber)">Set up product →</a>') + '</td>' +
           '<td class="num">' + (f ? (m.unitsPerPlate || 1) : '') + '</td><td class="num">' + (f ? runsFor(p, m) : '') + '</td>' +
-          '<td>' + progressCell(lineSt) + '</td></tr>';
+          '<td>' + progressCell(lineSt, o.id, p.id) + '</td><td>' + filamentCell(lineSt) + '</td></tr>';
       }).join('');
       h += '<div class="ttf-order"><div class="ttf-order-head"><b>' + esc(o.displayId) + '</b><span>' + esc(o.clientName || '') + '</span>' +
         '<span class="ttf-pill">' + ACTIVE[o.status] + '</span>' + (o.dueDate ? '<span class="ttf-pill warn">Due ' + esc(o.dueDate) + '</span>' : '') +
         (unmapped ? '<span class="ttf-pill bad">' + unmapped + ' product(s) not set up</span>' : '') +
+        (used ? '<span class="ttf-pill">' + g(used) + ' used' + (wasted ? ' · ' + g(wasted) + ' wasted' : '') + '</span>' : '') +
         '<span class="ttf-spacer"></span><button class="ttf-btn primary" data-act="send" data-order="' + esc(o.id) + '"' + (sendable && !connErr ? '' : ' disabled') + '>Send ' + (sendable || '') + ' to farm</button></div>' +
-        '<div class="ttf-wrap"><table><thead><tr><th>Product</th><th class="num">Units left</th><th>Bambuddy file</th><th class="num">Per plate</th><th class="num">Plates</th><th>Farm progress</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+        '<div class="ttf-wrap"><table><thead><tr><th>Product</th><th class="num">Units left</th><th>Bambuddy file</th><th class="num">Per plate</th><th class="num">Plates</th><th>Farm progress</th><th>Filament</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     });
     return h;
   }
@@ -18085,7 +18133,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   function render(){
     var needKey = needsSetup();
     document.querySelectorAll('#ttf .ttf-tabs button').forEach(function(b){ b.classList.toggle('on', b.dataset.tab === tab); });
-    document.getElementById('ttf-body').innerHTML = (tab === 'key' || needKey) ? renderKey() : banner() + (tab === 'orders' ? renderOrders() : renderProducts());
+    document.getElementById('ttf-body').innerHTML = (tab === 'key' || needKey) ? renderKey() : banner() + (tab === 'orders' ? renderOrders() : tab === 'waste' ? renderWaste() : renderProducts());
   }
 
   function saveKey(){
@@ -18124,6 +18172,19 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
       .then(refreshStatus).then(render);
   }
 
+  function undoLine(orderId, lineId){
+    var o = activeOrders().filter(function(x){ return x.id === orderId; })[0];
+    var p = o && (o.products || []).filter(function(x){ return x.id === lineId; })[0];
+    var st = (statusByOrder[orderId] || {})[lineId] || {};
+    if (!confirm('Undo sending ' + (p ? p.name : 'this line') + ' (' + (o ? o.displayId : '') + ')?\n\n' +
+      'The plates still waiting in Bambuddy are cancelled. ' + (st.printing ? st.printing + ' plate(s) printing right now keep printing. ' : '') +
+      (st.completed ? st.completed + ' plate(s) already printed stay counted. ' : '') + 'You can send the line again afterwards.')) return;
+    api('/cancel-line', { orderId: orderId, lineId: lineId })
+      .then(function(r){ if (r.printing) alert(r.printing + ' plate(s) were already printing and will finish.'); })
+      .catch(function(e){ alert('Undo failed: ' + (e.status === 0 ? 'the bridge isn\'t reachable.' : e.message)); })
+      .then(refreshStatus).then(render);
+  }
+
   function open(){
     document.getElementById('ttf-back').classList.add('on');
     document.getElementById('ttf-body').innerHTML = '<p class="ttf-note">Connecting to Bambuddy…</p>';
@@ -18136,7 +18197,11 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   document.getElementById('ttf-key').addEventListener('click', function(){ tab = 'key'; render(); });
   document.getElementById('ttf-back').addEventListener('click', function(e){ if (e.target.id === 'ttf-back') close(); });
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && document.getElementById('ttf-back').classList.contains('on')) close(); });
-  document.querySelector('#ttf .ttf-tabs').addEventListener('click', function(e){ var t = e.target.dataset.tab; if (t) { tab = t; render(); } });
+  document.querySelector('#ttf .ttf-tabs').addEventListener('click', function(e){
+    var t = e.target.dataset.tab; if (!t) return;
+    tab = t; render();
+    if (t === 'waste' && !connErr) { waste = null; render(); api('/waste-report').then(function(r){ waste = r; }).catch(function(err){ waste = { products: [], printers: [] }; connErr = err; }).then(function(){ if (tab === 'waste') render(); }); }
+  });
 
   var body = document.getElementById('ttf-body');
   body.addEventListener('click', function(e){
@@ -18147,6 +18212,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     if (a.dataset.act === 'map') { tab = 'products'; render(); }
     if (a.dataset.act === 'back') { tab = 'orders'; render(); }
     if (a.dataset.act === 'setup') { tab = 'key'; render(); }
+    if (a.dataset.act === 'undo') undoLine(a.dataset.order, a.dataset.line);
   });
   body.addEventListener('submit', function(e){
     var id = e.target.id; if (!/^ttf-/.test(id)) return;
