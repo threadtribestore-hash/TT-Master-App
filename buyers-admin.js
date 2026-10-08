@@ -361,6 +361,42 @@
     else showToast('Order ' + order.displayId + ' created for ' + (c.name || 'client'));
   }
 
+  // ---------- damage / replacement claims ----------
+  const ISSUE_LABEL = { broken: 'Broken', missing: 'Missing pieces', colour: 'Wrong colour', defect: 'Print defect', other: 'Other' };
+  function claimReplace(id){
+    const q = B.requests.find(function(x){ return x.id === id; });
+    const c = q && client(q.client_id);
+    if(!q || !c) return;
+    const p = q.payload || {}, src = state.orders.find(function(o){ return o.id === p.orderId; });
+    const order = newOrderShell('booked');
+    Object.assign(order, {
+      name: 'Replacement for ' + (p.displayId || 'order') + ' (' + (ISSUE_LABEL[p.issue] || 'claim') + ')',
+      clientId: c.id, clientName: c.name || '', clientPhone: c.phone || '', clientAddress: c.address || '', clientState: c.state || '', clientGstin: gstinOf(c),
+      orderSource: 'Buyer app claim', orderedDate: new Date().toISOString().slice(0, 10), notes: String(p.notes || '').slice(0, 2000), buyerRequestId: q.id
+    });
+    order.products = (p.lines || []).map(function(l){
+      const it = (state.productCatalog || []).find(function(i){ return i.id === l.catalogId; }) ||
+        (src && src.products.find(function(x){ return (x.name || '') === l.name; })) || {};
+      return { id: newId(), name: l.name || '', qty: Math.max(1, Math.round(+l.qty || 0)), already: 0, failed: 0, hrs: it.hours || it.hrs || 0, fil: it.weight || it.fil || 0,
+        color: it.color || '', colorHex: '', material: (it.material || '').trim() || 'PLA', listPrice: 0, actualPrice: 0, catalogId: l.catalogId || '' };
+    });
+    state.orders.push(order);
+    renderOrders(); recalcQueue(); renderInventory(); scheduleSave();
+    reply(q.id, 'accepted', 'Replacements are booked as ' + order.displayId + ' at no charge. Sorry about that.');
+    showToast('Replacement order ' + order.displayId + ' created');
+  }
+  function claimCredit(id){
+    const q = B.requests.find(function(x){ return x.id === id; });
+    if(!q) return;
+    const worth = ((q.payload && q.payload.lines) || []).reduce(function(t, l){ return t + (+l.qty || 0) * (+l.unitPrice || 0); }, 0);
+    const amt = prompt('Credit amount (₹) for the buyer’s next order. These pieces were worth ' + money(worth) + '.', String(Math.round(worth)));
+    if(amt === null) return;
+    const v = Math.max(0, Math.round(parseFloat(amt) || 0));
+    if(!v) return;
+    reply(q.id, 'done', money(v) + ' credit will be taken off your next order. Sorry about that.');
+    showNoticeModal('Remember to apply the ' + money(v) + ' credit as a discount on this buyer’s next order.');
+  }
+
   function applyProfile(id){
     const q = B.requests.find(function(x){ return x.id === id; });
     const c = q && client(q.client_id);
@@ -408,6 +444,13 @@
           (rows.totalQty < terms().minOrder ? ' · <span class="ba-warn">below ' + terms().minOrder + ' pcs order minimum</span>' : '') + '</span></td><td class="num"><b>' + money(total) + '</b></td></tr></table>' +
         (q.payload.reorderOf ? '<div class="ba-dim">Repeat of ' + esc(q.payload.reorderOf) + '</div>' : '') +
         (q.payload.notes ? '<div class="ba-note">“' + esc(q.payload.notes) + '”</div>' : '');
+    } else if(q.kind === 'claim'){
+      const p = q.payload || {}, pcs = (p.lines || []).reduce(function(t, l){ return t + (+l.qty || 0); }, 0);
+      const worth = (p.lines || []).reduce(function(t, l){ return t + (+l.qty || 0) * (+l.unitPrice || 0); }, 0);
+      body = '<div><b>Problem with ' + esc(p.displayId || 'an order') + '</b> · ' + esc(ISSUE_LABEL[p.issue] || p.issue || '') + ' · ' + pcs + ' pcs (worth ' + money(worth) + ') · wants ' + (p.want === 'credit' ? 'credit' : 'replacements') + '</div>' +
+        '<ul class="ba-list">' + (p.lines || []).map(function(l){ return '<li>' + esc(l.name) + ': <b>' + (+l.qty || 0) + '</b></li>'; }).join('') + '</ul>' +
+        (p.notes ? '<div class="ba-note">“' + esc(p.notes) + '”</div>' : '') +
+        ((p.photos || []).length ? '<div class="ba-photos">' + p.photos.map(function(d){ return typeof d === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(d) ? '<a data-ba="photo" href="#"><img src="' + d + '" alt="claim photo"></a>' : ''; }).join('') + '</div>' : '');
     } else if(q.kind === 'profile'){
       const p = q.payload || {};
       body = '<div class="ba-dim">Asked to update their details:</div><ul class="ba-list">' +
@@ -421,6 +464,7 @@
         (q.kind === 'order' ? '<button class="ba-btn primary" data-ba="create" data-id="' + q.id + '">Create order</button>' : '') +
         (q.kind === 'profile' ? '<button class="ba-btn primary" data-ba="apply" data-id="' + q.id + '">Apply changes</button>' : '') +
         (q.kind === 'message' ? '<button class="ba-btn primary" data-ba="answer" data-id="' + q.id + '">Reply</button>' : '') +
+        (q.kind === 'claim' ? '<button class="ba-btn primary" data-ba="claim-replace" data-id="' + q.id + '">Send replacements</button><button class="ba-btn" data-ba="claim-credit" data-id="' + q.id + '">Give credit</button>' : '') +
         '<button class="ba-btn" data-ba="decline" data-id="' + q.id + '">' + (q.kind === 'message' ? 'Close' : 'Decline') + '</button></div>';
     } else if(q.reply){
       actions = '<div class="ba-dim">Reply: ' + esc(q.reply) + '</div>';
@@ -528,6 +572,9 @@
     const act = b.getAttribute('data-ba'), id = b.getAttribute('data-id');
     if(act === 'create') createOrder(id);
     else if(act === 'apply') applyProfile(id);
+    else if(act === 'claim-replace'){ if(confirm('Book the claimed pieces as a free replacement order?')) claimReplace(id); }
+    else if(act === 'claim-credit') claimCredit(id);
+    else if(act === 'photo'){ e.preventDefault(); const im = b.querySelector('img'); const w = window.open(''); if(w && im){ const big = w.document.createElement('img'); big.src = im.src; big.style.maxWidth = '100%'; w.document.body.appendChild(big); } }
     else if(act === 'decline'){
       const why = prompt('Tell the buyer why (they’ll see this):', '');
       if(why !== null) reply(id, 'declined', why);
@@ -580,6 +627,8 @@
     '#tabBuyers .ba-note{margin:6px 0;font-style:italic}' +
     '#tabBuyers .ba-list{margin:4px 0 8px 18px;font-size:12px}' +
     '#tabBuyers .ba-actions{margin-top:8px}' +
+    '#tabBuyers .ba-photos{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}' +
+    '#tabBuyers .ba-photos img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}' +
     '#tabBuyers .ba-form{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 10px}' +
     '#tabBuyers .ba-form label{font-size:12px;color:var(--dim);display:flex;flex-direction:column;gap:4px}' +
     '#tabBuyers input[type=number]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;width:90px;font:12px "JetBrains Mono",monospace}' +
