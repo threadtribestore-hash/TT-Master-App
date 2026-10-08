@@ -77,6 +77,11 @@
   .chart .b i{ display:block; width:100%; background:var(--accent); border-radius:5px 5px 2px 2px; min-height:2px; }
   .chart .b.now i{ background:var(--accent); opacity:0.55; }
   .chart .b span{ font-size:10.5px; color:var(--dim); }
+  .chart .pair{ display:flex; align-items:flex-end; gap:2px; width:100%; height:100%; }
+  .chart .pair i{ flex:1; }
+  .chart i.sv, .legend i.sv{ background:var(--green); }
+  .legend{ display:flex; gap:14px; margin-top:8px; font-size:12px; color:var(--dim); }
+  .legend i{ display:inline-block; width:10px; height:10px; border-radius:3px; background:var(--accent); margin-right:5px; vertical-align:-1px; }
   .bar{ height:8px; background:var(--panel2); border-radius:6px; overflow:hidden; margin-top:6px; border:1px solid var(--line); }
   .bar span{ display:block; height:100%; border-radius:6px; background:var(--accent); }
 
@@ -567,85 +572,89 @@
   }
 
   // ======================= home: insights from their history =======================
-  function purchaseStats(){
-    var orders = realOrders(), now = today(), m0 = monthKey(now);
-    var by = { month: 0, d90: 0, y: 0, orders12: 0, pcs12: 0, saved12: 0, prevMonth: 0 };
-    var d90 = daysAgo(90), y1 = daysAgo(365), prevKey = monthKey(daysAgo(new Date().getDate() + 1));
-    var months = {}, prods = {};
-    orders.forEach(function(o){
-      var d = o.orderedDate || '', v = o.subtotal || 0;
-      if(monthKey(d) === m0) by.month += v;
-      if(monthKey(d) === prevKey) by.prevMonth += v;
-      if(d >= d90) by.d90 += v;
-      if(d >= y1){
-        by.y += v; by.orders12++;
-        months[monthKey(d)] = (months[monthKey(d)] || 0) + v;
-        o.lines.forEach(function(l){
-          by.pcs12 += l.qty;
-          by.saved12 += Math.max(0, ((l.listPrice || l.unitPrice) - l.unitPrice) * l.qty);
-          var k = l.catalogId || l.name;
-          if(!prods[k]) prods[k] = { id: l.catalogId, name: l.name, qty: 0, spend: 0, last: '' };
-          prods[k].qty += l.qty; prods[k].spend += l.qty * l.unitPrice; if(d > prods[k].last) prods[k].last = d;
-        });
-      }
-    });
-    by.avg = by.orders12 ? by.y / by.orders12 : 0;
-    by.months = months;
-    by.products = Object.keys(prods).map(function(k){ return prods[k]; }).sort(function(a, b){ return b.qty - a.qty; });
-    return by;
+  // What they paid Thread Tribe per piece, averaged over their orders (falls back to today's price).
+  function paidPerPiece(){
+    var by = {};
+    realOrders().forEach(function(o){ o.lines.forEach(function(l){
+      if(!l.catalogId) return;
+      if(!by[l.catalogId]) by[l.catalogId] = { qty: 0, amt: 0 };
+      by[l.catalogId].qty += l.qty; by[l.catalogId].amt += l.qty * l.unitPrice;
+    }); });
+    return function(id){ var x = by[id]; if(x && x.qty) return x.amt / x.qty; var p = product(id); return p ? costOf(p) : 0; };
   }
+  // Saved = trade discounts on their Thread Tribe orders (list price minus what they paid).
+  function savingsStats(){
+    var m0 = monthKey(today()), y1 = daysAgo(365), s = { month: 0, year: 0, months: {}, prods: {} };
+    realOrders().forEach(function(o){
+      var d = o.orderedDate || '';
+      o.lines.forEach(function(l){
+        var v = Math.max(0, ((l.listPrice || l.unitPrice) - l.unitPrice) * l.qty);
+        if(monthKey(d) === m0) s.month += v;
+        if(d >= y1){
+          s.year += v; s.months[monthKey(d)] = (s.months[monthKey(d)] || 0) + v;
+          var k = l.catalogId || l.name;
+          if(!s.prods[k]) s.prods[k] = { id: l.catalogId, name: l.name, qty: 0, last: '' };
+          s.prods[k].qty += l.qty; if(d > s.prods[k].last) s.prods[k].last = d;
+        }
+      });
+    });
+    s.products = Object.keys(s.prods).map(function(k){ return s.prods[k]; }).sort(function(a, b){ return b.qty - a.qty; });
+    return s;
+  }
+  // Earned = what they sold to their buyers (after their discounts, before GST) minus what those pieces cost them.
   function salesStats(){
-    var m0 = monthKey(today()), invs = list('invoices').filter(function(i){ return i.status !== 'cancelled'; });
-    var s = { month: 0, count: invs.length, receivable: 0, margin: 0, taxable: 0, customers: {} };
+    var m0 = monthKey(today()), y1 = daysAgo(365), cost = paidPerPiece();
+    var invs = list('invoices').filter(function(i){ return i.status !== 'cancelled'; });
+    var s = { month: 0, year: 0, salesYear: 0, months: {}, count: invs.length, receivable: 0, customers: {} };
     invs.forEach(function(i){
-      if(monthKey(i.date) === m0) s.month += i.taxable || 0;
+      var keep = 1 - (i.discountPct || 0) / 100, earned = 0;
+      (i.lines || []).forEach(function(l){ earned += num(l.qty) * num(l.rate) * keep - (l.productId ? num(l.qty) * cost(l.productId) : 0); });
+      if(monthKey(i.date) === m0) s.month += earned;
+      if((i.date || '') >= y1){ s.year += earned; s.salesYear += i.taxable || 0; s.months[monthKey(i.date)] = (s.months[monthKey(i.date)] || 0) + earned; }
       s.receivable += Math.max(0, (i.total || 0) - (i.paid || 0));
-      s.taxable += i.taxable || 0;
-      (i.lines || []).forEach(function(l){ var p = product(l.productId); if(p) s.margin += (l.qty * l.rate * (1 - (i.discountPct || 0) / 100)) - l.qty * costOf(p); });
       var c = (i.customer && (i.customer.business || i.customer.name)) || 'Walk-in';
-      s.customers[c] = (s.customers[c] || 0) + (i.taxable || 0);
+      s.customers[c] = (s.customers[c] || 0) + earned;
     });
     s.topCustomers = Object.keys(s.customers).map(function(k){ return [k, s.customers[k]]; }).sort(function(a, b){ return b[1] - a[1]; }).slice(0, 3);
     return s;
   }
-  function chart(months){
+  // Two bars a month: earned (accent) and saved (green).
+  function chart(earned, saved){
     var keys = [], d = new Date(); d.setDate(1);
     for(var i = 11; i >= 0; i--){ var x = new Date(d.getFullYear(), d.getMonth() - i, 1); keys.push(iso(x).slice(0, 7)); }
-    var max = Math.max.apply(null, keys.map(function(k){ return months[k] || 0; }).concat([1]));
-    return '<div class="chart">' + keys.map(function(k, i){
-      var v = months[k] || 0;
-      return '<div class="b' + (i === 11 ? ' now' : '') + '" title="' + monthLabel(k) + ': ' + money(v) + '"><i style="height:' + Math.max(2, Math.round(100 * v / max)) + '%"></i><span>' + monthLabel(k).slice(0, 1) + '</span></div>';
-    }).join('') + '</div>';
+    var max = Math.max.apply(null, keys.map(function(k){ return Math.max(earned[k] || 0, saved[k] || 0); }).concat([1]));
+    function h(v){ return Math.max(v > 0 ? 3 : 0, Math.round(100 * Math.max(0, v) / max)); }
+    return '<div class="chart">' + keys.map(function(k){
+      var e = earned[k] || 0, s = saved[k] || 0;
+      return '<div class="b" title="' + monthLabel(k) + ': earned ' + money(e) + ', saved ' + money(s) + '"><div class="pair"><i style="height:' + h(e) + '%"></i><i class="sv" style="height:' + h(s) + '%"></i></div><span>' + monthLabel(k).slice(0, 1) + '</span></div>';
+    }).join('') + '</div><div class="legend"><span><i></i>Earned</span><span><i class="sv"></i>Saved</span></div>';
   }
   function renderHome(){
-    var p = pack(), ps = purchaseStats(), open = p.orders.filter(isOpenOrder), reqs = openRequests(), low = lowStock();
-    var change = ps.prevMonth ? Math.round(100 * (ps.month - ps.prevMonth) / ps.prevMonth) : null;
-    var html = '<p class="hello">Hi ' + esc(p.client.contact || p.client.name || 'there') + '. Here’s your business with Thread Tribe.</p>';
+    var p = pack(), sv = savingsStats(), ss = salesStats(), open = p.orders.filter(isOpenOrder), reqs = openRequests(), low = lowStock();
+    var invoicing = ss.count > 0;
+    var html = '<p class="hello">Hi ' + esc(p.client.contact || p.client.name || 'there') + '. Here’s how your business is doing.</p>';
     html += '<div class="stats">' +
-      '<div class="stat"><div class="k">Bought this month</div><div class="v">' + money(ps.month) + '</div>' + (change !== null ? '<div class="s ' + (change >= 0 ? 'up' : 'down') + '">' + (change >= 0 ? '▲ ' : '▼ ') + Math.abs(change) + '% vs last month</div>' : '<div class="s">ex-GST</div>') + '</div>' +
-      '<div class="stat"><div class="k">Last 12 months</div><div class="v">' + money(ps.y) + '</div><div class="s">' + ps.orders12 + ' orders · ' + ps.pcs12.toLocaleString('en-IN') + ' pcs</div></div>' +
-      '<div class="stat"><div class="k">Average order</div><div class="v">' + money(ps.avg) + '</div><div class="s">last 12 months</div></div>' +
-      '<div class="stat"><div class="k">You saved</div><div class="v">' + money(ps.saved12) + '</div><div class="s">in trade discounts, 12 months</div></div>' +
+      '<button class="stat" data-go="business"><div class="k">Earned from your buyers</div><div class="v">' + money(ss.year) + '</div>' +
+        '<div class="s">' + (invoicing ? money(ss.month) + ' this month · 12 months' : 'Bill your buyers in Business to see this') + '</div></button>' +
+      '<div class="stat"><div class="k">Saved with Thread Tribe</div><div class="v" style="color:var(--green)">' + money(sv.year) + '</div>' +
+        '<div class="s">' + money(sv.month) + ' this month · 12 months</div></div>' +
       '</div>';
-    html += '<div class="card"><div class="muted">Monthly purchases from Thread Tribe</div>' + chart(ps.months) + '</div>';
-
-    if(list('invoices').length){
-      var ss = salesStats();
-      html += '<div class="h2">Your sales</div><div class="stats">' +
-        '<button class="stat" data-go="business"><div class="k">Sold this month</div><div class="v">' + money(ss.month) + '</div><div class="s">' + ss.count + ' invoices in all</div></button>' +
+    html += '<div class="card"><div class="muted">By month</div>' + chart(ss.months, sv.months) + '</div>';
+    if(invoicing){
+      html += '<div class="stats">' +
         '<button class="stat" data-go="business"><div class="k">To collect</div><div class="v">' + money(ss.receivable) + '</div><div class="s">from your buyers</div></button>' +
-        '<div class="stat"><div class="k">Gross margin</div><div class="v">' + money(ss.margin) + '</div><div class="s">' + (ss.taxable ? Math.round(100 * ss.margin / ss.taxable) + '% of sales' : '') + '</div></div>' +
-        '<div class="stat"><div class="k">Top buyer</div><div class="v" style="font-size:16px">' + esc(ss.topCustomers[0] ? ss.topCustomers[0][0] : '—') + '</div><div class="s">' + (ss.topCustomers[0] ? money(ss.topCustomers[0][1]) : '') + '</div></div></div>';
+        '<div class="stat"><div class="k">Best buyer</div><div class="v" style="font-size:16px">' + esc(ss.topCustomers[0] ? ss.topCustomers[0][0] : '—') + '</div><div class="s">' + (ss.topCustomers[0] ? money(ss.topCustomers[0][1]) + ' earned' : '') + '</div></div></div>';
     }
     if(low.length){
       html += '<div class="h2">Running low <span class="count">' + low.length + '</span></div><div class="card">' + low.slice(0, 5).map(function(r){
         return '<div class="row"><div><div style="font-weight:600">' + esc(r.name) + '</div><div class="muted">' + r.onHand + ' left</div></div><button class="btn small" data-a="quick-add" data-id="' + esc(r.id) + '">Reorder</button></div>';
       }).join('') + '</div>';
     }
-    if(ps.products.length){
-      html += '<div class="h2">Your best sellers · 12 months</div><div class="card">' + ps.products.slice(0, 5).map(function(x){
+    if(sv.products.length){
+      html += '<div class="h2">Your best sellers · 12 months</div><div class="card">' + sv.products.slice(0, 5).map(function(x){
         var p2 = x.id && product(x.id), days = x.last ? Math.round((new Date(today()) - new Date(x.last)) / 86400000) : null;
-        return '<div class="row"><div style="min-width:0"><div style="font-weight:600">' + esc(x.name) + '</div><div class="muted">' + x.qty.toLocaleString('en-IN') + ' pcs · ' + money(x.spend) + (days !== null ? ' · last bought ' + (days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago') : '') + '</div></div>' +
+        return '<div class="row"><div style="min-width:0"><div style="font-weight:600">' + esc(x.name) + '</div><div class="muted">' + x.qty.toLocaleString('en-IN') + ' pcs' +
+          (days !== null ? ' · last bought ' + (days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago') : '') + '</div></div>' +
           (p2 ? '<button class="btn small" data-a="quick-add" data-id="' + esc(p2.id) + '">Add</button>' : '') + '</div>';
       }).join('') + '</div>';
     }
@@ -914,7 +923,7 @@
     var invs = list('invoices').filter(function(i){ return !q || (i.no + ' ' + ((i.customer && (i.customer.business + ' ' + i.customer.name)) || '')).toLowerCase().indexOf(q) !== -1; })
       .sort(function(a, b){ return (b.date || '').localeCompare(a.date || '') || (b.createdAt || '').localeCompare(a.createdAt || ''); });
     var ss = salesStats();
-    return '<div class="stats"><div class="stat"><div class="k">Sold this month</div><div class="v">' + money(ss.month) + '</div><div class="s">ex-GST</div></div>' +
+    return '<div class="stats"><div class="stat"><div class="k">Earned this month</div><div class="v">' + money(ss.month) + '</div><div class="s">after your cost</div></div>' +
       '<div class="stat"><div class="k">To collect</div><div class="v">' + money(ss.receivable) + '</div><div class="s">from your buyers</div></div></div>' +
       '<div class="btns" style="margin-bottom:10px"><button class="btn primary block" data-a="new-invoice">+ New invoice</button></div>' +
       '<input class="search" id="bq" type="search" placeholder="Search invoices" value="' + esc(bizQuery) + '">' +
