@@ -190,7 +190,9 @@
     const open = o.status === 'booked' || o.status === 'in_production';
     const noDue = o.status === 'quoted' || o.status === 'cancelled' || o.paymentStatus === 'paid' || o.paymentStatus === 'refunded';
     return {
-      id: o.id, displayId: o.displayId || '', name: o.name || '', status: o.status, orderedDate: orderDate(o), dueDate: o.dueDate || '',
+      // Studio has no "shipped" status; a made order with a dispatch date reads as shipped to the buyer.
+      id: o.id, displayId: o.displayId || '', name: o.name || '', status: o.status === 'production_done' && o.shippedDate ? 'shipped' : o.status, orderedDate: orderDate(o), dueDate: o.dueDate || '',
+      dispatchBy: o.dispatchBy || '', shippedDate: o.shippedDate || '', courier: o.courier || '', trackingNo: o.trackingNo || '',
       productionDoneDate: o.productionDoneDate || '', deliveryDate: o.deliveryDate || '',
       lines: o.products.filter(function(p){ return (p.qty || 0) > 0; }).map(function(p){
         return { name: p.name || '', color: p.color || '', material: p.material || '', qty: p.qty || 0, made: Math.min(p.already || 0, p.qty || 0),
@@ -513,6 +515,24 @@
           '<td class="ba-dim">' + (t.next ? money(t.next.need) + ' to ' + esc(t.next.name) : 'top tier') + '</td></tr>';
       }).join('') + '</table></div></div>';
 
+    const buyerIds = {};
+    (state.clients || []).forEach(function(c){ if(c.buyerApp && isTrade(c)) buyerIds[c.id] = c.name || 'Client'; });
+    const toShip = state.orders.filter(function(o){ return buyerIds[o.clientId] && ['booked', 'in_production', 'production_done'].indexOf(o.status) !== -1; })
+      .sort(function(a, b){ return (a.dispatchBy || a.dueDate || '9').localeCompare(b.dispatchBy || b.dueDate || '9'); });
+    html += '<div class="panel"><div class="panel-title">Dispatch</div><p class="ba-dim">What buyers see under Supplies. Set an expected dispatch date early; add the courier and tracking number when it leaves.</p>' +
+      (toShip.length ? '<div style="overflow-x:auto"><table class="ba-table"><tr><th>Order</th><th>Status</th><th>Expected dispatch</th><th>Courier</th><th>Tracking / AWB</th><th></th></tr>' +
+        toShip.map(function(o){
+          const sent = !!o.shippedDate;
+          return '<tr><td><b>' + esc(o.displayId || '') + '</b> ' + esc(buyerIds[o.clientId]) + '<div class="ba-dim" style="margin:0">' + esc(o.name || '') + '</div></td>' +
+            '<td>' + (sent ? '<span class="ba-pill ok">Dispatched ' + esc(o.shippedDate) + '</span>' : esc(statusLabel(o.status))) + '</td>' +
+            '<td><input type="date" data-disp="dispatchBy" data-id="' + o.id + '" value="' + esc(o.dispatchBy || '') + '"></td>' +
+            '<td><input list="baCouriers" data-disp="courier" data-id="' + o.id + '" value="' + esc(o.courier || '') + '" placeholder="Courier" style="width:120px"></td>' +
+            '<td><input data-disp="trackingNo" data-id="' + o.id + '" value="' + esc(o.trackingNo || '') + '" placeholder="AWB no." style="width:130px"></td>' +
+            '<td>' + (sent ? '<button class="ba-btn" data-ba="undispatch" data-id="' + o.id + '">Undo</button><button class="ba-btn" data-ba="delivered" data-id="' + o.id + '">Delivered</button>'
+              : '<button class="ba-btn primary" data-ba="dispatch" data-id="' + o.id + '">Mark dispatched</button>') + '</td></tr>';
+        }).join('') + '</table></div>' : '<p class="ba-dim">No open orders for Buyer app clients.</p>') +
+      '<datalist id="baCouriers">' + ['Delhivery', 'Blue Dart', 'DTDC', 'Shiprocket', 'India Post', 'Ekart', 'Xpressbees', 'Porter', 'Own delivery'].map(function(c){ return '<option value="' + c + '">'; }).join('') + '</datalist></div>';
+
     html += '<div class="panel"><div class="panel-title">Order discounts</div>' +
       '<p class="ba-dim">Buyers can mix products. Discount = tier % + quantity %, on the order’s total pieces, capped. Changes reach buyers on the next sync.</p>' +
       '<div class="ba-form"><label>Min per product <input type="number" min="1" data-bs="minPerProduct" value="' + T.minPerProduct + '"></label>' +
@@ -574,6 +594,15 @@
     else if(act === 'apply') applyProfile(id);
     else if(act === 'claim-replace'){ if(confirm('Book the claimed pieces as a free replacement order?')) claimReplace(id); }
     else if(act === 'claim-credit') claimCredit(id);
+    else if(act === 'dispatch'){
+      const o = orderById(id); if(!o) return;
+      if(o.status !== 'production_done' && !confirm(o.displayId + ' isn’t marked Production Done yet. Mark it dispatched anyway?')) return;
+      o.shippedDate = new Date().toISOString().slice(0, 10);
+      if(o.status !== 'production_done') setOrderStatusDirect(o.id, 'production_done');
+      scheduleSave(); render(); showToast(o.displayId + ' marked dispatched' + (o.trackingNo ? '' : ' — add the tracking number too'));
+    }
+    else if(act === 'undispatch'){ const o = orderById(id); if(o){ o.shippedDate = ''; scheduleSave(); render(); } }
+    else if(act === 'delivered'){ const o = orderById(id); if(o){ setOrderStatusDirect(o.id, 'delivered'); setTimeout(render, 300); } }
     else if(act === 'photo'){ e.preventDefault(); const im = b.querySelector('img'); const w = window.open(''); if(w && im){ const big = w.document.createElement('img'); big.src = im.src; big.style.maxWidth = '100%'; w.document.body.appendChild(big); } }
     else if(act === 'decline'){
       const why = prompt('Tell the buyer why (they’ll see this):', '');
@@ -589,9 +618,15 @@
       (navigator.clipboard ? navigator.clipboard.writeText(msg) : Promise.reject()).then(function(){ showToast('Invite copied'); }).catch(function(){ prompt('Copy this:', msg); });
     }
   });
+  function orderById(id){ return state.orders.find(function(o){ return o.id === id; }); }
   function saveTerms(t){ state.buyerSettings = { minPerProduct: t.minPerProduct, minOrder: t.minOrder, maxDiscount: t.maxDiscount, slabs: t.slabs }; scheduleSave(); }
   document.addEventListener('change', function(e){
     const tab = document.getElementById('tabBuyers');
+    if(tab && tab.contains(e.target) && e.target.hasAttribute('data-disp')){
+      const o = orderById(e.target.getAttribute('data-id'));
+      if(o){ o[e.target.getAttribute('data-disp')] = String(e.target.value || '').trim().slice(0, 80); scheduleSave(); showToast('Saved — the buyer sees it on the next sync'); }
+      return;
+    }
     if(tab && tab.contains(e.target) && (e.target.hasAttribute('data-bs') || e.target.hasAttribute('data-slab'))){
       const t = terms(), v = Math.max(0, parseFloat(e.target.value) || 0);
       if(e.target.hasAttribute('data-bs')) t[e.target.getAttribute('data-bs')] = Math.round(v * 10) / 10;
@@ -627,6 +662,7 @@
     '#tabBuyers .ba-note{margin:6px 0;font-style:italic}' +
     '#tabBuyers .ba-list{margin:4px 0 8px 18px;font-size:12px}' +
     '#tabBuyers .ba-actions{margin-top:8px}' +
+    '#tabBuyers input[type=date],#tabBuyers input[data-disp]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font:12px "JetBrains Mono",monospace}' +
     '#tabBuyers .ba-photos{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}' +
     '#tabBuyers .ba-photos img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}' +
     '#tabBuyers .ba-form{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 10px}' +
