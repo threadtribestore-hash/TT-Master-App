@@ -17829,4 +17829,293 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </option><option value="Jammu and Kashmir"></option><option value="Ladakh"></option><option value="Chandigarh"></option><option value="Puducherry">
 </option><option value="Dadra and Nagar Haveli and Daman and Diu"></option><option value="Andaman and Nicobar Islands"></option><option value="Lakshadweep">
 </option></datalist>
+<!-- TT-FARM-PANEL:START (added by studio-bridge/install.py; re-run it to update) -->
+<style>
+  #ttf-open{position:fixed;left:18px;bottom:18px;z-index:9998;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:10px 16px;font:600 13px 'JetBrains Mono',monospace;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  #ttf-open:hover{border-color:var(--cyan)}
+  #ttf-back{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto}
+  #ttf-back.on{display:flex}
+  #ttf{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;width:min(1100px,100%);font:13px 'JetBrains Mono',monospace;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  #ttf header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);text-align:left}
+  #ttf header h2{margin:0;font-size:15px;flex:1;min-width:180px;text-align:left}
+  #ttf .ttf-tabs button,#ttf .ttf-btn{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+  #ttf .ttf-tabs button.on{border-color:var(--cyan);color:var(--cyan)}
+  #ttf .ttf-btn.primary{background:var(--cyan);color:#0d1117;border-color:var(--cyan);font-weight:600}
+  #ttf .ttf-btn:disabled{opacity:.45;cursor:not-allowed}
+  #ttf .ttf-body{padding:16px 18px;max-height:76vh;overflow:auto}
+  #ttf .ttf-note{color:var(--dim);margin:0 0 12px}
+  #ttf .ttf-banner{border:1px solid var(--amber);color:var(--text);background:color-mix(in srgb,var(--amber) 12%,transparent);border-radius:8px;padding:10px 12px;margin-bottom:12px}
+  #ttf .ttf-banner.err{border-color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent)}
+  #ttf .ttf-order{border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  #ttf .ttf-order-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 12px;background:var(--input-bg)}
+  #ttf .ttf-order-head b{font-size:14px}
+  #ttf .ttf-pill{border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--dim);font-size:11px}
+  #ttf .ttf-pill.ok{color:var(--green);border-color:var(--green)}
+  #ttf .ttf-pill.warn{color:var(--amber);border-color:var(--amber)}
+  #ttf .ttf-pill.bad{color:var(--red);border-color:var(--red)}
+  #ttf table{width:100%;border-collapse:collapse}
+  #ttf th,#ttf td{text-align:left;padding:7px 10px;border-top:1px solid var(--line);vertical-align:middle}
+  #ttf th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  #ttf td.num,#ttf th.num{text-align:right;font-variant-numeric:tabular-nums}
+  #ttf select,#ttf input[type=number]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font:inherit;max-width:100%}
+  #ttf input[type=number]{width:70px}
+  #ttf .ttf-spacer{flex:1}
+  #ttf .ttf-bar{height:6px;background:var(--input-bg);border-radius:3px;overflow:hidden;min-width:80px}
+  #ttf .ttf-bar i{display:block;height:100%;background:var(--green)}
+  #ttf label.ttf-check{display:flex;gap:8px;align-items:center;color:var(--dim)}
+  #ttf .ttf-wrap{overflow-x:auto}
+  #ttf .ttf-keyform{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 6px}
+  #ttf .ttf-keyform input{flex:1;min-width:220px;background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 8px;font:inherit}
+  #ttf .ttf-msg{min-height:1.2em;margin:6px 0 0}
+  #ttf .ttf-msg.err{color:var(--red)} #ttf .ttf-msg.ok{color:var(--green)}
+</style>
+<button id="ttf-open" type="button" title="Send orders to the print farm (Bambuddy)">🖨 Farm</button>
+<div id="ttf-back" role="dialog" aria-modal="true" aria-label="Print farm">
+  <div id="ttf">
+    <header>
+      <h2>Print farm · Bambuddy</h2>
+      <span class="ttf-tabs"><button data-tab="orders" class="on">Orders</button> <button data-tab="products">Products</button></span>
+      <button class="ttf-btn" id="ttf-key" type="button" title="Set the Bambuddy API key">🔑 API key</button>
+      <button class="ttf-btn" id="ttf-close" type="button">Close</button>
+    </header>
+    <div class="ttf-body" id="ttf-body"></div>
+  </div>
+</div>
+<script>
+(function(){
+  // The hosted app reuses this page for Stock mode; the farm panel belongs to Studio only.
+  if (window.TT_STOCK_MODE) { ['ttf-open', 'ttf-back'].forEach(function(id){ var el = document.getElementById(id); if (el) el.remove(); }); return; }
+  var BRIDGE = 'http://127.0.0.1:8765';
+  var STATE_KEY = 'thread-tribe-print-farm-state-v1';
+  var MAP_KEY = 'tt-bambuddy-map-v1';
+  var HOLD_KEY = 'tt-bambuddy-hold-v1';
+  var ACTIVE = { booked: 'Booked', in_production: 'In production' };
+
+  var tab = 'orders', library = null, printers = null, connErr = null, statusByOrder = {}, plateCache = {};
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function norm(n){ return String(n || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+  function rd(k, d){ try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } }
+  function wr(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+  function studio(){ return rd(STATE_KEY, { orders: [], productCatalog: [] }); }
+  function getMap(){ return rd(MAP_KEY, {}); }
+  function setMapEntry(name, patch){ var m = getMap(), k = norm(name); m[k] = Object.assign({ name: name }, m[k] || {}, patch); wr(MAP_KEY, m); }
+
+  function api(path, body){
+    var opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
+    return fetch(BRIDGE + path, opt).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+        return j;
+      });
+    }, function(){ var e = new Error('bridge-down'); e.status = 0; throw e; });
+  }
+
+  function connect(){
+    connErr = null;
+    return api('/status').then(function(s){ printers = s.printers; return api('/library'); })
+      .then(function(l){ library = l.files; })
+      .catch(function(e){ connErr = e; });
+  }
+
+  function linesLeft(p){ return Math.max((+p.qty || 0) - (+p.already || 0), 0); }
+  function runsFor(p, m){ var u = Math.max(+((m && m.unitsPerPlate) || 1), 1); return Math.ceil(linesLeft(p) / u); }
+  function activeOrders(){
+    return (studio().orders || []).filter(function(o){ return ACTIVE[o.status]; })
+      .sort(function(a, b){ return (a.dueDate || '9999').localeCompare(b.dueDate || '9999'); });
+  }
+  function fileById(id){ return (library || []).filter(function(f){ return f.id === id; })[0]; }
+
+  function banner(){
+    if (!connErr) return '';
+    if (connErr.status === 0) return '<div class="ttf-banner err"><b>The bridge isn\'t running.</b> Double-click <b>Start Studio Bridge</b> in PrintFarm/studio-bridge, keep its window open, then press Retry. <button class="ttf-btn" data-act="retry">Retry</button></div>';
+    if (connErr.status === 401 || connErr.status === 403) return '';
+    return '<div class="ttf-banner err"><b>Couldn\'t reach Bambuddy:</b> ' + esc(connErr.message) + ' <button class="ttf-btn" data-act="retry">Retry</button></div>';
+  }
+
+  function progressCell(st){
+    if (!st) return '<span class="ttf-pill">Not sent</span>';
+    var pct = st.target ? Math.round(100 * st.completed / st.target) : 0;
+    var bits = st.completed + '/' + st.target + ' plates';
+    if (st.printing) bits += ' · ' + st.printing + ' printing';
+    if (st.failed) bits += ' · <span style="color:var(--red)">' + st.failed + ' failed</span>';
+    return '<div class="ttf-bar"><i style="width:' + pct + '%"></i></div><div style="margin-top:4px">' + bits + '</div>';
+  }
+
+  function renderOrders(){
+    var orders = activeOrders(), map = getMap();
+    if (!orders.length) return '<p class="ttf-note">No booked or in-production orders.</p>';
+    var hold = rd(HOLD_KEY, false);
+    var h = '<p class="ttf-note">Each product line becomes an order batch in Bambuddy, split across free printers of the right model. Units already made (the "already" count) are subtracted. Sending twice won\'t duplicate anything.</p>';
+    h += '<label class="ttf-check" style="margin-bottom:14px"><input type="checkbox" id="ttf-hold"' + (hold ? ' checked' : '') + '> Hold sent jobs in Bambuddy until someone presses Start</label>';
+    orders.forEach(function(o){
+      var st = statusByOrder[o.id] || {}, sendable = 0, unmapped = 0;
+      var rows = (o.products || []).map(function(p){
+        var m = map[norm(p.name)], f = m && fileById(m.fileId), left = linesLeft(p), lineSt = st[p.id];
+        if (!m || !f) unmapped++; else if (!lineSt && left > 0) sendable++;
+        return '<tr><td>' + esc(p.name) + '</td><td class="num">' + left + '</td>' +
+          '<td>' + (f ? esc(f.name) + (m.plateId ? ' · plate ' + m.plateId : '') : '<a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--amber)">Set up product →</a>') + '</td>' +
+          '<td class="num">' + (f ? (m.unitsPerPlate || 1) : '') + '</td><td class="num">' + (f ? runsFor(p, m) : '') + '</td>' +
+          '<td>' + progressCell(lineSt) + '</td></tr>';
+      }).join('');
+      h += '<div class="ttf-order"><div class="ttf-order-head"><b>' + esc(o.displayId) + '</b><span>' + esc(o.clientName || '') + '</span>' +
+        '<span class="ttf-pill">' + ACTIVE[o.status] + '</span>' + (o.dueDate ? '<span class="ttf-pill warn">Due ' + esc(o.dueDate) + '</span>' : '') +
+        (unmapped ? '<span class="ttf-pill bad">' + unmapped + ' product(s) not set up</span>' : '') +
+        '<span class="ttf-spacer"></span><button class="ttf-btn primary" data-act="send" data-order="' + esc(o.id) + '"' + (sendable && !connErr ? '' : ' disabled') + '>Send ' + (sendable || '') + ' to farm</button></div>' +
+        '<div class="ttf-wrap"><table><thead><tr><th>Product</th><th class="num">Units left</th><th>Bambuddy file</th><th class="num">Per plate</th><th class="num">Plates</th><th>Farm progress</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    });
+    return h;
+  }
+
+  function productNames(){
+    var seen = {}, out = [];
+    function add(n, active){ var k = norm(n); if (!k || seen[k]) return; seen[k] = 1; out.push({ name: n, active: active }); }
+    activeOrders().forEach(function(o){ (o.products || []).forEach(function(p){ add(p.name, true); }); });
+    (studio().productCatalog || []).forEach(function(p){ add(p.name, false); });
+    return out;
+  }
+
+  function renderProducts(){
+    if (!library) return '<p class="ttf-note">Connect to Bambuddy to set up products.</p>';
+    var map = getMap(), models = {};
+    (printers || []).forEach(function(p){ if (p.model) models[p.model] = 1; });
+    var h = '<p class="ttf-note">Match each Studio product to a sliced file in Bambuddy\'s library, once. <b>Per plate</b> is how many units one print makes. Products on open orders are listed first. Only sliced files (.gcode.3mf) appear; upload them in Bambuddy → Library.</p>';
+    if (!library.length) h += '<div class="ttf-banner">Bambuddy\'s library has no sliced files yet. Upload your .gcode.3mf files there first.</div>';
+    h += '<div class="ttf-wrap"><table><thead><tr><th>Studio product</th><th>Bambuddy file</th><th>Plate</th><th class="num">Per plate</th><th>Printer model</th></tr></thead><tbody>';
+    productNames().forEach(function(p){
+      var m = map[norm(p.name)] || {}, plates = plateCache[m.fileId];
+      var fileOpts = '<option value="">—</option>' + library.map(function(f){ return '<option value="' + f.id + '"' + (f.id === m.fileId ? ' selected' : '') + '>' + esc(f.name) + (f.model ? ' (' + esc(f.model) + ')' : '') + '</option>'; }).join('');
+      var plateOpts = !m.fileId ? '' : !plates ? '<option>loading…</option>' : plates.map(function(pl){ return '<option value="' + pl.index + '"' + (pl.index === m.plateId ? ' selected' : '') + '>' + pl.index + (pl.name ? ' · ' + esc(pl.name) : '') + '</option>'; }).join('');
+      var modelOpts = '<option value="">File\'s model</option>' + Object.keys(models).map(function(md){ return '<option' + (md === m.targetModel ? ' selected' : '') + '>' + esc(md) + '</option>'; }).join('');
+      h += '<tr data-name="' + esc(p.name) + '"><td>' + esc(p.name) + (p.active ? ' <span class="ttf-pill warn">on order</span>' : '') + '</td>' +
+        '<td><select data-f="fileId">' + fileOpts + '</select></td>' +
+        '<td>' + (m.fileId ? '<select data-f="plateId">' + plateOpts + '</select>' : '') + '</td>' +
+        '<td class="num">' + (m.fileId ? '<input type="number" min="1" data-f="unitsPerPlate" value="' + (m.unitsPerPlate || 1) + '">' : '') + '</td>' +
+        '<td>' + (m.fileId ? '<select data-f="targetModel">' + modelOpts + '</select>' : '') + '</td></tr>';
+      if (m.fileId && !plates) loadPlates(m.fileId);
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  function loadPlates(fileId){
+    if (plateCache[fileId]) return Promise.resolve(plateCache[fileId]);
+    plateCache[fileId] = null;
+    return api('/plates?fileId=' + fileId).then(function(r){
+      plateCache[fileId] = r.plates.length ? r.plates : [{ index: null, name: 'single plate', objects: 1 }];
+      if (tab === 'products') render();
+      return plateCache[fileId];
+    }).catch(function(){ plateCache[fileId] = [{ index: null, name: 'single plate', objects: 1 }]; });
+  }
+
+  function refreshStatus(){
+    if (connErr) return Promise.resolve();
+    return Promise.all(activeOrders().map(function(o){
+      return api('/order-status?orderId=' + encodeURIComponent(o.id)).then(function(r){ statusByOrder[o.id] = r.lines; }).catch(function(){});
+    }));
+  }
+
+  function renderKey(){
+    var needed = connErr && (connErr.status === 401 || connErr.status === 403);
+    return '<h3 style="margin:0 0 6px;font-size:14px">Bambuddy API key</h3>' +
+      (needed ? '<div class="ttf-banner">' + esc(connErr.message) + '</div>' : '') +
+      '<p class="ttf-note">In Bambuddy, open Settings → API Keys and create a key with <b>queue</b>, <b>read status</b> and <b>library</b> permissions; leave printer control off. Paste it below. It is checked with Bambuddy, then saved on this Mac only (PrintFarm/studio-bridge/config.json). Studio never stores it.</p>' +
+      '<form class="ttf-keyform" id="ttf-keyform" autocomplete="off"><input type="password" id="ttf-keyinput" placeholder="bb_…" spellcheck="false" autocomplete="off" aria-label="Bambuddy API key">' +
+      '<button class="ttf-btn primary" type="submit">Check &amp; save</button>' + (needed ? '' : ' <button class="ttf-btn" type="button" data-act="back">Cancel</button>') + '</form>' +
+      '<p class="ttf-msg" id="ttf-keymsg"></p>';
+  }
+
+  function render(){
+    var needKey = connErr && (connErr.status === 401 || connErr.status === 403);
+    document.querySelectorAll('#ttf .ttf-tabs button').forEach(function(b){ b.classList.toggle('on', b.dataset.tab === tab); });
+    document.getElementById('ttf-body').innerHTML = (tab === 'key' || needKey) ? renderKey() : banner() + (tab === 'orders' ? renderOrders() : renderProducts());
+    var ki = document.getElementById('ttf-keyinput'); if (ki) ki.focus();
+  }
+
+  function saveKey(){
+    var input = document.getElementById('ttf-keyinput'), msg = document.getElementById('ttf-keymsg'), v = input.value.trim();
+    if (!v) { msg.className = 'ttf-msg err'; msg.textContent = 'Paste the key first.'; return; }
+    msg.className = 'ttf-msg'; msg.textContent = 'Checking with Bambuddy…';
+    api('/api-key', { key: v }).then(function(){
+      input.value = ''; msg.className = 'ttf-msg ok'; msg.textContent = 'Saved. Bambuddy accepted the key.';
+      setTimeout(function(){ tab = 'orders'; body.innerHTML = '<p class="ttf-note">Connecting…</p>'; connect().then(refreshStatus).then(render); }, 900);
+    }).catch(function(e){
+      msg.className = 'ttf-msg err';
+      msg.textContent = e.status === 0 ? 'The bridge isn\'t running. Double-click Start Studio Bridge, then try again.' : e.message;
+    });
+  }
+
+  function send(orderId){
+    var o = activeOrders().filter(function(x){ return x.id === orderId; })[0]; if (!o) return;
+    var map = getMap(), st = statusByOrder[o.id] || {}, lines = [];
+    (o.products || []).forEach(function(p){
+      var m = map[norm(p.name)];
+      if (!m || !fileById(m.fileId) || st[p.id] || linesLeft(p) < 1) return;
+      lines.push({ lineId: p.id, name: p.name, units: linesLeft(p), unitsPerPlate: m.unitsPerPlate || 1, runs: runsFor(p, m), fileId: m.fileId, plateId: m.plateId == null ? null : m.plateId, targetModel: m.targetModel || null });
+    });
+    if (!lines.length) return;
+    var hold = rd(HOLD_KEY, false), total = lines.reduce(function(s, l){ return s + l.runs; }, 0);
+    var msg = 'Send ' + o.displayId + ' to the farm?\n\n' + lines.map(function(l){ return '• ' + l.name + ': ' + l.units + ' units → ' + l.runs + ' plate' + (l.runs === 1 ? '' : 's'); }).join('\n') +
+      '\n\nTotal ' + total + ' print jobs.' + (hold ? ' They will wait for Start in Bambuddy.' : ' Printing starts as printers come free.');
+    if (!confirm(msg)) return;
+    var btn = document.querySelector('[data-act="send"][data-order="' + orderId + '"]'); if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    api('/send', { order: { id: o.id, displayId: o.displayId, clientName: o.clientName, dueDate: o.dueDate || null }, lines: lines, manualStart: hold })
+      .then(function(r){
+        var bad = r.results.filter(function(x){ return x.result === 'error'; });
+        if (bad.length) alert('Some lines were not sent:\n\n' + bad.map(function(x){ var l = lines.filter(function(l){ return l.lineId === x.lineId; })[0]; return '• ' + (l ? l.name : x.lineId) + ': ' + x.message; }).join('\n'));
+      })
+      .catch(function(e){ alert('Send failed: ' + (e.status === 0 ? 'the bridge isn\'t running.' : e.message)); })
+      .then(refreshStatus).then(render);
+  }
+
+  function open(){
+    document.getElementById('ttf-back').classList.add('on');
+    document.getElementById('ttf-body').innerHTML = '<p class="ttf-note">Connecting to Bambuddy…</p>';
+    connect().then(refreshStatus).then(render);
+  }
+  function close(){ document.getElementById('ttf-back').classList.remove('on'); }
+
+  document.getElementById('ttf-open').addEventListener('click', open);
+  document.getElementById('ttf-close').addEventListener('click', close);
+  document.getElementById('ttf-key').addEventListener('click', function(){ tab = 'key'; render(); });
+  document.getElementById('ttf-back').addEventListener('click', function(e){ if (e.target.id === 'ttf-back') close(); });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && document.getElementById('ttf-back').classList.contains('on')) close(); });
+  document.querySelector('#ttf .ttf-tabs').addEventListener('click', function(e){ var t = e.target.dataset.tab; if (t) { tab = t; render(); } });
+
+  var body = document.getElementById('ttf-body');
+  body.addEventListener('click', function(e){
+    var a = e.target.closest('[data-act]'); if (!a) return;
+    e.preventDefault();
+    if (a.dataset.act === 'retry') { body.innerHTML = '<p class="ttf-note">Connecting…</p>'; connect().then(refreshStatus).then(render); }
+    if (a.dataset.act === 'send') send(a.dataset.order);
+    if (a.dataset.act === 'map') { tab = 'products'; render(); }
+    if (a.dataset.act === 'back') { tab = 'orders'; render(); }
+  });
+  body.addEventListener('submit', function(e){ if (e.target.id === 'ttf-keyform') { e.preventDefault(); saveKey(); } });
+  body.addEventListener('change', function(e){
+    if (e.target.id === 'ttf-hold') { wr(HOLD_KEY, e.target.checked); return; }
+    var row = e.target.closest('tr[data-name]'), f = e.target.dataset.f; if (!row || !f) return;
+    var name = row.dataset.name, v = e.target.value;
+    if (f === 'fileId') {
+      if (!v) { var m = getMap(); delete m[norm(name)]; wr(MAP_KEY, m); render(); return; }
+      var id = +v;
+      setMapEntry(name, { fileId: id, plateId: null, unitsPerPlate: 1, targetModel: '' });
+      loadPlates(id).then(function(pl){
+        var first = pl && pl[0];
+        if (first) setMapEntry(name, { plateId: first.index, unitsPerPlate: Math.max(first.objects || 1, 1) });
+        render();
+      });
+      render();
+    } else if (f === 'plateId') {
+      var pl = (plateCache[getMap()[norm(name)].fileId] || []).filter(function(p){ return String(p.index) === v; })[0];
+      setMapEntry(name, { plateId: v === 'null' ? null : +v, unitsPerPlate: Math.max((pl && pl.objects) || 1, 1) });
+      render();
+    } else if (f === 'unitsPerPlate') {
+      setMapEntry(name, { unitsPerPlate: Math.max(parseInt(v, 10) || 1, 1) });
+    } else if (f === 'targetModel') {
+      setMapEntry(name, { targetModel: v });
+    }
+  });
+})();
+</script>
+<!-- TT-FARM-PANEL:END -->
 </body></html>
