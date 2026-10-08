@@ -8,18 +8,29 @@
 // buyer_submit_request into buyer_requests, which land in this tab's inbox.
 // Buyers never read studio_rows.
 //
-// Pricing (decided Oct 2026):
-//   toys   weight x Rs 4 per gram
-//   lamps  Rs 300 flat up to 100 g, then weight x Rs 3.5 per gram
-//   then the client's dealer-tier discount, where the tier comes from what they
-//   spent (toys + lamps together) on orders dated in the last 30 days.
+// Pricing (decided Oct 2026). The Buyer app sells toys only; lamps are left out.
+//   base      weight x Rs 4 per gram
+//   discount  dealer tier % (from spend on orders dated in the last 30 days)
+//             + quantity slab % (from the order's total pieces, products mixed),
+//             capped. Orders need a minimum per product and per order.
 // Prices are always recomputed here when an order is created; the price a buyer
 // saw in their app is only shown for comparison.
 (function(){
   if(window.TT_STOCK_MODE) return;
 
-  const TOY_RATE = 4, LAMP_RATE = 3.5, LAMP_FLAT = 300, LAMP_FLAT_UPTO = 100;
-  const TIER_DAYS = 30, HISTORY_DAYS = 180, MOQ = 25;
+  const TOY_RATE = 4;
+  const TIER_DAYS = 30, HISTORY_DAYS = 365;
+  const DEFAULT_TERMS = { minPerProduct: 10, minOrder: 25, maxDiscount: 20,
+    slabs: [{ min: 100, pct: 3 }, { min: 250, pct: 5 }, { min: 500, pct: 8 }, { min: 1000, pct: 12 }] };
+  function terms(){
+    const t = Object.assign({}, DEFAULT_TERMS, state.buyerSettings || {});
+    t.slabs = (Array.isArray(t.slabs) ? t.slabs : DEFAULT_TERMS.slabs)
+      .map(function(x){ return { min: Math.max(1, Math.round(+x.min || 0)), pct: Math.max(0, Math.min(100, +x.pct || 0)) }; })
+      .filter(function(x){ return x.min > 0; }).sort(function(a, b){ return a.min - b.min; });
+    return t;
+  }
+  function slabPct(totalQty){ let p = 0; terms().slabs.forEach(function(x){ if(totalQty >= x.min) p = x.pct; }); return p; }
+  function orderDiscount(tierPct, totalQty){ return Math.min(terms().maxDiscount, (tierPct || 0) + slabPct(totalQty)); }
   const HASH_KEY = 'tt-buyer-pack-hashes-v1';
   const B = { requests: [], prod: {}, known: null, hashes: {}, missing: false, seen: {}, at: 0, showDone: false, thumbs: {}, publishing: false };
   try{ B.hashes = JSON.parse(localStorage.getItem(HASH_KEY)) || {}; }catch(e){}
@@ -37,11 +48,7 @@
   }
   function basePrice(item){
     const g = parseFloat(item.weight) || 0;
-    if(g <= 0) return 0;
-    const k = kindOf(item);
-    if(k === 'toy') return Math.round(g * TOY_RATE);
-    if(k === 'lamp') return g <= LAMP_FLAT_UPTO ? LAMP_FLAT : Math.round(g * LAMP_RATE);
-    return 0;
+    return g > 0 && kindOf(item) === 'toy' ? Math.round(g * TOY_RATE) : 0;
   }
   function tierPrice(base, pct){ return Math.round(base * (1 - (pct || 0) / 100)); }
 
@@ -151,7 +158,7 @@
     return state.orders.filter(function(o){
       if(o.clientId !== cid || o.status === 'lost') return false;
       return ['quoted', 'booked', 'in_production', 'production_done', 'shipped'].indexOf(o.status) !== -1 || orderDate(o) >= cutoff || (o.deliveryDate || '') >= cutoff;
-    }).sort(function(a, b){ return orderDate(b).localeCompare(orderDate(a)); }).slice(0, 80).map(orderView);
+    }).sort(function(a, b){ return orderDate(b).localeCompare(orderDate(a)); }).slice(0, 250).map(orderView);
   }
   function buildPack(c){
     const tier = tierOf(c.id), biz = state.business || {};
@@ -159,8 +166,8 @@
       type: 'tt-buyer-pack', version: 1, generatedAt: new Date().toISOString(),
       business: { name: biz.name || 'Thread Tribe Studios', phone: biz.phone || '', email: biz.email || '', gst: biz.gst || '', address: biz.address || '', gstRate: biz.gstRate || 0 },
       client: { id: c.id, name: c.name || '', contact: c.contact || '', phone: c.phone || '', email: emailOf(c), gstin: gstinOf(c), address: c.address || '', city: c.city || '', state: c.state || '' },
-      terms: { moq: MOQ, toyRatePerGram: TOY_RATE, note: 'Prices are ex-GST. Orders are confirmed by Thread Tribe before production starts.' },
-      tier: tier,
+      // The tier name is not sent: buyers see their price, not their rank.
+      terms: Object.assign(terms(), { tierPct: tier.pct, note: 'Prices are ex-GST. Orders are confirmed by Thread Tribe before production starts.' }),
       catalogue: catalogue(tier.pct),
       orders: ordersFor(c.id)
     };
@@ -257,12 +264,17 @@
 
   // Current prices for a request's lines, whatever the buyer's screen said.
   function priced(q){
-    const c = client(q.client_id), pct = c ? tierOf(c.id).pct : 0;
-    return ((q.payload && q.payload.lines) || []).map(function(l){
+    const c = client(q.client_id), tierPct = c ? tierOf(c.id).pct : 0;
+    const rows = ((q.payload && q.payload.lines) || []).map(function(l){
       const item = (state.productCatalog || []).find(function(i){ return i.id === l.productId; });
       const base = item ? basePrice(item) : 0;
-      return { line: l, item: item, qty: Math.max(0, Math.round(parseFloat(l.qty) || 0)), base: base, price: tierPrice(base, pct), seen: parseFloat(l.unitPrice) || 0 };
+      return { line: l, item: item, qty: Math.max(0, Math.round(parseFloat(l.qty) || 0)), base: base, seen: parseFloat(l.unitPrice) || 0 };
     });
+    const total = rows.reduce(function(s, x){ return s + (x.base > 0 ? x.qty : 0); }, 0);
+    const pct = orderDiscount(tierPct, total);
+    rows.forEach(function(x){ x.price = tierPrice(x.base, pct); });
+    rows.pct = pct; rows.tierPct = tierPct; rows.slabPct = slabPct(total); rows.totalQty = total;
+    return rows;
   }
 
   function createOrder(id){
@@ -325,12 +337,13 @@
       body = '<table class="ba-table"><tr><th>Product</th><th class="num">Qty</th><th class="num">Price now</th><th class="num">Buyer saw</th><th class="num">Line</th></tr>' +
         rows.map(function(x){
           total += x.price * x.qty;
-          const warn = !x.item ? ' <span class="ba-pill bad">not in catalogue</span>' : x.qty < MOQ ? ' <span class="ba-pill warn">below MOQ ' + MOQ + '</span>' : '';
+          const warn = !x.item || !x.base ? ' <span class="ba-pill bad">not offered</span>' : x.qty < terms().minPerProduct ? ' <span class="ba-pill warn">below ' + terms().minPerProduct + ' per product</span>' : '';
           const diff = x.item && x.seen && Math.round(x.seen) !== x.price ? ' class="ba-warn"' : '';
           return '<tr><td>' + esc((x.item && x.item.name) || x.line.name || '?') + (x.line.color ? ' · ' + esc(x.line.color) : '') + warn + '</td><td class="num">' + x.qty +
             '</td><td class="num">' + money(x.price) + '</td><td class="num"' + diff + '>' + money(x.seen) + '</td><td class="num">' + money(x.price * x.qty) + '</td></tr>';
         }).join('') +
-        '<tr><td colspan="4"><b>Total (ex-GST)</b></td><td class="num"><b>' + money(total) + '</b></td></tr></table>' +
+        '<tr><td colspan="4"><b>Total (ex-GST)</b> <span class="ba-dim">' + rows.totalQty + ' pcs · ' + rows.pct + '% off (tier ' + rows.tierPct + '% + quantity ' + rows.slabPct + '%' + (rows.tierPct + rows.slabPct > rows.pct ? ', capped' : '') + ')' +
+          (rows.totalQty < terms().minOrder ? ' · <span class="ba-warn">below ' + terms().minOrder + ' pcs order minimum</span>' : '') + '</span></td><td class="num"><b>' + money(total) + '</b></td></tr></table>' +
         (q.payload.reorderOf ? '<div class="ba-dim">Repeat of ' + esc(q.payload.reorderOf) + '</div>' : '') +
         (q.payload.notes ? '<div class="ba-note">“' + esc(q.payload.notes) + '”</div>' : '');
     } else if(q.kind === 'profile'){
@@ -368,9 +381,10 @@
     const done = B.requests.filter(function(q){ return q.status !== 'open'; }).slice(0, 30);
     const hiddenD2c = (state.clients || []).filter(function(c){ return !isTrade(c); }).length;
     const clients = (state.clients || []).filter(isTrade).sort(function(a, b){ return (b.buyerApp ? 1 : 0) - (a.buyerApp ? 1 : 0) || (a.name || '').localeCompare(b.name || ''); });
-    const cat = (state.productCatalog || []).filter(function(i){ return (i.name || '').trim(); });
+    const cat = (state.productCatalog || []).filter(function(i){ return (i.name || '').trim() && kindOf(i) === 'toy'; });
     const priced = cat.filter(function(i){ return basePrice(i) > 0; });
     const unpriced = cat.filter(function(i){ return basePrice(i) <= 0; });
+    const T = terms();
 
     let html = '<div class="panel"><div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><span>Buyer App</span>' +
       '<span><button class="ba-btn" data-ba="copy-link">Copy app link</button></span></div>' +
@@ -393,14 +407,54 @@
           '<td class="ba-dim">' + (t.next ? money(t.next.need) + ' to ' + esc(t.next.name) : 'top tier') + '</td></tr>';
       }).join('') + '</table></div></div>';
 
-    html += '<div class="panel"><div class="panel-title">Price check</div><p class="ba-dim">' + priced.length + ' of ' + cat.length + ' catalogue products have a trade price. ' +
-      'Toys: ₹' + TOY_RATE + '/g. Lamps: ₹' + LAMP_FLAT + ' up to ' + LAMP_FLAT_UPTO + ' g, then ₹' + LAMP_RATE + '/g. Before tier discount, ex-GST.</p>' +
-      (unpriced.length ? '<p class="ba-dim"><b>Not shown to buyers</b> — needs a weight, and a category containing toy / clicker / fidget / flexi or lamp / light / pendant / chandelier / wall:</p><ul class="ba-list">' +
+    html += '<div class="panel"><div class="panel-title">Order discounts</div>' +
+      '<p class="ba-dim">Buyers can mix products. Discount = tier % + quantity %, on the order’s total pieces, capped. Changes reach buyers on the next sync.</p>' +
+      '<div class="ba-form"><label>Min per product <input type="number" min="1" data-bs="minPerProduct" value="' + T.minPerProduct + '"></label>' +
+      '<label>Min per order <input type="number" min="1" data-bs="minOrder" value="' + T.minOrder + '"></label>' +
+      '<label>Max total discount % <input type="number" min="0" max="100" data-bs="maxDiscount" value="' + T.maxDiscount + '"></label></div>' +
+      '<table class="ba-table" style="max-width:420px"><tr><th>Order total (pcs) from</th><th class="num">Extra discount %</th><th></th></tr>' +
+      T.slabs.map(function(x, i){ return '<tr><td><input type="number" min="1" data-slab="' + i + '" data-f="min" value="' + x.min + '"></td><td class="num"><input type="number" min="0" max="100" step="0.5" data-slab="' + i + '" data-f="pct" value="' + x.pct + '"></td><td><button class="ba-btn" data-ba="slab-del" data-i="' + i + '">✕</button></td></tr>'; }).join('') +
+      '</table><button class="ba-btn" data-ba="slab-add">+ Add slab</button></div>';
+
+    html += '<div class="panel"><div class="panel-title">Resale · last 90 days</div>' + resaleHtml() + '</div>';
+
+    html += '<div class="panel"><div class="panel-title">Price check</div><p class="ba-dim">The Buyer app sells toys only. ' + priced.length + ' of ' + cat.length + ' toys have a trade price (₹' + TOY_RATE + '/g, before discounts, ex-GST). ' +
+      'Suggested retail comes from the D2C price, so import the website prices to show resellers their margin.</p>' +
+      (unpriced.length ? '<p class="ba-dim"><b>Not shown to buyers</b> — needs a weight in grams:</p><ul class="ba-list">' +
         unpriced.slice(0, 60).map(function(i){ return '<li>' + esc(i.name) + ' <span class="ba-dim">(' + esc(i.category || 'no category') + ', ' + (parseFloat(i.weight) || 0) + ' g)</span></li>'; }).join('') + '</ul>' : '') + '</div>';
 
     root.innerHTML = html;
   }
-  window.renderBuyers = function(){ render(); if(typeof cloudIsOn === 'function' && cloudIsOn() && !B.at) pull().catch(function(e){ console.warn('[buyers]', e); }); };
+  // ---------- resale totals (from resellers' own invoices; no names or prices) ----------
+  const R = { rows: null, at: 0, missing: false, loading: false };
+  async function loadResale(){
+    if(R.loading || !(typeof cloudIsOn === 'function' && cloudIsOn())) return;
+    R.loading = true;
+    try{
+      const r = await cloud.sb.rpc('reseller_summary', { p_since: isoDaysAgo(90) });
+      if(r.error){ R.missing = /reseller_summary|does not exist|schema cache/i.test(r.error.message || ''); R.rows = []; }
+      else { R.missing = false; R.rows = r.data || []; }
+      R.at = Date.now();
+    } finally { R.loading = false; }
+    refreshViews();
+  }
+  function resaleHtml(){
+    if(R.missing) return '<p class="ba-dim">Run <code>buyer_tools_setup.sql</code> in Supabase to switch on reseller tools.</p>';
+    if(!R.rows) return '<p class="ba-dim">Loading…</p>';
+    if(!R.rows.length) return '<p class="ba-dim">No resale invoices yet. Resellers’ customer names and selling prices stay private; you see units by product and city.</p>';
+    function top(key){
+      const m = {};
+      R.rows.forEach(function(r){ const k = r[key] || '—'; m[k] = (m[k] || 0) + (+r.units || 0); });
+      return Object.keys(m).map(function(k){ return [k, m[k]]; }).sort(function(a, b){ return b[1] - a[1]; }).slice(0, 12);
+    }
+    function table(title, list){ return '<div><b>' + title + '</b><table class="ba-table">' + list.map(function(x){ return '<tr><td>' + esc(x[0]) + '</td><td class="num">' + Math.round(x[1]).toLocaleString('en-IN') + '</td></tr>'; }).join('') + '</table></div>'; }
+    const total = R.rows.reduce(function(s, r){ return s + (+r.units || 0); }, 0);
+    return '<p class="ba-dim">' + Math.round(total).toLocaleString('en-IN') + ' units resold onward. Names and selling prices stay private to each reseller.</p>' +
+      '<div class="ba-cols">' + table('By product', top('product')) + table('By city', top('city')) + table('By reseller', top('client_name')) + '</div>';
+  }
+
+  window.renderBuyers = function(){
+    if(!R.at || Date.now() - R.at > 300000) loadResale(); render(); if(typeof cloudIsOn === 'function' && cloudIsOn() && !B.at) pull().catch(function(e){ console.warn('[buyers]', e); }); };
 
   document.addEventListener('click', function(e){
     const b = e.target.closest('[data-ba]');
@@ -415,12 +469,25 @@
       const txt = prompt('Your reply (the buyer sees this):', '');
       if(txt) reply(id, 'done', txt);
     } else if(act === 'toggle-done'){ B.showDone = !B.showDone; render(); }
+    else if(act === 'slab-add'){ const t = terms(); const last = t.slabs[t.slabs.length - 1]; t.slabs.push({ min: last ? last.min * 2 : 100, pct: last ? last.pct + 2 : 3 }); saveTerms(t); render(); }
+    else if(act === 'slab-del'){ const t = terms(); t.slabs.splice(+b.getAttribute('data-i'), 1); saveTerms(t); render(); }
     else if(act === 'copy-link'){
       const msg = 'Thread Tribe trade app: ' + appUrl() + ' — sign in with this email to see your prices, orders and invoices.';
       (navigator.clipboard ? navigator.clipboard.writeText(msg) : Promise.reject()).then(function(){ showToast('Invite copied'); }).catch(function(){ prompt('Copy this:', msg); });
     }
   });
+  function saveTerms(t){ state.buyerSettings = { minPerProduct: t.minPerProduct, minOrder: t.minOrder, maxDiscount: t.maxDiscount, slabs: t.slabs }; scheduleSave(); }
   document.addEventListener('change', function(e){
+    const tab = document.getElementById('tabBuyers');
+    if(tab && tab.contains(e.target) && (e.target.hasAttribute('data-bs') || e.target.hasAttribute('data-slab'))){
+      const t = terms(), v = Math.max(0, parseFloat(e.target.value) || 0);
+      if(e.target.hasAttribute('data-bs')) t[e.target.getAttribute('data-bs')] = Math.round(v * 10) / 10;
+      else t.slabs[+e.target.getAttribute('data-slab')][e.target.getAttribute('data-f')] = v;
+      t.minPerProduct = Math.max(1, Math.round(t.minPerProduct)); t.minOrder = Math.max(t.minPerProduct, Math.round(t.minOrder));
+      t.maxDiscount = Math.min(100, t.maxDiscount);
+      saveTerms(t); render(); showToast('Order discounts saved');
+      return;
+    }
     const b = e.target.closest('[data-ba="access"]');
     if(!b) return;
     const c = client(b.getAttribute('data-id'));
@@ -446,6 +513,10 @@
     '#tabBuyers .ba-warn{color:var(--amber)}' +
     '#tabBuyers .ba-note{margin:6px 0;font-style:italic}' +
     '#tabBuyers .ba-list{margin:4px 0 8px 18px;font-size:12px}' +
-    '#tabBuyers .ba-actions{margin-top:8px}';
+    '#tabBuyers .ba-actions{margin-top:8px}' +
+    '#tabBuyers .ba-form{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 10px}' +
+    '#tabBuyers .ba-form label{font-size:12px;color:var(--dim);display:flex;flex-direction:column;gap:4px}' +
+    '#tabBuyers input[type=number]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;width:90px;font:12px "JetBrains Mono",monospace}' +
+    '#tabBuyers .ba-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}';
   document.head.appendChild(css);
 })();

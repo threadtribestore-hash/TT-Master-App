@@ -13461,6 +13461,7 @@ document.getElementById('importCatalogFile').addEventListener('change', function
       // their column before broader patterns (category's "type"/"tag", name's
       // "product"/"name") get a chance to also match it.
       const photoIdx = claim(matchCatalogHeader(headers, ['photo', 'image', 'img', 'picture'], claimed));
+      const d2cIdx = claim(matchCatalogHeader(headers, ['retail', 'd2c', 'mrp'], claimed));
       const materialIdx = claim(matchCatalogHeader(headers, ['material'], claimed));
       const colorIdx = claim(matchCatalogHeader(headers, ['color', 'colour'], claimed));
       const weightIdx = claim(matchCatalogHeader(headers, ['weight', 'filament', 'grams', 'g)'], claimed));
@@ -13509,6 +13510,7 @@ document.getElementById('importCatalogFile').addEventListener('change', function
         const color = cellVal(row, colorIdx);
         const size = cellVal(row, sizeIdx);
         const photo = cellVal(row, photoIdx);
+        const d2c = cellVal(row, d2cIdx);
 
         const existing = byName[name.trim().toLowerCase()];
         if(existing){
@@ -13520,6 +13522,7 @@ document.getElementById('importCatalogFile').addEventListener('change', function
           if(color !== undefined) existing.color = color.toString().trim();
           if(size !== undefined) existing.size = size.toString().trim();
           if(photo !== undefined) existing.photo = photo.toString().trim();
+          if(d2c !== undefined) existing.d2cPrice = posNum(d2c);
           updated++;
         } else {
           const item = {
@@ -13533,7 +13536,7 @@ document.getElementById('importCatalogFile').addEventListener('change', function
             size: size !== undefined ? size.toString().trim() : '',
             photo: photo !== undefined ? photo.toString().trim() : '',
             wholesalePrice: null,
-            d2cPrice: null
+            d2cPrice: d2c !== undefined ? posNum(d2c) : null
           };
           state.productCatalog.push(item);
           byName[name.trim().toLowerCase()] = item;
@@ -17822,7 +17825,7 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
-<script src="buyers-admin.js?v=3"></script>
+<script src="buyers-admin.js?v=4"></script>
 
 
 <datalist id="indianStatesList">
