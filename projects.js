@@ -75,8 +75,8 @@
     row.data = data; return true;
   }
 
-  // Designers get a Projects tab in their Partner app.
-  function isDesigner(pid){ return !!(state.projectDesigners || {})[pid] || X.projects.some(function(p){ return p.designer_id === pid; }); }
+  // Partners ticked as designers get a Designer profile in their Partner app.
+  function isDesigner(pid){ return !!(state.projectDesigners || {})[pid]; }
   const origBuild = ponBuildPack;
   ponBuildPack = function(pid){
     const pack = origBuild(pid);
@@ -114,7 +114,7 @@
   function detail(p){
     ensurePon();
     const d = p.data || {};
-    const partners = state.pon.partners.map(function(x){ return [x.id, x.name || 'Partner']; });
+    const partners = state.pon.partners.filter(function(x){ return isDesigner(x.id) || x.id === p.designer_id; }).map(function(x){ return [x.id, x.name || 'Partner'] ; });
     const clients = (state.clients || []).filter(function(c){ return c.buyerApp; }).map(function(c){ return [c.id, c.name || 'Client']; });
     let h = '<div class="panel pj-detail"><div class="panel-title" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>' + esc(d.title || 'Untitled') + '</span><span><button class="pj-btn" data-pj="delete">Delete</button><button class="pj-btn" data-pj="close">Close</button></span></div>' +
       '<div class="pj-form">' +
@@ -126,7 +126,8 @@
       '</div><label class="pj-wide">Brief<textarea data-pf="brief" rows="3">' + esc(d.brief || '') + '</textarea></label>';
 
     h += '<div class="pj-sec"><b>Steps</b> ' + bar(progress(p.id)) +
-      (!p.designer_id ? '<div class="pj-dim pj-warn">Pick a designer — they add their own steps and dates in the Partner app.</div>' : needsPlan(p) ? '<div class="pj-dim pj-warn">Waiting for ' + esc(partnerName(p.designer_id)) + ' to add their steps and dates.</div>' : '') +
+      (p.designer_id && !isDesigner(p.designer_id) ? '<div class="pj-dim pj-warn">' + esc(partnerName(p.designer_id)) + ' isn’t ticked as a designer above, so they can’t see this project.</div>' :
+       !p.designer_id ? '<div class="pj-dim pj-warn">' + (Object.keys(state.projectDesigners || {}).length ? 'Pick a designer' : 'Tick a partner as a designer above, then pick them here') + ' — they add their own steps and dates in the Partner app.</div>' : needsPlan(p) ? '<div class="pj-dim pj-warn">Waiting for ' + esc(partnerName(p.designer_id)) + ' to add their steps and dates.</div>' : '') +
       items(p.id, 'task').map(function(x){
       const late = !x.data.done && x.data.due && x.data.due < today();
       return '<div class="pj-row"><input type="checkbox" data-pj="task-done" data-id="' + esc(x.id) + '"' + (x.data.done ? ' checked' : '') + '><span' + (x.data.done ? ' class="pj-done"' : '') + '>' + esc(x.data.title) + '</span>' +
@@ -141,7 +142,7 @@
   function designersRow(){
     ensurePon();
     const d = state.projectDesigners || {};
-    return '<div class="pj-dim" style="margin-bottom:8px">Designers (get a Projects tab in their app): ' + state.pon.partners.map(function(x){
+    return '<div class="pj-dim" style="margin-bottom:8px">Designers (get a Designer profile in their Partner app): ' + state.pon.partners.map(function(x){
       return '<label class="pj-chip"><input type="checkbox" data-pj-designer="' + esc(x.id) + '"' + (d[x.id] ? ' checked' : '') + '> ' + esc(x.name || 'Partner') + '</label>';
     }).join(' ') + '</div>';
   }
@@ -206,7 +207,7 @@
       if(!state.projectDesigners) state.projectDesigners = {};
       if(e.target.checked) state.projectDesigners[dz] = true; else delete state.projectDesigners[dz];
       scheduleSave(); if(typeof cloudPublishPacks === 'function') cloudPublishPacks();
-      showToast(e.target.checked ? 'Projects tab switched on in their Partner app' : 'Removed'); return;
+      render(); showToast(e.target.checked ? 'Designer profile switched on in their Partner app' : 'Designer profile removed'); return;
     }
     const p = X.sel && project(X.sel); if(!p) return;
     const f = e.target.getAttribute('data-pf'); if(!f) return;
