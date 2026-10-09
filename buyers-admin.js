@@ -522,7 +522,7 @@
     (state.clients || []).forEach(function(c){ if(c.buyerApp && isTrade(c)) buyerIds[c.id] = c.name || 'Client'; });
     const toShip = state.orders.filter(function(o){ return buyerIds[o.clientId] && ['booked', 'in_production', 'production_done'].indexOf(o.status) !== -1; })
       .sort(function(a, b){ return (a.dispatchBy || a.dueDate || '9').localeCompare(b.dispatchBy || b.dueDate || '9'); });
-    html += '<div class="panel"><div class="panel-title">Dispatch</div><p class="ba-dim">What buyers see under Supplies. Set an expected dispatch date early; add the courier and tracking number when it leaves.</p>' +
+    html += '<div class="panel"><div class="panel-title">Dispatch</div><p class="ba-dim">What buyers see under Purchases. Set an expected dispatch date early; add the courier and tracking number when it leaves.</p>' +
       (toShip.length ? '<div style="overflow-x:auto"><table class="ba-table"><tr><th>Order</th><th>Status</th><th>Expected dispatch</th><th>Courier</th><th>Tracking / AWB</th><th></th></tr>' +
         toShip.map(function(o){
           const sent = !!o.shippedDate;
