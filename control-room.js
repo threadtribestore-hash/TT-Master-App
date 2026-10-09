@@ -58,13 +58,15 @@
   // itself (which slows everything else by its share). Dates: production finish →
   // + packing days = dispatch → + transit days = delivery. The safe date adds a
   // margin on print time for failures, downtime and changeovers.
-  const P = { lines: [{ id: '', qty: 0 }], hours: '', need: '', rush: 0, customer: '' };
+  const P = { lines: [{ id: '', qty: 0 }], hours: '', need: '', rush: 0, customer: '', partners: false };
   function pset(){ return Object.assign({ packDays: 1, transitDays: 3, safetyPct: 15 }, state.promiseSettings || {}); }
   function fleet(){
     const running = (state.printers || []).filter(function(p){ return p.status !== 'down'; }).length || (state.fleet && state.fleet.printers) || 0;
     const hpd = (state.fleet && state.fleet.hoursPerDay) || 0;
     const reserved = queue().reduce(function(t, o){ return t + (o.reservedPrinters || 0); }, 0);
-    return { running: running, hpd: hpd, cap: running * hpd, free: Math.max(0, running - reserved) };
+    // Optionally add the partner network's free printer-hours (partner-planning.js).
+    const extra = P.partners && window.TTPartners && window.TTPartners.ready() ? window.TTPartners.freePerDay(14) : 0;
+    return { running: running, hpd: hpd, own: running * hpd, extra: extra, cap: running * hpd + extra, free: Math.max(0, running - reserved) };
   }
   function lineHours(){
     let hours = 0, pcs = 0, missing = [];
@@ -145,7 +147,8 @@
       '<label>Customer needs it by<input type="date" data-pp="need" value="' + esc(P.need) + '"></label>' +
       '<label>Rush on dedicated printers<select data-pp="rush"><option value="0">No — join the queue</option>' +
         Array.from({ length: fleet().free }, function(_, i){ return '<option value="' + (i + 1) + '"' + (P.rush === i + 1 ? ' selected' : '') + '>' + (i + 1) + ' printer' + (i ? 's' : '') + '</option>'; }).join('') + '</select></label>' +
-      '<label>Customer (for the message)<input data-pp="customer" value="' + esc(P.customer) + '" placeholder="e.g. Anand"></label></div>' +
+      '<label>Customer (for the message)<input data-pp="customer" value="' + esc(P.customer) + '" placeholder="e.g. Anand"></label>' +
+      (window.TTPartners && window.TTPartners.ready() ? '<label class="cr-chk"><input type="checkbox" data-pp="partners"' + (P.partners ? ' checked' : '') + '> Count partner farms (+' + Math.round(window.TTPartners.freePerDay(14)) + ' h/day free)</label>' : '') + '</div>' +
       '<div id="crPromiseOut">' + promiseOut() + '</div>' +
       '<details class="cr-pset"><summary class="cr-dim">Assumptions: ' + S.packDays + ' day packing · ' + S.transitDays + ' days transit · ' + S.safetyPct + '% safety margin</summary>' +
       '<div class="cr-pf"><label>Packing days<input type="number" min="0" data-ps="packDays" value="' + S.packDays + '"></label><label>Transit days<input type="number" min="0" data-ps="transitDays" value="' + S.transitDays + '"></label>' +
@@ -161,7 +164,7 @@
       '<div class="cr-dates"><div><span>Safe to promise · dispatch</span><b>' + fmtLong(r.dispatch) + '</b></div><div><span>Delivered by</span><b>' + fmtLong(r.delivery) + '</b></div>' +
       '<div><span>Earliest possible dispatch</span><b>' + fmtLong(r.earliestDispatch) + '</b></div></div>' +
       '<div class="cr-dim" style="margin:6px 0 0">' + Math.round(r.L.hours) + ' print-hours' + (r.L.pcs ? ' for ' + r.L.pcs.toLocaleString('en-IN') + ' pcs' : '') +
-        (r.k ? ' on ' + r.k + ' dedicated printer' + (r.k === 1 ? '' : 's') : ' after ' + Math.round(r.queued) + ' h already queued, on ' + r.F.running + ' printers × ' + r.F.hpd + ' h/day') + '.</div>';
+        (r.k ? ' on ' + r.k + ' dedicated printer' + (r.k === 1 ? '' : 's') : ' after ' + Math.round(r.queued) + ' h already queued, on ' + r.F.running + ' printers × ' + r.F.hpd + ' h/day' + (r.F.extra ? ' + ' + Math.round(r.F.extra) + ' h/day at partner farms' : '')) + '.</div>';
     if(r.L.missing.length) html += '<div class="cr-warn" style="margin-top:6px">No print time set for ' + esc(r.L.missing.join(', ')) + ' — add it in Product Catalog, or enter the hours above.</div>';
     if(v === 'no' || v === 'tight'){
       const tips = [];
@@ -345,14 +348,18 @@
       const d = o.shippedDate || (o.status === 'delivered' ? '' : target(o));
       if(d && d >= days[0] && d <= days[13]) (by[d] = by[d] || []).push(o);
     });
+    const pk = {};
+    ((window.TTPartners && window.TTPartners.pickups()) || []).forEach(function(x){ if(x.b.date >= days[0] && x.b.date <= days[13]) (pk[x.b.date] = pk[x.b.date] || []).push(x); });
     return '<div class="cr-cal">' + ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(function(n){ return '<div class="cr-cal-h">' + n + '</div>'; }).join('') +
       days.map(function(d){
         return '<div class="cr-day' + (d === t ? ' today' : '') + (d < t ? ' past' : '') + '"><div class="cr-day-n">' + new Date(d + 'T00:00:00').getDate() + '</div>' +
           (by[d] || []).map(function(o){
             const cls = o.shippedDate ? 'sent' : (d < t ? 'late' : o.status === 'production_done' ? 'ready' : 'plan');
             return '<a href="#" class="cr-ev ' + cls + '" data-cr="open" data-id="' + o.id + '" title="' + esc(who(o) + ' · ' + (o.name || '') + (o.courier ? ' · ' + o.courier : '')) + '">' + (o.shippedDate ? '✓ ' : '') + esc(o.displayId || '') + '</a>';
+          }).join('') + (pk[d] || []).map(function(x){
+            return '<span class="cr-ev pk" title="' + esc((x.p.name || 'Partner') + ' · ' + ((x.job && x.job.productName) || '') + (x.b.courier ? ' · ' + x.b.courier : '')) + '">🚚 ' + esc((x.job && x.job.jobCode) || 'pickup') + '</span>';
           }).join('') + '</div>';
-      }).join('') + '</div><div class="cr-legend"><span class="cr-ev plan">planned</span><span class="cr-ev ready">ready</span><span class="cr-ev sent">✓ dispatched</span><span class="cr-ev late">late</span></div>';
+      }).join('') + '</div><div class="cr-legend"><span class="cr-ev plan">planned</span><span class="cr-ev ready">ready</span><span class="cr-ev sent">✓ dispatched</span><span class="cr-ev late">late</span><span class="cr-ev pk">🚚 partner pickup</span></div>';
   }
   function problemsHtml(p){
     function list(title, rows, fn){ return rows.length ? '<div class="cr-prob"><b>' + title + ' <span class="cr-count">' + rows.length + '</span></b>' + rows.slice(0, 8).map(fn).join('') + '</div>' : ''; }
@@ -432,7 +439,7 @@
       '</div>' +
       '<div class="panel"><div class="panel-title">Customer chats</div>' + chatsHtml() + '</div>';
   }
-  window.renderControlRoom = function(){ render(); if(window.TTBuyers) window.TTBuyers.refresh().then(render).catch(function(){}); };
+  window.renderControlRoom = function(){ render(); if(window.TTPartners) window.TTPartners.load().then(render).catch(function(){}); if(window.TTBuyers) window.TTBuyers.refresh().then(render).catch(function(){}); };
   setInterval(function(){
     const t = document.getElementById('tabControl');
     if(t && t.style.display !== 'none' && !(document.activeElement && t.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render();
@@ -476,6 +483,7 @@
       const k = t.getAttribute('data-pp'), i = t.getAttribute('data-i');
       if(i !== null){ P.lines[+i][k] = k === 'qty' ? (+t.value || 0) : t.value; }
       else if(k === 'rush') P.rush = +t.value || 0;
+      else if(k === 'partners') P.partners = t.checked;
       else P[k] = t.value;
       refreshPromise(); return true;
     }
@@ -570,6 +578,8 @@
     '#tabControl .cr-tips{margin:8px 0 0 18px;font-size:13px}' +
     '#tabControl .cr-msgbox{margin-top:10px;display:flex;flex-direction:column;gap:6px} #tabControl .cr-msgbox textarea{width:100%;resize:vertical}' +
     '#tabControl .cr-pset{margin-top:8px}' +
+    '#tabControl .cr-ev.pk{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}' +
+    '#tabControl .cr-chk{flex-direction:row!important;align-items:center;gap:6px!important;color:var(--text)!important;font-size:12.5px!important}' +
     '#tabControl .cr-impact{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}' +
     '#tabControl .cr-impact-h{display:flex;flex-direction:column;gap:2px;margin-bottom:6px} #tabControl .cr-impact-h .cr-dim{margin:0}' +
     '#tabControl .cr-it{width:100%;border-collapse:collapse;font-size:12.5px}' +
