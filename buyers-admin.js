@@ -497,7 +497,7 @@
     const T = terms();
 
     let html = '<div class="panel"><div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><span>Buyer App</span>' +
-      '<span><button class="ba-btn" data-ba="copy-link">Copy app link</button></span></div>' +
+      '<span><button class="ba-btn" data-ba="copy-link">Copy invite message</button></span></div>' +
       '<p class="ba-dim">Buyers sign in at <a href="' + esc(appUrl()) + '" target="_blank" rel="noopener"><b>' + esc(appUrl()) + '</b></a> with their email and can install it from there as its own app. They see the catalogue at their tier price, their orders with production progress, invoices and what they owe — nothing else.</p></div>';
 
     html += '<div class="panel"><div class="panel-title">Order requests' + (open.length ? ' <span class="pon-badge">' + open.length + '</span>' : '') + '</div>' +
@@ -507,14 +507,15 @@
     html += '<div class="panel"><div class="panel-title">Buyers</div><p class="ba-dim">Tier = spend on orders dated in the last ' + TIER_DAYS + ' days, toys and lamps together' +
       (state.dealerRewardsEnabled === false ? '. <b>Dealer rewards are switched off in Settings, so no tier discounts apply.</b>' : '.') +
       (hiddenD2c ? ' ' + hiddenD2c + ' D2C client' + (hiddenD2c === 1 ? ' is' : 's are') + ' left out — the Buyer app is for trade clients only.' : '') + '</p>' +
-      '<div style="overflow-x:auto"><table class="ba-table"><tr><th>Access</th><th>Client</th><th>Email</th><th class="num">30-day spend</th><th>Tier</th><th>Next</th></tr>' +
+      '<div style="overflow-x:auto"><table class="ba-table"><tr><th>Access</th><th>Client</th><th>Email</th><th class="num">30-day spend</th><th>Tier</th><th>Next</th><th></th></tr>' +
       clients.map(function(c){
         const em = emailOf(c), t = tierOf(c.id);
         return '<tr><td><input type="checkbox" data-ba="access" data-id="' + c.id + '"' + (c.buyerApp ? ' checked' : '') + (em ? '' : ' disabled title="Add an email in Clients first"') + '></td>' +
           '<td>' + esc(c.name || '(no name)') + (c.type ? ' <span class="ba-dim">' + esc(c.type) + '</span>' : '') + '</td>' +
           '<td>' + (em ? esc(em) : '<span class="ba-dim">no email</span>') + '</td><td class="num">' + money(t.spend) + '</td>' +
           '<td>' + (t.name ? esc(t.name) + ' · ' + t.pct + '%' : '—') + '</td>' +
-          '<td class="ba-dim">' + (t.next ? money(t.next.need) + ' to ' + esc(t.next.name) : 'top tier') + '</td></tr>';
+          '<td class="ba-dim">' + (t.next ? money(t.next.need) + ' to ' + esc(t.next.name) : 'top tier') + '</td>' +
+          '<td>' + (c.buyerApp && em ? '<button class="ba-btn" data-ba="invite" data-id="' + c.id + '" title="Opens WhatsApp with the invite">Invite</button>' : '') + '</td></tr>';
       }).join('') + '</table></div></div>';
 
     const buyerIds = {};
@@ -621,11 +622,39 @@
     else if(act === 'slab-add'){ const t = terms(); const last = t.slabs[t.slabs.length - 1]; t.slabs.push({ min: last ? last.min * 2 : 100, pct: last ? last.pct + 2 : 3 }); saveTerms(t); render(); }
     else if(act === 'slab-del'){ const t = terms(); t.slabs.splice(+b.getAttribute('data-i'), 1); saveTerms(t); render(); }
     else if(act === 'copy-link'){
-      const msg = 'Thread Tribe trade app: ' + appUrl() + ' — sign in with this email to see your prices, orders and invoices.';
-      (navigator.clipboard ? navigator.clipboard.writeText(msg) : Promise.reject()).then(function(){ showToast('Invite copied'); }).catch(function(){ prompt('Copy this:', msg); });
+      const msg = inviteMessage(null);
+      (navigator.clipboard ? navigator.clipboard.writeText(msg) : Promise.reject()).then(function(){ showToast('Invite message copied — paste it in WhatsApp'); }).catch(function(){ prompt('Copy this:', msg); });
+    }
+    else if(act === 'invite'){
+      const c = client(id); if(!c) return;
+      let phone = String(c.phone || '').replace(/\D/g, '');
+      if(phone.length === 10) phone = '91' + phone;
+      window.open('https://wa.me/' + (phone.length >= 11 ? phone : '') + '?text=' + encodeURIComponent(inviteMessage(c)), '_blank');
     }
   });
   function orderById(id){ return state.orders.find(function(o){ return o.id === id; }); }
+  // Invite: what the app does for a reseller, in WhatsApp-friendly lines.
+  function inviteMessage(c){
+    const first = c ? String(c.contact || c.name || '').trim().split(/\s+/)[0] : '';
+    return [
+      'Hi' + (first ? ' ' + first : '') + '! 👋',
+      '',
+      'Thread Tribe now has a trade app for our resellers: *TT Trade*. It’s built to save you time and help you sell more:',
+      '',
+      '✅ Your trade prices on every toy — mix any toys, and bigger orders get more off',
+      '✅ Order and reorder in a few taps, and follow production and delivery live',
+      '✅ Send your buyers a catalogue under *your* name with *your* prices',
+      '✅ Make GST invoices for your buyers and send payment reminders on WhatsApp',
+      '✅ Track your stock — see what’s running low and restock in one tap',
+      '✅ See what you’ve earned from your buyers and saved with us',
+      '',
+      'Open it here: ' + appUrl(),
+      c && emailOf(c) ? 'Sign in with: ' + emailOf(c) + ' (we’ll email you a code — no password)' : 'Sign in with the email you gave us — we’ll email you a code, no password.',
+      'Tap *Install app* to keep it on your home screen.',
+      '',
+      '— Thread Tribe'
+    ].join('\n');
+  }
   // ---------- trending and collections ----------
   // Trending = toys moving fastest across all trade buyers (their orders with Thread
   // Tribe in the last 60 days, plus units resellers invoiced onward). Buyers get the
