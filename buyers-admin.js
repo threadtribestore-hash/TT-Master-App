@@ -527,14 +527,14 @@
         toShip.map(function(o){
           const sent = !!o.shippedDate;
           return '<tr><td><b>' + esc(o.displayId || '') + '</b> ' + esc(buyerIds[o.clientId]) + '<div class="ba-dim" style="margin:0">' + esc(o.name || '') + '</div></td>' +
-            '<td>' + (sent ? '<span class="ba-pill ok">Dispatched ' + esc(o.shippedDate) + '</span>' : esc(statusLabel(o.status))) + '</td>' +
+            '<td>' + (sent ? '<span class="ba-pill ok">Dispatched ' + esc(o.shippedDate) + '</span>' + trackCell(o) : esc(statusLabel(o.status))) + '</td>' +
             '<td><input type="date" data-disp="dispatchBy" data-id="' + o.id + '" value="' + esc(o.dispatchBy || '') + '"></td>' +
             '<td><input list="baCouriers" data-disp="courier" data-id="' + o.id + '" value="' + esc(o.courier || '') + '" placeholder="Courier" style="width:120px"></td>' +
             '<td><input data-disp="trackingNo" data-id="' + o.id + '" value="' + esc(o.trackingNo || '') + '" placeholder="AWB no." style="width:130px"></td>' +
-            '<td>' + (sent ? '<button class="ba-btn" data-ba="undispatch" data-id="' + o.id + '">Undo</button><button class="ba-btn" data-ba="delivered" data-id="' + o.id + '">Delivered</button>'
+            '<td>' + (sent ? '<button class="ba-btn" data-ba="undispatch" data-id="' + o.id + '">Undo</button><button class="ba-btn' + (TK.rows[o.id] && TK.rows[o.id].tag === 'Delivered' && TK.rows[o.id].awb === o.trackingNo ? ' primary" title="The courier says it was delivered' : '') + '" data-ba="delivered" data-id="' + o.id + '">Delivered</button>'
               : '<button class="ba-btn primary" data-ba="dispatch" data-id="' + o.id + '">Mark dispatched</button>') + '</td></tr>';
         }).join('') + '</table></div>' : '<p class="ba-dim">No open orders for Buyer app clients.</p>') +
-      '<datalist id="baCouriers">' + ['Delhivery', 'Blue Dart', 'DTDC', 'Shiprocket', 'India Post', 'Ekart', 'Xpressbees', 'Porter', 'Own delivery'].map(function(c){ return '<option value="' + c + '">'; }).join('') + '</datalist></div>';
+      '<datalist id="baCouriers">' + ['Delhivery', 'Blue Dart', 'DTDC', 'Shiprocket', 'India Post', 'Ekart', 'Xpressbees', 'Ecom Express', 'Shadowfax', 'Professional Couriers', 'Porter', 'Own delivery'].map(function(c){ return '<option value="' + c + '">'; }).join('') + '</datalist></div>';
 
     html += '<div class="panel"><div class="panel-title">Order discounts</div>' +
       '<p class="ba-dim">Buyers can mix products. Discount = tier % + quantity %, on the order’s total pieces, capped. Changes reach buyers on the next sync.</p>' +
@@ -559,6 +559,39 @@
         unpriced.slice(0, 60).map(function(i){ return '<li>' + esc(i.name) + ' <span class="ba-dim">(' + esc(i.category || 'no category') + ')</span></li>'; }).join('') + '</ul>' : '') + '</div>';
 
     root.innerHTML = html;
+  }
+  // ---------- live parcel tracking (AfterShip via the track-parcel function; parcel_tracking table) ----------
+  const TK = { rows: {}, at: 0, busy: {} };
+  const TK_LABEL = { Pending: 'Waiting for scan', InfoReceived: 'Booked', InTransit: 'In transit', OutForDelivery: 'Out for delivery', AttemptFail: 'Attempt failed', Delivered: 'Delivered', AvailableForPickup: 'Ready for pickup', Exception: 'Exception', Expired: 'No updates' };
+  async function loadTracking(){
+    if(!(typeof cloudIsOn === 'function' && cloudIsOn())) return;
+    const r = await cloud.sb.from('parcel_tracking').select('order_id,awb,tag,subtag_message,eta,checkpoints,fetched_at');
+    TK.at = Date.now();
+    if(r.error) return;
+    TK.rows = {}; (r.data || []).forEach(function(x){ TK.rows[x.order_id] = x; });
+    refreshViews();
+  }
+  async function checkTracking(id){
+    if(TK.busy[id]) return;
+    TK.busy[id] = true; refreshViews();
+    try{
+      const r = await cloud.sb.functions.invoke('track-parcel', { body: { orderId: id, force: true } });
+      const err = r.error ? ((r.data && r.data.error) || r.error.message || 'error') : (r.data && r.data.error);
+      if(r.data && r.data.tracking) TK.rows[id] = r.data.tracking;
+      else if(/not-found/.test(String(err))) showToast('Not in the Buyer app yet — try again in a couple of minutes, after it publishes');
+      else if(/not-configured/.test(String(err))) showToast('Add the AFTERSHIP_API_KEY secret in Supabase first');
+      else if(err) showToast('Tracking: ' + String(err).slice(0, 120));
+    }catch(e){ showToast('Tracking isn’t set up yet (track-parcel function)'); }
+    TK.busy[id] = false; refreshViews();
+  }
+  function trackCell(o){
+    const t = TK.rows[o.id];
+    if(TK.busy[o.id]) return '<div class="ba-dim" style="margin:2px 0 0">Checking…</div>';
+    if(!o.trackingNo) return '';
+    if(!t || t.awb !== o.trackingNo) return '<div><button class="ba-btn" data-ba="track" data-id="' + o.id + '">Check tracking</button></div>';
+    const last = (t.checkpoints || [])[0], tone = t.tag === 'Delivered' || t.tag === 'OutForDelivery' ? 'ok' : t.tag === 'Exception' || t.tag === 'AttemptFail' ? 'bad' : '';
+    return '<div style="margin-top:4px"><span class="ba-pill ' + tone + '">' + esc(TK_LABEL[t.tag] || t.tag) + '</span>' + (last && last.loc ? ' <span class="ba-dim">' + esc(last.loc) + '</span>' : '') +
+      (t.eta && t.tag !== 'Delivered' ? ' <span class="ba-dim">· ETA ' + esc(t.eta) + '</span>' : '') + ' <button class="ba-btn" data-ba="track" data-id="' + o.id + '" title="Ask the courier again">↻</button></div>';
   }
   // ---------- resale totals (from resellers' own invoices; no names or prices) ----------
   const R = { rows: null, at: 0, missing: false, loading: false };
@@ -595,7 +628,8 @@
   };
   window.renderBuyers = function(){
     if(!WEB.at) loadWebToys().then(function(){ refreshViews(); });
-    if(!R.at || Date.now() - R.at > 300000) loadResale(); render(); if(typeof cloudIsOn === 'function' && cloudIsOn() && !B.at) pull().catch(function(e){ console.warn('[buyers]', e); }); };
+    if(!R.at || Date.now() - R.at > 300000) loadResale();
+    if(!TK.at || Date.now() - TK.at > 300000) loadTracking().catch(function(){}); render(); if(typeof cloudIsOn === 'function' && cloudIsOn() && !B.at) pull().catch(function(e){ console.warn('[buyers]', e); }); };
 
   document.addEventListener('click', function(e){
     const b = e.target.closest('[data-ba]');
@@ -612,6 +646,7 @@
       if(o.status !== 'production_done') setOrderStatusDirect(o.id, 'production_done');
       scheduleSave(); render(); showToast(o.displayId + ' marked dispatched' + (o.trackingNo ? '' : ' — add the tracking number too'));
     }
+    else if(act === 'track') checkTracking(id);
     else if(act === 'undispatch'){ const o = orderById(id); if(o){ o.shippedDate = ''; scheduleSave(); render(); } }
     else if(act === 'delivered'){ const o = orderById(id); if(o){ setOrderStatusDirect(o.id, 'delivered'); setTimeout(render, 300); } }
     else if(act === 'photo'){ e.preventDefault(); const im = b.querySelector('img'); const w = window.open(''); if(w && im){ const big = w.document.createElement('img'); big.src = im.src; big.style.maxWidth = '100%'; w.document.body.appendChild(big); } }
