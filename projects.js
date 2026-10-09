@@ -48,7 +48,13 @@
   let t = null;
   function soon(){ clearTimeout(t); t = setTimeout(function(){ load().then(refresh); }, 400); }
   function project(id){ return X.projects.find(function(p){ return p.id === id; }); }
-  function items(id, kind){ return (X.items[id] || []).filter(function(x){ return !kind || x.kind === kind; }); }
+  // Steps run in date order (undated last); updates in the order they were posted.
+  function byDue(a, b){ return (a.data.due || '9999').localeCompare(b.data.due || '9999') || (a.data.at || '').localeCompare(b.data.at || ''); }
+  function items(id, kind){ const l = (X.items[id] || []).filter(function(x){ return !kind || x.kind === kind; }); return kind === 'task' ? l.slice().sort(byDue) : l; }
+  // The designer fills in their own steps once Thread Tribe has started the project.
+  function needsPlan(p){ return !!p.designer_id && ['live', 'cancelled', 'on_hold'].indexOf(stageOf(p)) === -1 && !items(p.id, 'task').some(function(x){ return x.data.owner !== 'tt'; }); }
+  // Thread Tribe's own steps on every new project.
+  const TT_STEPS = [['Share brief and references', 1], ['Review prototype', null], ['Final approval', null]];
   function progress(id){ const ts = items(id, 'task'); return { done: ts.filter(function(x){ return x.data.done; }).length, total: ts.length }; }
   async function saveProject(p){
     const r = await cloud.sb.from('projects').upsert({ id: p.id, designer_id: p.designer_id || null, client_id: p.client_id || null, data: p.data, created_by: p.created_by || 'tt' }, { onConflict: 'id' });
@@ -94,7 +100,7 @@
     return '<button class="pj-card' + (X.sel === p.id ? ' on' : '') + '" data-pj="open" data-id="' + esc(p.id) + '"><b>' + esc(d.title || 'Untitled') + '</b>' +
       '<span class="pj-dim">' + esc([p.designer_id ? partnerName(p.designer_id) : '', clientName(p.client_id)].filter(Boolean).join(' · ') || 'No designer yet') + '</span>' +
       bar(pr) + (next ? '<span class="pj-dim">Next: ' + esc(next.data.title) + (next.data.due ? ' · ' + fmt(next.data.due) : '') + '</span>' : '') +
-      (d.due ? '<span class="pj-tags"><i' + (late ? ' class="warn"' : '') + '>due ' + fmt(d.due) + '</i></span>' : '') + '</button>';
+      ((d.due || needsPlan(p)) ? '<span class="pj-tags">' + (d.due ? '<i' + (late ? ' class="warn"' : '') + '>due ' + fmt(d.due) + '</i>' : '') + (needsPlan(p) ? '<i class="warn">waiting for designer’s plan</i>' : '') + '</span>' : '') + '</button>';
   }
   function board(){
     const cols = STAGES.concat(X.showOther ? OTHER : []);
@@ -119,7 +125,9 @@
         '<label>Due<input type="date" data-pf="due" value="' + esc(d.due || '') + '"></label>' +
       '</div><label class="pj-wide">Brief<textarea data-pf="brief" rows="3">' + esc(d.brief || '') + '</textarea></label>';
 
-    h += '<div class="pj-sec"><b>Steps</b> ' + bar(progress(p.id)) + items(p.id, 'task').map(function(x){
+    h += '<div class="pj-sec"><b>Steps</b> ' + bar(progress(p.id)) +
+      (!p.designer_id ? '<div class="pj-dim pj-warn">Pick a designer — they add their own steps and dates in the Partner app.</div>' : needsPlan(p) ? '<div class="pj-dim pj-warn">Waiting for ' + esc(partnerName(p.designer_id)) + ' to add their steps and dates.</div>' : '') +
+      items(p.id, 'task').map(function(x){
       const late = !x.data.done && x.data.due && x.data.due < today();
       return '<div class="pj-row"><input type="checkbox" data-pj="task-done" data-id="' + esc(x.id) + '"' + (x.data.done ? ' checked' : '') + '><span' + (x.data.done ? ' class="pj-done"' : '') + '>' + esc(x.data.title) + '</span>' +
         '<span class="pj-dim' + (late ? ' pj-warn' : '') + '">' + (x.data.owner === 'tt' ? 'Thread Tribe' : 'Designer') + (x.data.due ? ' · ' + fmt(x.data.due) : '') + '</span></div>';
@@ -162,7 +170,14 @@
     if(act === 'new'){
       const title = prompt('Project name'); if(!title) return;
       const np = { id: 'pj' + uid(), designer_id: null, client_id: null, created_by: 'tt', data: { title: title.slice(0, 120), stage: 'brief', createdAt: new Date().toISOString() } };
-      if(await saveProject(np)){ X.projects.unshift(np); X.sel = np.id; render(); }
+      if(await saveProject(np)){
+        X.projects.unshift(np); X.sel = np.id;
+        for(const st of TT_STEPS){
+          const due = st[1] == null ? '' : (function(){ const d = new Date(); d.setDate(d.getDate() + st[1]); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+          await addItem(np.id, 'task', { title: st[0], owner: 'tt', due: due, done: false });
+        }
+        render(); showToast('Pick the designer — they’ll add their steps in the Partner app');
+      }
       return;
     }
     if(!p) return;
