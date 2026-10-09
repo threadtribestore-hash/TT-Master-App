@@ -9,7 +9,7 @@
 (function(){
   if(window.TT_STOCK_MODE) return;
 
-  const STAGES = [['brief', 'Brief'], ['design', 'Design'], ['prototype', 'Prototype'], ['approval', 'Approval'], ['live', 'Live']];
+  const STAGES = [['request', 'Requests'], ['brief', 'Brief'], ['design', 'Design'], ['prototype', 'Prototype'], ['approval', 'Approval'], ['live', 'Live']];
   const OTHER = [['on_hold', 'On hold'], ['cancelled', 'Cancelled']];
   // Stage names used by earlier versions.
   const OLD = { pitch: 'brief', concept: 'design', cad: 'design', production: 'approval' };
@@ -30,7 +30,7 @@
     if(!on()) return;
     const r = await cloud.sb.from('projects').select('id,designer_id,client_id,data,created_by,updated_at').order('updated_at', { ascending: false });
     if(r.error){ X.missing = /projects|does not exist|schema cache|relation/i.test(r.error.message || ''); X.loaded = true; return; }
-    const it = await cloud.sb.from('project_items').select('project_id,id,kind,author,data,deleted,updated_at').in('kind', ['task', 'comment']).eq('deleted', false).limit(20000);
+    const it = await cloud.sb.from('project_items').select('project_id,id,kind,author,data,deleted,updated_at').in('kind', ['task', 'comment', 'image']).eq('deleted', false).limit(20000);
     X.missing = false; X.loaded = true;
     X.projects = r.data || [];
     X.items = {};
@@ -46,13 +46,13 @@
     }
   }
   let t = null;
-  function soon(){ clearTimeout(t); t = setTimeout(function(){ load().then(refresh); }, 400); }
+  function soon(){ clearTimeout(t); t = setTimeout(function(){ load().then(function(){ refresh(); badge(); }); }, 400); }
   function project(id){ return X.projects.find(function(p){ return p.id === id; }); }
   // Steps run in date order (undated last); updates in the order they were posted.
   function byDue(a, b){ return (a.data.due || '9999').localeCompare(b.data.due || '9999') || (a.data.at || '').localeCompare(b.data.at || ''); }
   function items(id, kind){ const l = (X.items[id] || []).filter(function(x){ return !kind || x.kind === kind; }); return kind === 'task' ? l.slice().sort(byDue) : l; }
   // The designer fills in their own steps once Thread Tribe has started the project.
-  function needsPlan(p){ return !!p.designer_id && ['live', 'cancelled', 'on_hold'].indexOf(stageOf(p)) === -1 && !items(p.id, 'task').some(function(x){ return x.data.owner !== 'tt'; }); }
+  function needsPlan(p){ return !!p.designer_id && ['request', 'live', 'cancelled', 'on_hold'].indexOf(stageOf(p)) === -1 && !items(p.id, 'task').some(function(x){ return x.data.owner !== 'tt'; }); }
   // Thread Tribe's own steps on every new project.
   const TT_STEPS = [['Share brief and references', 1], ['Review prototype', null], ['Final approval', null]];
   function progress(id){ const ts = items(id, 'task'); return { done: ts.filter(function(x){ return x.data.done; }).length, total: ts.length }; }
@@ -87,16 +87,34 @@
     const origPull = cloudPullReports;
     cloudPullReports = async function(){
       const r = await origPull.apply(this, arguments);
-      try{ await load(); refresh(); }catch(e){}
+      try{ await load(); refresh(); badge(); }catch(e){}
       return r;
     };
   }
 
   // ---------- view ----------
+  function isImg(d){ return typeof d === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(d); }
+  function isUrl(u){ return typeof u === 'string' && /^https?:\/\/[^\s"'<>]+$/i.test(u); }
+  function requests(){ return X.projects.filter(function(p){ return stageOf(p) === 'request'; }); }
+  // Projects tab button shows how many brand-partner requests are waiting.
+  function badge(){
+    const b = document.querySelector('.tab-btn[data-tab="projects"]'), n = requests().length;
+    if(b) b.innerHTML = 'Projects' + (n ? ' <span class="pon-badge">' + n + '</span>' : '');
+  }
+  function refsHtml(p){
+    const imgs = items(p.id, 'image').filter(function(x){ return isImg(x.data && x.data.img); }), refs = ((p.data || {}).refs || []).filter(isUrl);
+    if(!imgs.length && !refs.length) return '';
+    return '<div class="pj-sec"><b>References</b><div class="pj-refs">' + imgs.map(function(x){ return '<a href="#" data-pj="zoom" data-id="' + esc(x.id) + '"><img src="' + x.data.img + '" alt=""></a>'; }).join('') + '</div>' +
+      refs.map(function(u){ return '<div><a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(u.replace(/^https?:\/\//, '').slice(0, 60)) + ' ↗</a></div>'; }).join('') + '</div>';
+  }
   function bar(pr){ return pr.total ? '<span class="pj-bar"><i style="width:' + Math.round(100 * pr.done / pr.total) + '%"></i></span><span class="pj-dim">' + pr.done + ' of ' + pr.total + ' steps</span>' : ''; }
   function card(p){
     const d = p.data || {}, pr = progress(p.id), next = items(p.id, 'task').find(function(x){ return !x.data.done; });
     const late = d.due && d.due < today() && stageOf(p) !== 'live';
+    const nImg = items(p.id, 'image').length;
+    if(stageOf(p) === 'request') return '<button class="pj-card pj-req' + (X.sel === p.id ? ' on' : '') + '" data-pj="open" data-id="' + esc(p.id) + '"><b>' + esc(d.title || 'Untitled') + '</b>' +
+      '<span class="pj-dim">From ' + esc(clientName(p.client_id) || d.clientName || 'a brand partner') + ' · ' + fmt((d.createdAt || '').slice(0, 10)) + '</span>' +
+      '<span class="pj-tags">' + (d.qty ? '<i>' + d.qty + ' pcs</i>' : '') + (nImg ? '<i>📷 ' + nImg + '</i>' : '') + (d.due ? '<i>by ' + fmt(d.due) + '</i>' : '') + '</span></button>';
     return '<button class="pj-card' + (X.sel === p.id ? ' on' : '') + '" data-pj="open" data-id="' + esc(p.id) + '"><b>' + esc(d.title || 'Untitled') + '</b>' +
       '<span class="pj-dim">' + esc([p.designer_id ? partnerName(p.designer_id) : '', clientName(p.client_id)].filter(Boolean).join(' · ') || 'No designer yet') + '</span>' +
       bar(pr) + (next ? '<span class="pj-dim">Next: ' + esc(next.data.title) + (next.data.due ? ' · ' + fmt(next.data.due) : '') + '</span>' : '') +
@@ -123,7 +141,13 @@
         '<label>Designer<select data-pf="designer_id">' + opts(partners, p.designer_id, '— none —') + '</select></label>' +
         '<label>Client (brand partner)<select data-pf="client_id">' + opts(clients, p.client_id, '— our own product —') + '</select></label>' +
         '<label>Due<input type="date" data-pf="due" value="' + esc(d.due || '') + '"></label>' +
-      '</div><label class="pj-wide">Brief<textarea data-pf="brief" rows="3">' + esc(d.brief || '') + '</textarea></label>';
+        '<label>Quantity<input type="number" min="0" data-pf="qty" value="' + esc(d.qty || '') + '"></label>' +
+        '<label>Target price / pc ₹<input type="number" min="0" data-pf="targetPrice" value="' + esc(d.targetPrice || '') + '"></label>' +
+      '</div><label class="pj-wide">Brief<textarea data-pf="brief" rows="3">' + esc(d.brief || '') + '</textarea></label>' + refsHtml(p);
+    if(stageOf(p) === 'request'){
+      h = h.replace('<div class="pj-form">', '<div class="pj-banner">Request from <b>' + esc(clientName(p.client_id) || d.clientName || 'a brand partner') + '</b>. Accept it to start the design (pick a designer), or decline with a reason.' +
+        '<div><button class="pj-btn primary" data-pj="accept">Accept → Brief</button><button class="pj-btn" data-pj="decline">Decline</button></div></div><div class="pj-form">');
+    }
 
     h += '<div class="pj-sec"><b>Steps</b> ' + bar(progress(p.id)) +
       (p.designer_id && !isDesigner(p.designer_id) ? '<div class="pj-dim pj-warn">' + esc(partnerName(p.designer_id)) + ' isn’t ticked as a designer above, so they can’t see this project.</div>' :
@@ -158,7 +182,7 @@
     const t2 = document.getElementById('tabProjects');
     if(t2 && t2.style.display !== 'none' && !(document.activeElement && t2.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render();
   }
-  window.renderProjects = function(){ render(); load().then(render); };
+  window.renderProjects = function(){ render(); load().then(function(){ render(); badge(); }); };
 
   // ---------- actions ----------
   document.addEventListener('click', async function(e){
@@ -182,6 +206,30 @@
       return;
     }
     if(!p) return;
+    if(act === 'zoom'){
+      e.preventDefault();
+      const im = items(p.id, 'image').find(function(x){ return x.id === id; });
+      if(im && isImg(im.data.img)){ const w = window.open(''); if(w){ w.document.title = 'Reference'; const img = w.document.createElement('img'); img.src = im.data.img; img.style.maxWidth = '100%'; w.document.body.style.margin = '0'; w.document.body.style.background = '#111'; w.document.body.appendChild(img); } }
+      return;
+    }
+    if(act === 'accept'){
+      p.data = Object.assign({}, p.data, { stage: 'brief', acceptedAt: new Date().toISOString() });
+      if(await saveProject(p)){
+        await addItem(p.id, 'comment', { text: 'Thanks! We’ve accepted your request and our design team is starting on it. You can follow progress here.', internal: false });
+        for(const st of TT_STEPS){ await addItem(p.id, 'task', { title: st[0], owner: 'tt', due: '', done: false }); }
+        render(); badge(); showToast('Accepted — now pick a designer');
+      }
+      return;
+    }
+    if(act === 'decline'){
+      const why = prompt('Reason for declining (the brand partner sees this):', 'Sorry, we can’t take this one on right now.'); if(why === null) return;
+      p.data = Object.assign({}, p.data, { stage: 'cancelled', declinedAt: new Date().toISOString() });
+      if(await saveProject(p)){
+        if(why.trim()) await addItem(p.id, 'comment', { text: why.trim().slice(0, 2000), internal: false });
+        X.sel = null; render(); badge(); showToast('Request declined');
+      }
+      return;
+    }
     if(act === 'delete'){
       if(!confirm('Delete “' + ((p.data || {}).title || 'this project') + '” and all its steps and updates?')) return;
       const r = await cloud.sb.from('projects').delete().eq('id', p.id);
@@ -214,6 +262,7 @@
     const v = e.target.value;
     if(f === 'designer_id') p.designer_id = v || null;
     else if(f === 'client_id'){ p.client_id = v || null; p.data = Object.assign({}, p.data, { clientName: clientName(v) || '' }); }
+    else if(f === 'qty' || f === 'targetPrice') p.data = Object.assign({}, p.data, { [f]: Math.max(0, +v || 0) });
     else p.data = Object.assign({}, p.data, { [f]: String(v).slice(0, f === 'brief' ? 4000 : 200) });
     if(await saveProject(p)){ showToast('Saved'); if(f === 'stage' || f === 'title') render(); }
   });
@@ -239,6 +288,8 @@
     '#tabProjects .pj-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;font-size:13px} #tabProjects .pj-done{text-decoration:line-through;color:var(--dim)}' +
     '#tabProjects .pj-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px} #tabProjects .pj-add input:not([type=checkbox]){flex:1;min-width:140px}' +
     '#tabProjects .pj-warn{color:var(--amber)}' +
+    '#tabProjects .pj-card.pj-req{border-color:var(--amber)} #tabProjects .pj-banner{background:var(--input-bg);border:1px solid var(--amber);border-radius:8px;padding:10px;margin:8px 0;font-size:13px}' +
+    '#tabProjects .pj-refs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0} #tabProjects .pj-refs img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}' +
     '#tabProjects .pj-msg{border-left:3px solid var(--line);padding:4px 10px;margin:6px 0;font-size:13px} #tabProjects .pj-msg.designer{border-color:var(--cyan)} #tabProjects .pj-msg.client{border-color:var(--amber)}';
   document.head.appendChild(css);
 })();
