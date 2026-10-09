@@ -52,6 +52,134 @@
     return { finish: out, hours: used, days: cap > 0 ? used / cap : 0, cap: cap };
   }
 
+  // ---------- live delivery-promise calculator (for the sales team) ----------
+  // Answers "when can we deliver?" while the customer is on the phone. The new order
+  // joins the back of the current queue on the shared fleet, or gets N printers to
+  // itself (which slows everything else by its share). Dates: production finish →
+  // + packing days = dispatch → + transit days = delivery. The safe date adds a
+  // margin on print time for failures, downtime and changeovers.
+  const P = { lines: [{ id: '', qty: 0 }], hours: '', need: '', rush: 0, customer: '' };
+  function pset(){ return Object.assign({ packDays: 1, transitDays: 3, safetyPct: 15 }, state.promiseSettings || {}); }
+  function fleet(){
+    const running = (state.printers || []).filter(function(p){ return p.status !== 'down'; }).length || (state.fleet && state.fleet.printers) || 0;
+    const hpd = (state.fleet && state.fleet.hoursPerDay) || 0;
+    const reserved = queue().reduce(function(t, o){ return t + (o.reservedPrinters || 0); }, 0);
+    return { running: running, hpd: hpd, cap: running * hpd, free: Math.max(0, running - reserved) };
+  }
+  function lineHours(){
+    let hours = 0, pcs = 0, missing = [];
+    P.lines.forEach(function(l){
+      const it = (state.productCatalog || []).find(function(i){ return i.id === l.id; }), q = Math.max(0, Math.round(+l.qty || 0));
+      if(!it || !q) return;
+      pcs += q;
+      if(!(+it.hours > 0)) missing.push(it.name);
+      hours += q * (+it.hours || 0) * bufferMult();
+    });
+    const manual = parseFloat(P.hours);
+    if(isFinite(manual) && manual > 0) hours += manual;
+    return { hours: hours, pcs: pcs, missing: missing };
+  }
+  function dayAfter(days){ return addDays(today(), Math.max(0, Math.ceil(days - 1e-9) - 1)); }
+  function promise(){
+    const F = fleet(), S = pset(), L = lineHours(), fc = forecast();
+    if(!(L.hours > 0) || !F.cap) return { L: L, F: F, empty: true };
+    const queued = fc.hours, safety = 1 + (+S.safetyPct || 0) / 100;
+    let earliestDays, safeDays, delay = 0;
+    const k = Math.min(P.rush, F.free);
+    if(k > 0){
+      earliestDays = L.hours / (k * F.hpd);
+      safeDays = earliestDays * safety;
+      delay = earliestDays * k / F.running;                 // days the rest of the queue slips
+    } else {
+      earliestDays = (queued + L.hours) / F.cap;
+      safeDays = (queued + L.hours * safety) / F.cap;
+    }
+    const r = { L: L, F: F, S: S, k: k, delay: delay, queued: queued,
+      earliestMade: dayAfter(earliestDays), safeMade: dayAfter(safeDays) };
+    r.dispatch = addDays(r.safeMade, +S.packDays || 0);
+    r.delivery = addDays(r.dispatch, +S.transitDays || 0);
+    r.earliestDispatch = addDays(r.earliestMade, +S.packDays || 0);
+    // Against the customer's date: what it takes to make it, and what fits by then.
+    if(P.need){
+      const lastMade = addDays(P.need, -(+S.packDays || 0) - (+S.transitDays || 0));
+      const daysAvail = dayDiff(lastMade, today()) + 1;
+      r.lastMade = lastMade; r.daysAvail = daysAvail;
+      r.verdict = r.delivery <= P.need ? 'yes' : addDays(r.earliestDispatch, +S.transitDays || 0) <= P.need ? 'tight' : 'no';
+      if(daysAvail > 0){
+        const needK = Math.ceil(L.hours * safety / (daysAvail * F.hpd));
+        r.needPrinters = needK <= F.free ? needK : null;
+        const hoursByThen = k > 0 ? daysAvail * k * F.hpd / safety : Math.max(0, daysAvail * F.cap - queued) / safety;
+        r.partialPcs = L.pcs && L.hours ? Math.min(L.pcs, Math.floor(L.pcs * hoursByThen / L.hours)) : 0;
+      }
+    }
+    // Who a rush would push past their own date.
+    if(k > 0 && delay > 0){
+      r.hurt = queue().filter(function(o){
+        const due = target(o), fin = fc.finish[o.id];
+        return due && fin && fin <= due && addDays(fin, Math.ceil(delay)) > due;
+      });
+    }
+    return r;
+  }
+  function promiseHtml(){
+    const cat = (state.productCatalog || []).filter(function(i){ return (i.name || '').trim(); }).slice().sort(function(a, b){ return a.name.localeCompare(b.name); });
+    const S = pset();
+    return '<div class="panel cr-promise"><div class="panel-title">Promise a delivery date</div>' +
+      '<p class="cr-dim">For quoting a customer live. It counts everything already queued on the printers. Results update as you type.</p>' +
+      '<div class="cr-pl">' + P.lines.map(function(l, i){
+        return '<div class="cr-pl-row"><select data-pp="id" data-i="' + i + '"><option value="">Choose a product…</option>' + cat.map(function(it){
+          return '<option value="' + esc(it.id) + '"' + (it.id === l.id ? ' selected' : '') + '>' + esc(it.name) + (+it.hours > 0 ? ' · ' + it.hours + ' h/pc' : ' · no print time') + '</option>'; }).join('') + '</select>' +
+          '<input type="number" min="0" placeholder="Qty" data-pp="qty" data-i="' + i + '" value="' + (l.qty || '') + '">' +
+          (P.lines.length > 1 ? '<button class="cr-btn" data-cr="pl-del" data-i="' + i + '">✕</button>' : '') + '</div>';
+      }).join('') + '<button class="cr-btn" data-cr="pl-add">+ Add product</button></div>' +
+      '<div class="cr-pf"><label>or extra print hours<input type="number" min="0" step="0.5" data-pp="hours" value="' + esc(P.hours) + '" placeholder="0"></label>' +
+      '<label>Customer needs it by<input type="date" data-pp="need" value="' + esc(P.need) + '"></label>' +
+      '<label>Rush on dedicated printers<select data-pp="rush"><option value="0">No — join the queue</option>' +
+        Array.from({ length: fleet().free }, function(_, i){ return '<option value="' + (i + 1) + '"' + (P.rush === i + 1 ? ' selected' : '') + '>' + (i + 1) + ' printer' + (i ? 's' : '') + '</option>'; }).join('') + '</select></label>' +
+      '<label>Customer (for the message)<input data-pp="customer" value="' + esc(P.customer) + '" placeholder="e.g. Anand"></label></div>' +
+      '<div id="crPromiseOut">' + promiseOut() + '</div>' +
+      '<details class="cr-pset"><summary class="cr-dim">Assumptions: ' + S.packDays + ' day packing · ' + S.transitDays + ' days transit · ' + S.safetyPct + '% safety margin</summary>' +
+      '<div class="cr-pf"><label>Packing days<input type="number" min="0" data-ps="packDays" value="' + S.packDays + '"></label><label>Transit days<input type="number" min="0" data-ps="transitDays" value="' + S.transitDays + '"></label>' +
+      '<label>Safety margin %<input type="number" min="0" max="100" data-ps="safetyPct" value="' + S.safetyPct + '"></label></div></details></div>';
+  }
+  function promiseOut(){
+    const r = promise();
+    if(!r.F.cap) return '<div class="cr-note">Set printers and print hours per day in Settings so the calculator knows your capacity.</div>';
+    if(r.empty) return '<div class="cr-note">Add a product and quantity (or print hours) to get a date.</div>';
+    const v = r.verdict, color = v === 'yes' ? 'ok' : v === 'tight' ? 'warn' : v === 'no' ? 'bad' : '';
+    let html = '<div class="cr-res ' + color + '">' +
+      (v ? '<div class="cr-verdict">' + (v === 'yes' ? '✓ Yes, we can deliver by ' + fmt(P.need) : v === 'tight' ? '⚠ Possible, but tight for ' + fmt(P.need) : '✗ Not by ' + fmt(P.need)) + '</div>' : '') +
+      '<div class="cr-dates"><div><span>Safe to promise · dispatch</span><b>' + fmtLong(r.dispatch) + '</b></div><div><span>Delivered by</span><b>' + fmtLong(r.delivery) + '</b></div>' +
+      '<div><span>Earliest possible dispatch</span><b>' + fmtLong(r.earliestDispatch) + '</b></div></div>' +
+      '<div class="cr-dim" style="margin:6px 0 0">' + Math.round(r.L.hours) + ' print-hours' + (r.L.pcs ? ' for ' + r.L.pcs.toLocaleString('en-IN') + ' pcs' : '') +
+        (r.k ? ' on ' + r.k + ' dedicated printer' + (r.k === 1 ? '' : 's') : ' after ' + Math.round(r.queued) + ' h already queued, on ' + r.F.running + ' printers × ' + r.F.hpd + ' h/day') + '.</div>';
+    if(r.L.missing.length) html += '<div class="cr-warn" style="margin-top:6px">No print time set for ' + esc(r.L.missing.join(', ')) + ' — add it in Product Catalog, or enter the hours above.</div>';
+    if(v === 'no' || v === 'tight'){
+      const tips = [];
+      if(r.daysAvail <= 0) tips.push('That date is too soon even to pack and ship (' + r.S.packDays + ' + ' + r.S.transitDays + ' days).');
+      else {
+        if(!r.k && r.needPrinters) tips.push('Dedicate <b>' + r.needPrinters + ' printer' + (r.needPrinters === 1 ? '' : 's') + '</b> to make it — pick it under “Rush”.');
+        if(!r.needPrinters) tips.push('Even all ' + r.F.free + ' free printers can’t make it in time.');
+        if(r.partialPcs && r.partialPcs < r.L.pcs) tips.push('About <b>' + r.partialPcs.toLocaleString('en-IN') + ' of ' + r.L.pcs.toLocaleString('en-IN') + ' pcs</b> could ship in time — offer a part delivery.');
+      }
+      if(tips.length) html += '<ul class="cr-tips">' + tips.map(function(t){ return '<li>' + t + '</li>'; }).join('') + '</ul>';
+    }
+    if(r.k){
+      html += '<div class="' + (r.hurt && r.hurt.length ? 'cr-warn' : 'cr-dim') + '" style="margin-top:6px">Rushing slows the rest of the queue by about ' + (Math.round(r.delay * 10) / 10) + ' days' +
+        (r.hurt && r.hurt.length ? ' — these would then miss their dates: ' + r.hurt.map(function(o){ return esc(o.displayId) + ' (' + esc(who(o)) + ')'; }).join(', ') : ', and no order misses its date') + '.</div>';
+    }
+    html += '<div class="cr-msgbox"><textarea id="crPromiseMsg" rows="3">' + esc(promiseMessage(r)) + '</textarea>' +
+      '<div><button class="cr-btn primary" data-cr="p-copy">Copy message</button><button class="cr-btn" data-cr="p-wa">Send on WhatsApp</button></div></div></div>';
+    return html;
+  }
+  function fmtLong(s){ const d = new Date(s + 'T00:00:00'); return isNaN(d) ? s : d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }); }
+  function promiseMessage(r){
+    const items = P.lines.map(function(l){ const it = (state.productCatalog || []).find(function(i){ return i.id === l.id; }); return it && +l.qty ? l.qty + ' × ' + it.name : ''; }).filter(Boolean);
+    return 'Hi' + (P.customer ? ' ' + P.customer : '') + ', ' + (items.length ? 'for ' + items.join(', ') + ' — ' : '') +
+      'we can dispatch by ' + fmtLong(r.dispatch) + ', so you should receive it by ' + fmtLong(r.delivery) + '. Production starts as soon as you confirm. — Thread Tribe';
+  }
+  function refreshPromise(){ const o = document.getElementById('crPromiseOut'); if(o) o.innerHTML = promiseOut(); }
+
   // ---------- delivery problems ----------
   function problems(){
     const t = today(), fc = forecast(), out = { overdue: [], risk: [], unpaid: [] };
@@ -280,6 +408,7 @@
         '<div class="cr-kpi ' + (p.overdue.length + p.risk.length ? 'bad' : '') + '"><div class="k">Late or at risk</div><div class="v">' + (p.overdue.length + p.risk.length) + '</div><div class="s">' + p.overdue.length + ' overdue</div></div>' +
         '<div class="cr-kpi ' + (waiting ? 'warn' : '') + '"><div class="k">Chats waiting</div><div class="v">' + waiting + '</div><div class="s">need a reply</div></div>' +
       '</div>' +
+      promiseHtml() +
       '<div class="cr-grid">' +
         '<div class="panel"><div class="panel-title">Production queue</div>' + queueHtml(fc) + '</div>' +
         '<div><div class="panel"><div class="panel-title">Dispatch calendar · 2 weeks</div>' + calendarHtml() + '</div>' +
@@ -290,7 +419,7 @@
   window.renderControlRoom = function(){ render(); if(window.TTBuyers) window.TTBuyers.refresh().then(render).catch(function(){}); };
   setInterval(function(){
     const t = document.getElementById('tabControl');
-    if(t && t.style.display !== 'none' && !(document.activeElement && t.contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) render();
+    if(t && t.style.display !== 'none' && !(document.activeElement && t.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render();
   }, 30000);
 
   document.addEventListener('click', function(e){
@@ -301,6 +430,14 @@
     const b = e.target.closest('[data-cr]'); if(!b) return;
     const act = b.getAttribute('data-cr'), id = b.getAttribute('data-id');
     if(b.tagName === 'A') e.preventDefault();
+    if(act === 'pl-add'){ P.lines.push({ id: '', qty: 0 }); render(); return; }
+    if(act === 'pl-del'){ P.lines.splice(+b.getAttribute('data-i'), 1); render(); return; }
+    if(act === 'p-copy' || act === 'p-wa'){
+      const msg = (document.getElementById('crPromiseMsg') || {}).value || '';
+      if(act === 'p-wa') window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+      else (navigator.clipboard ? navigator.clipboard.writeText(msg) : Promise.reject()).then(function(){ showToast('Message copied'); }).catch(function(){ prompt('Copy:', msg); });
+      return;
+    }
     if(act === 'open'){ const i = state.orders.findIndex(function(o){ return o.id === id; }); if(i !== -1) openOrderDetailModal(id, i); }
     else if(act === 'start'){ setOrderStatusDirect(id, 'in_production'); setTimeout(render, 300); }
     else if(act === 'done'){ setOrderStatusDirect(id, 'production_done'); setTimeout(render, 300); }
@@ -315,7 +452,26 @@
     else if(act === 'team-done'){ V.filter = 'reply'; render(); }
     else if(act === 'del-group'){ if(confirm('Remove this imported chat from the dashboard?')){ chats().groups = chats().groups.filter(function(g){ return g.id !== id; }); scheduleSave(); render(); } }
   });
+  // Calculator inputs: recompute on every keystroke without re-rendering the form.
+  function onPromiseInput(e){
+    const t = e.target;
+    if(!t.closest || !t.closest('.cr-promise')) return false;
+    if(t.hasAttribute('data-pp')){
+      const k = t.getAttribute('data-pp'), i = t.getAttribute('data-i');
+      if(i !== null){ P.lines[+i][k] = k === 'qty' ? (+t.value || 0) : t.value; }
+      else if(k === 'rush') P.rush = +t.value || 0;
+      else P[k] = t.value;
+      refreshPromise(); return true;
+    }
+    if(t.hasAttribute('data-ps')){
+      const st = pset(); st[t.getAttribute('data-ps')] = Math.max(0, +t.value || 0);
+      state.promiseSettings = st; scheduleSave(); refreshPromise(); return true;
+    }
+    return false;
+  }
+  document.addEventListener('input', onPromiseInput);
   document.addEventListener('change', function(e){
+    if(onPromiseInput(e)) return;
     if(e.target.id === 'crFile' && e.target.files && e.target.files[0]){ importChat(e.target.files[0]); e.target.value = ''; return; }
     const tm = e.target.closest && e.target.closest('[data-crteam]');
     if(tm){
@@ -380,6 +536,24 @@
     '#tabControl .cr-tag.payment{color:var(--green)} #tabControl .cr-tag.complaint,#tabControl .cr-tag.claim{color:var(--red)} #tabControl .cr-tag.dispatch{color:var(--cyan)} #tabControl .cr-tag.order{color:var(--amber)}' +
     '#tabControl .cr-reply{display:flex;gap:6px;margin-top:6px} #tabControl .cr-reply input{flex:1;background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:13px inherit}' +
     '#tabControl .cr-senders{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 12px;font-size:13px}' +
+    '#tabControl .cr-promise{border:1px solid var(--cyan)}' +
+    '#tabControl .cr-pl-row{display:flex;gap:6px;margin-bottom:6px} #tabControl .cr-pl-row select{flex:1;min-width:0}' +
+    '#tabControl .cr-pl-row input{width:90px}' +
+    '#tabControl .cr-promise select,#tabControl .cr-promise input,#tabControl .cr-promise textarea{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px;font:13px inherit}' +
+    '#tabControl .cr-pf{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin:10px 0}' +
+    '#tabControl .cr-pf label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--dim)}' +
+    '#tabControl .cr-note{padding:12px;border:1px dashed var(--line);border-radius:10px;color:var(--dim);font-size:13px}' +
+    '#tabControl .cr-res{border:1px solid var(--line);border-radius:12px;padding:12px 14px}' +
+    '#tabControl .cr-res.ok{border-color:var(--green)} #tabControl .cr-res.warn{border-color:var(--amber)} #tabControl .cr-res.bad{border-color:var(--red)}' +
+    '#tabControl .cr-verdict{font-size:16px;font-weight:700;margin-bottom:8px}' +
+    '#tabControl .cr-res.ok .cr-verdict{color:var(--green)} #tabControl .cr-res.warn .cr-verdict{color:var(--amber)} #tabControl .cr-res.bad .cr-verdict{color:var(--red)}' +
+    '#tabControl .cr-dates{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}' +
+    '#tabControl .cr-dates div{background:var(--input-bg);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column}' +
+    '#tabControl .cr-dates span{font-size:11px;color:var(--dim)} #tabControl .cr-dates b{font-size:16px;margin-top:2px}' +
+    '#tabControl .cr-dates div:first-child b{color:var(--cyan)}' +
+    '#tabControl .cr-tips{margin:8px 0 0 18px;font-size:13px}' +
+    '#tabControl .cr-msgbox{margin-top:10px;display:flex;flex-direction:column;gap:6px} #tabControl .cr-msgbox textarea{width:100%;resize:vertical}' +
+    '#tabControl .cr-pset{margin-top:8px}' +
     '@media (max-width:700px){#tabControl .cr-grid{grid-template-columns:1fr} #tabControl .cr-day{min-height:48px} #tabControl .cr-kpi{padding:9px 10px} #tabControl .cr-kpi .v{font-size:20px} #tabControl .cr-kpi .k{font-size:9.5px}}';
   document.head.appendChild(css);
 })();
