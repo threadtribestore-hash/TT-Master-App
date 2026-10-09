@@ -112,13 +112,22 @@
         r.partialPcs = L.pcs && L.hours ? Math.min(L.pcs, Math.floor(L.pcs * hoursByThen / L.hours)) : 0;
       }
     }
-    // Who a rush would push past their own date.
-    if(k > 0 && delay > 0){
-      r.hurt = queue().filter(function(o){
-        const due = target(o), fin = fc.finish[o.id];
-        return due && fin && fin <= due && addDays(fin, Math.ceil(delay)) > due;
-      });
-    }
+    // Every queued order, now and with the new order in place. Rushed: while the rush runs
+    // (T days) the queue has the other printers only, then the whole fleet again. Queued
+    // at the back: the new order doesn't move anyone.
+    const slow = F.cap - k * F.hpd, T = k > 0 ? earliestDays : 0;
+    let cum = 0;
+    r.impact = queue().map(function(o){
+      cum += orderTotals(o).hours || 0;
+      const before = cum / F.cap;
+      let after = before;
+      if(k > 0) after = slow <= 0 ? T + cum / F.cap : (cum <= slow * T ? cum / slow : T + (cum - slow * T) / F.cap);
+      const due = target(o), was = dayAfter(before), now = dayAfter(after);
+      return { o: o, due: due, was: was, now: now, slip: dayDiff(now, was), lateBefore: !!(due && was > due), lateAfter: !!(due && now > due) };
+    });
+    r.hurt = r.impact.filter(function(x){ return x.lateAfter && !x.lateBefore; }).map(function(x){ return x.o; });
+    r.lastDone = r.impact.length ? r.impact[r.impact.length - 1].now : '';
+    r.lastWas = r.impact.length ? r.impact[r.impact.length - 1].was : '';
     return r;
   }
   function promiseHtml(){
@@ -164,9 +173,16 @@
       }
       if(tips.length) html += '<ul class="cr-tips">' + tips.map(function(t){ return '<li>' + t + '</li>'; }).join('') + '</ul>';
     }
-    if(r.k){
-      html += '<div class="' + (r.hurt && r.hurt.length ? 'cr-warn' : 'cr-dim') + '" style="margin-top:6px">Rushing slows the rest of the queue by about ' + (Math.round(r.delay * 10) / 10) + ' days' +
-        (r.hurt && r.hurt.length ? ' — these would then miss their dates: ' + r.hurt.map(function(o){ return esc(o.displayId) + ' (' + esc(who(o)) + ')'; }).join(', ') : ', and no order misses its date') + '.</div>';
+    if(r.impact && r.impact.length){
+      html += '<div class="cr-impact"><div class="cr-impact-h"><b>' + (r.k ? 'What the rush does to the queue' : 'Orders already in the queue') + '</b>' +
+        '<span class="cr-dim">' + (r.k ? 'Whole queue done ' + fmtLong(r.lastDone) + ' instead of ' + fmtLong(r.lastWas) + (r.hurt.length ? ' · <span class="cr-bad">' + r.hurt.length + ' will now be late</span>' : ' · no order newly late') : 'This order goes after them, so none of them moves. Queue clears ' + fmtLong(r.lastWas) + '.') + '</span></div>' +
+        '<table class="cr-it"><tr><th>Order</th><th>Due</th><th>Finishes now</th>' + (r.k ? '<th>With rush</th><th></th>' : '') + '</tr>' +
+        r.impact.map(function(x){
+          const cls = x.lateAfter && !x.lateBefore ? 'cr-bad' : x.lateAfter ? 'cr-warn' : '';
+          return '<tr><td>' + orderLink(x.o) + ' <span class="cr-dim">' + esc(who(x.o)) + '</span></td><td>' + (x.due ? fmt(x.due) : '—') + '</td>' +
+            '<td class="' + (!r.k && x.lateBefore ? 'cr-warn' : '') + '">' + fmt(x.was) + '</td>' +
+            (r.k ? '<td class="' + cls + '">' + fmt(x.now) + '</td><td class="' + cls + '">' + (x.slip > 0 ? '+' + x.slip + 'd' : 'same') + (x.lateAfter && !x.lateBefore ? ' · late' : x.lateAfter ? ' · already late' : '') + '</td>' : '') + '</tr>';
+        }).join('') + '</table></div>';
     }
     html += '<div class="cr-msgbox"><textarea id="crPromiseMsg" rows="3">' + esc(promiseMessage(r)) + '</textarea>' +
       '<div><button class="cr-btn primary" data-cr="p-copy">Copy message</button><button class="cr-btn" data-cr="p-wa">Send on WhatsApp</button></div></div></div>';
@@ -554,6 +570,11 @@
     '#tabControl .cr-tips{margin:8px 0 0 18px;font-size:13px}' +
     '#tabControl .cr-msgbox{margin-top:10px;display:flex;flex-direction:column;gap:6px} #tabControl .cr-msgbox textarea{width:100%;resize:vertical}' +
     '#tabControl .cr-pset{margin-top:8px}' +
+    '#tabControl .cr-impact{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}' +
+    '#tabControl .cr-impact-h{display:flex;flex-direction:column;gap:2px;margin-bottom:6px} #tabControl .cr-impact-h .cr-dim{margin:0}' +
+    '#tabControl .cr-it{width:100%;border-collapse:collapse;font-size:12.5px}' +
+    '#tabControl .cr-it th,#tabControl .cr-it td{text-align:left;padding:5px 6px;border-top:1px solid var(--line);white-space:nowrap}' +
+    '#tabControl .cr-it th{color:var(--dim);font-weight:500;font-size:11px}' +
     '@media (max-width:700px){#tabControl .cr-grid{grid-template-columns:1fr} #tabControl .cr-day{min-height:48px} #tabControl .cr-kpi{padding:9px 10px} #tabControl .cr-kpi .v{font-size:20px} #tabControl .cr-kpi .k{font-size:9.5px}}';
   document.head.appendChild(css);
 })();
