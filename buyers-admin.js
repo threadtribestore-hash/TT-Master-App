@@ -548,7 +548,7 @@
     html += '<div class="panel"><div class="panel-title">Collections</div>' + collectionsHtml() + '</div>';
     const tr = trending();
     html += '<div class="panel"><div class="panel-title">Trending · what buyers see</div>' + (tr.length ? '<p class="ba-dim">' + tr.map(function(n, i){ return (i + 1) + '. ' + esc(n); }).join(' · ') + '</p>' : '<p class="ba-dim">Nothing yet — builds from trade orders in the last 60 days.</p>') + '</div>';
-    html += '<div class="panel"><div class="panel-title">Resale · last 90 days</div>' + resaleHtml() + '</div>';
+    html += '<div class="panel"><div class="panel-title">Brand owners’ sales · last 90 days</div>' + resaleHtml() + '</div>';
 
     const webOnly = catalogue(0).filter(function(x){ return /^web:/.test(x.id); });
     html += '<div class="panel"><div class="panel-title">Price check</div><p class="ba-dim">The Buyer app shows every toy on threadtribe.co (' + WEB.items.length + ') plus the toys in your Product Catalog. ' +
@@ -574,9 +574,9 @@
     refreshViews();
   }
   function resaleHtml(){
-    if(R.missing) return '<p class="ba-dim">Run <code>buyer_tools_setup.sql</code> in Supabase to switch on reseller tools.</p>';
+    if(R.missing) return '<p class="ba-dim">Run <code>buyer_tools_setup.sql</code> in Supabase to switch on the brand owners’ business tools.</p>';
     if(!R.rows) return '<p class="ba-dim">Loading…</p>';
-    if(!R.rows.length) return '<p class="ba-dim">No resale invoices yet. Resellers’ customer names and selling prices stay private; you see units by product and city.</p>';
+    if(!R.rows.length) return '<p class="ba-dim">No sales invoices from brand owners yet. Their customer names and selling prices stay private; you see units by product and city.</p>';
     function top(key){
       const m = {};
       R.rows.forEach(function(r){ const k = r[key] || '—'; m[k] = (m[k] || 0) + (+r.units || 0); });
@@ -584,8 +584,8 @@
     }
     function table(title, list){ return '<div><b>' + title + '</b><table class="ba-table">' + list.map(function(x){ return '<tr><td>' + esc(x[0]) + '</td><td class="num">' + Math.round(x[1]).toLocaleString('en-IN') + '</td></tr>'; }).join('') + '</table></div>'; }
     const total = R.rows.reduce(function(s, r){ return s + (+r.units || 0); }, 0);
-    return '<p class="ba-dim">' + Math.round(total).toLocaleString('en-IN') + ' units resold onward. Names and selling prices stay private to each reseller.</p>' +
-      '<div class="ba-cols">' + table('By product', top('product')) + table('By city', top('city')) + table('By reseller', top('client_name')) + '</div>';
+    return '<p class="ba-dim">' + Math.round(total).toLocaleString('en-IN') + ' units sold on by brand owners. Names and selling prices stay private to each brand owner.</p>' +
+      '<div class="ba-cols">' + table('By product', top('product')) + table('By city', top('city')) + table('By brand owner', top('client_name')) + '</div>';
   }
 
   window.renderBuyers = function(){
@@ -639,7 +639,7 @@
     return [
       'Hi' + (first ? ' ' + first : '') + '! 👋',
       '',
-      'Thread Tribe now has a trade app for our resellers: *TT Trade*. It’s built to save you time and help you sell more:',
+      'Thread Tribe now has a trade app for brand owners: *TT Trade*. It’s built to save you time and help you sell more:',
       '',
       '✅ Your trade prices on every toy — mix any toys, and bigger orders get more off',
       '✅ Order and reorder in a few taps, and follow production and delivery live',
