@@ -226,9 +226,9 @@
         (x.data.notes ? '<div>' + esc(x.data.notes) + '</div>' : '') + (isUrl(x.data.link) ? '<a href="' + esc(x.data.link) + '" target="_blank" rel="noopener">Photos / files ↗</a>' : '') +
         '<div class="pj-tags">' + (dv ? '<i class="' + (dv.decision === 'approved' ? 'ok' : 'warn') + '">TT: ' + esc(dv.decision === 'approved' ? 'approved' : 'changes requested') + (dv.note ? ' — ' + esc(dv.note) : '') + '</i>' : '') +
           (cv ? '<i class="' + (cv.data.decision === 'approved' ? 'ok' : 'warn') + '">Client: ' + esc(cv.data.decision === 'approved' ? 'approved' : 'changes requested') + (cv.data.note ? ' — ' + esc(cv.data.note) : '') + '</i>' : '') +
-          (x.data.internal ? '<i>hidden from client</i>' : '') + '</div>' +
+          (p.client_id && x.data.internal ? '<i>not shared with client yet</i>' : '') + '</div>' +
         '<div><button class="pj-btn primary" data-pj="proto-ok" data-id="' + esc(x.id) + '">Approve</button><button class="pj-btn" data-pj="proto-change" data-id="' + esc(x.id) + '">Request changes</button>' +
-          (p.client_id ? '<button class="pj-btn" data-pj="proto-share" data-id="' + esc(x.id) + '">' + (x.data.internal ? 'Show to client' : 'Hide from client') + '</button>' : '') + '</div></div></div>';
+          (p.client_id ? '<button class="pj-btn" data-pj="proto-share" data-id="' + esc(x.id) + '">' + (x.data.internal ? 'Share with client' : 'Hide from client') + '</button>' : '') + '</div></div></div>';
     }).join('') : '<div class="pj-dim">No prototypes yet — the designer adds each round from their app.</div>') + '</div>';
 
     // files
