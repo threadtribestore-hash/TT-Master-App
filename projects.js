@@ -50,7 +50,6 @@
           .subscribe();
       }catch(e){}
     }
-    syncEarnings();
   }
   let t = null;
   function soon(){ clearTimeout(t); t = setTimeout(function(){ load().then(refresh); }, 400); }
@@ -107,17 +106,13 @@
     const paid = state.pon.payouts.filter(function(x){ return x.projectId === p.id; }).reduce(function(t2, x){ return t2 + (+x.amount || 0); }, 0);
     return { hoursApproved: hours.approved || 0, hoursPending: hours.pending || 0, hourly: Math.round(hourly), pieces: pieces, royalty: Math.round(royalty), total: Math.round(hourly + royalty), paid: Math.round(paid), due: Math.max(0, Math.round(hourly + royalty - paid)) };
   }
-  // Read-only copy for the designer's app.
-  async function syncEarnings(){
-    for(const p of X.projects){
-      const e = earnings(p), tm = terms(p.id);
-      const view = { hoursApproved: e.hoursApproved, hourlyRate: +tm.hourlyRate || 0, pieces: e.pieces, royalty: e.royalty, royaltyTerms: tm.royaltyType === 'percent' ? tm.royaltyValue + '% of sales' : '₹' + (+tm.royaltyValue || 0) + ' per piece', total: e.total, paid: e.paid, due: e.due };
-      if(JSON.stringify((p.data || {}).earnings || {}) !== JSON.stringify(view)){
-        p.data = Object.assign({}, p.data, { earnings: view });
-        await cloud.sb.from('projects').update({ data: p.data }).eq('id', p.id);
-      }
-    }
+  // The designer's view of their earnings travels in their private job pack (pon_packs),
+  // not on the project row, which the brand partner can also read.
+  function earningsView(p){
+    const e = earnings(p), tm = terms(p.id);
+    return { hoursApproved: e.hoursApproved, hourlyRate: +tm.hourlyRate || 0, hourly: e.hourly, pieces: e.pieces, royalty: e.royalty, royaltyTerms: tm.royaltyType === 'percent' ? tm.royaltyValue + '% of sales' : '₹' + (+tm.royaltyValue || 0) + ' per piece', total: e.total, paid: e.paid, due: e.due };
   }
+  function syncEarnings(){ if(typeof cloudPublishPacks === 'function') try{ cloudPublishPacks(); }catch(e){} }
   // Prototype filament counts as used filament on the designer's balance.
   function protoGrams(pid, color){
     let g = 0;
@@ -144,6 +139,39 @@
     }catch(e){}
     return rows;
   };
+
+  // Design fees are earned like job payouts, so a design payment doesn't show as an advance.
+  const origStats = ponPartnerStats;
+  ponPartnerStats = function(pid){
+    const s = origStats(pid);
+    try{
+      let earned = 0;
+      X.projects.forEach(function(p){ if(p.designer_id === pid){ const e = earnings(p); earned += e.total; } });
+      s.designEarned = earned; s.accrued += earned; s.outstanding = s.accrued - s.paid;
+    }catch(e){}
+    return s;
+  };
+  function isDesigner(pid){ return !!(state.projectDesigners || {})[pid] || X.projects.some(function(p){ return p.designer_id === pid; }); }
+  const origBuild = ponBuildPack;
+  ponBuildPack = function(pid){
+    const pack = origBuild(pid);
+    try{
+      if(pack && isDesigner(pid)){
+        pack.designer = true;
+        pack.projectEarnings = {};
+        X.projects.forEach(function(p){ if(p.designer_id === pid) pack.projectEarnings[p.id] = earningsView(p); });
+      }
+    }catch(e){}
+    return pack;
+  };
+  if(typeof cloudPullReports === 'function'){
+    const origPull = cloudPullReports;
+    cloudPullReports = async function(){
+      const r = await origPull.apply(this, arguments);
+      try{ await load(); refresh(); }catch(e){}
+      return r;
+    };
+  }
 
   // ---------- view ----------
   function card(p){
@@ -244,13 +272,20 @@
     }).join('') + '<div class="pj-add"><input id="pjComment" placeholder="Write to the designer' + (p.client_id ? ' and client' : '') + '…">' + (p.client_id ? '<label class="pj-dim"><input type="checkbox" id="pjInternal"> internal (hide from client)</label>' : '') + '<button class="pj-btn primary" data-pj="comment">Send</button></div></div>';
     return h + '</div>';
   }
+  function designersRow(){
+    ensurePon();
+    const d = state.projectDesigners || {};
+    return '<div class="pj-dim" style="margin-bottom:8px">Designers (they get a Projects tab and can pitch ideas): ' + state.pon.partners.map(function(x){
+      return '<label class="pj-chip"><input type="checkbox" data-pj-designer="' + esc(x.id) + '"' + (d[x.id] ? ' checked' : '') + '> ' + esc(x.name || 'Partner') + '</label>';
+    }).join(' ') + '</div>';
+  }
   function render(){
     const root = document.getElementById('projectsRoot'); if(!root) return;
     if(!on()){ root.innerHTML = '<div class="panel"><p class="pj-dim">Sign in to Cloud sync to use Projects.</p></div>'; return; }
     if(X.missing){ root.innerHTML = '<div class="panel"><p class="pj-dim">Run <code>projects_setup.sql</code> in Supabase → SQL Editor to switch on Projects, then reload.</p></div>'; return; }
     const sel = X.sel && project(X.sel);
     root.innerHTML = '<div class="panel"><div class="panel-title" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>Custom projects</span><button class="pj-btn primary" data-pj="new">+ New project</button></div>' +
-      (X.loaded ? (X.projects.length ? board() : '<p class="pj-dim">No projects yet. Start one, or wait for your designer to pitch an idea from the Partner app.</p>') : '<p class="pj-dim">Loading…</p>') + '</div>' + (sel ? detail(sel) : '');
+      designersRow() + (X.loaded ? (X.projects.length ? board() : '<p class="pj-dim">No projects yet. Start one, or wait for your designer to pitch an idea from the Partner app.</p>') : '<p class="pj-dim">Loading…</p>') + '</div>' + (sel ? detail(sel) : '');
   }
   function refresh(){
     const t2 = document.getElementById('tabProjects');
@@ -279,8 +314,7 @@
       await addItem(p.id, 'task', { title: title.slice(0, 200), owner: document.getElementById('pjTaskOwner').value, due: document.getElementById('pjTaskDue').value, done: false }); render();
     } else if(act === 'task-done'){
       const row = items(p.id, 'task').find(function(x){ return x.id === id; });
-      if(row && row.author === 'tt') await updateItem(row, { done: b.checked });
-      else if(row){ b.checked = !!row.data.done; showToast('Only the designer can tick off their own tasks'); }
+      if(row) await updateItem(row, { done: b.checked });
       render();
     } else if(act === 'proto-ok' || act === 'proto-change'){
       const note = act === 'proto-change' ? prompt('What should change?') : '';
@@ -306,7 +340,7 @@
       await updateItem(row, { status: 'done', reply: grams + ' g of ' + (color || 'filament') + ' issued' }); render();
       showToast('Filament issued — it shows on the designer’s balance');
     } else if(act === 'hrs-ok' || act === 'hrs-no'){
-      await addItem(p.id, 'approval', { target: id, decision: act === 'hrs-ok' ? 'approved' : 'rejected', internal: false }); await syncEarnings(); render();
+      await addItem(p.id, 'approval', { target: id, decision: act === 'hrs-ok' ? 'approved' : 'rejected', internal: true }); await syncEarnings(); render();
     } else if(act === 'pay'){
       const e2 = earnings(p); if(!e2.due) return;
       const amt = Math.round(parseFloat(prompt('Amount paid to the designer (₹)', String(e2.due))) || 0); if(!amt) return;
@@ -344,11 +378,18 @@
   });
   document.addEventListener('change', async function(e){
     const tab = document.getElementById('tabProjects'); if(!tab || !tab.contains(e.target)) return;
+    const dz = e.target.getAttribute('data-pj-designer');
+    if(dz){
+      if(!state.projectDesigners) state.projectDesigners = {};
+      if(e.target.checked) state.projectDesigners[dz] = true; else delete state.projectDesigners[dz];
+      scheduleSave(); if(typeof cloudPublishPacks === 'function') cloudPublishPacks();
+      showToast(e.target.checked ? 'Projects tab switched on in their Partner app' : 'Removed'); return;
+    }
     const p = X.sel && project(X.sel); if(!p) return;
     const f = e.target.getAttribute('data-pf'), tf = e.target.getAttribute('data-pt');
     if(f){
       const v = e.target.value;
-      if(f === 'designer_id' || f === 'client_id') p[f] = v || null;
+      if(f === 'designer_id' || f === 'client_id'){ p[f] = v || null; if(f === 'client_id') p.data = Object.assign({}, p.data, { clientName: clientName(v) || '' }); }
       else if(f === 'refs') p.data = Object.assign({}, p.data, { refs: v.split('\n').map(function(s){ return s.trim(); }).filter(isUrl).slice(0, 20) });
       else p.data = Object.assign({}, p.data, { [f]: ['qty', 'targetPrice', 'budgetGrams'].indexOf(f) !== -1 ? (+v || 0) : String(v).slice(0, f === 'brief' ? 4000 : 200) });
       if(await saveProject(p)){ showToast('Saved'); if(f === 'stage' || f === 'title') render(); }
@@ -360,7 +401,7 @@
 
   const css = document.createElement('style');
   css.textContent =
-    '#tabProjects .pj-dim{color:var(--dim);font-size:12px}' +
+    '#tabProjects .pj-dim{color:var(--dim);font-size:12px} #tabProjects .pj-chip{display:inline-flex;flex-direction:row;align-items:center;gap:4px;margin-right:10px;color:var(--text)}' +
     '#tabProjects .pj-btn{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:5px 11px;font:12px "JetBrains Mono",monospace;cursor:pointer;margin:2px 4px 2px 0}' +
     '#tabProjects .pj-btn.primary{background:var(--cyan);border-color:var(--cyan);color:#0d1117;font-weight:600}' +
     '#tabProjects .pj-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px}' +
