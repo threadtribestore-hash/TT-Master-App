@@ -1720,6 +1720,7 @@
     <div class="tab-dropdown" id="tabDropdown">
       <div class="tab-group-label">Main</div>
       <button class="tab-btn active" data-tab="home">Home</button>
+      <button class="tab-btn" data-tab="control">Control Room</button>
       <div class="tab-group-label">Operations</div>
       <button class="tab-btn" data-tab="orders">Orders</button>
       <button class="tab-btn" data-tab="clients">Clients</button>
@@ -1741,6 +1742,8 @@
       <button class="tab-btn" data-tab="help">Help</button>
     </div>
   </div>
+
+  <div id="tabControl" style="display:none;"><div id="controlRoot"></div></div>
 
   <div id="tabHome">
     <!-- KPI Cards -->
@@ -3018,6 +3021,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     tabBar.classList.remove('open');
     const target = btn.getAttribute('data-tab');
     document.getElementById('tabHome').style.display = target === 'home' ? '' : 'none';
+    document.getElementById('tabControl').style.display = target === 'control' ? '' : 'none';
     document.getElementById('tabBI').style.display = target === 'bi' ? '' : 'none';
     document.getElementById('tabProduction').style.display = target === 'production' ? '' : 'none';
     document.getElementById('tabOrders').style.display = target === 'orders' ? '' : 'none';
@@ -3034,6 +3038,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     document.getElementById('tabSettings').style.display = target === 'settings' ? '' : 'none';
     document.getElementById('tabHelp').style.display = target === 'help' ? '' : 'none';
     if(target === 'home') renderHome();
+    if(target === 'control' && typeof renderControlRoom === 'function') renderControlRoom();
     // Orders / Quotes / Lifetime Revenue are computed from linked orders, so recompute
     // fresh whenever this tab is opened rather than trying to track every order edit.
     if(target === 'clients') renderClients();
@@ -17829,6 +17834,7 @@ setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
 <script src="buyers-admin.js?v=12"></script>
+<script src="control-room.js?v=1"></script>
 
 
 <datalist id="indianStatesList">

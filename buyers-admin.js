@@ -588,6 +588,11 @@
       '<div class="ba-cols">' + table('By product', top('product')) + table('By city', top('city')) + table('By brand partner', top('client_name')) + '</div>';
   }
 
+  // Read-only view of buyer data for the Control Room tab (control-room.js).
+  window.TTBuyers = {
+    requests: function(){ return B.requests; }, prod: function(){ return B.prod; },
+    reply: reply, clientName: clientName, refresh: function(){ return pull(); }
+  };
   window.renderBuyers = function(){
     if(!WEB.at) loadWebToys().then(function(){ refreshViews(); });
     if(!R.at || Date.now() - R.at > 300000) loadResale(); render(); if(typeof cloudIsOn === 'function' && cloudIsOn() && !B.at) pull().catch(function(e){ console.warn('[buyers]', e); }); };
