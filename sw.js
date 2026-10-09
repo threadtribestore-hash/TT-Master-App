@@ -1,7 +1,7 @@
 // Offline support for Thread Tribe Studio.
 // Bump VERSION whenever index.html changes so phones pick up the new build.
-const VERSION = 'tt-studio-202610101300';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './config.js', './buyers-admin.js?v=12', './partner-planning.js?v=1', './control-room.js?v=4', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
+const VERSION = 'tt-studio-202610101500';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './config.js', './buyers-admin.js?v=12', './partner-planning.js?v=2', './control-room.js?v=4', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
 const THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];
 
 self.addEventListener('install', function(e){

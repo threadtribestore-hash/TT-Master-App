@@ -269,6 +269,20 @@
     state.ponRewards = ts; scheduleSave(); showToast('Reward tiers saved — partners see them on the next sync');
   });
 
+  // Studio only republished job packs after a local edit, so partners waited for someone
+  // to change something before seeing scorecards or new job details. Ride along with the
+  // regular pull: refresh partner planning data and republish packs every 2 minutes
+  // (cloudPublishPacks only uploads packs whose content changed).
+  let lastPublish = 0;
+  const origPull = cloudPullReports;
+  cloudPullReports = async function(){
+    await origPull();
+    try{
+      await load();
+      if(Date.now() - lastPublish > 120000){ lastPublish = Date.now(); await cloudPublishPacks(); }
+    }catch(e){ console.warn('[planning] sync', e); }
+  };
+
   // For the Control Room: partner capacity for the calculator, pickups for the calendar.
   window.TTPartners = { freePerDay: freePerDay, pickups: pickups, load: load, ready: function(){ return !!PP.at && !PP.missing; } };
 
