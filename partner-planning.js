@@ -269,6 +269,28 @@
     state.ponRewards = ts; scheduleSave(); showToast('Reward tiers saved — partners see them on the next sync');
   });
 
+  // Studio ignores a partner moving a job backwards (an old report must not undo real
+  // progress). The Partner app's "Back to …" sends revert:true, which is deliberate, so
+  // apply those first; the normal update then handles the other fields.
+  const origApply = ponApplyUpdateJobs;
+  ponApplyUpdateJobs = function(partner, jobs, stamp){
+    let reverted = 0;
+    (jobs || []).forEach(function(u){
+      if(!u || !u.revert) return;
+      const j = state.pon.jobs.find(function(x){ return x.id === u.id && x.partnerId === partner.id; });
+      if(!j || !ponIsOpen(j)) return;
+      const from = PON_PARTNER_FLOW.indexOf(j.status), to = PON_PARTNER_FLOW.indexOf(u.status);
+      if(to < 1 || to >= from) return;                     // back to Accepted or Printing only
+      j.status = u.status;
+      if(from >= PON_PARTNER_FLOW.indexOf('shipped')) j.shippedDate = '';
+      j.partnerUpdatedAt = typeof stamp === 'string' && stamp ? stamp.slice(0, 40) : new Date().toISOString();
+      reverted++;
+    });
+    const r = origApply(partner, jobs, stamp);
+    if(reverted && r) r.updated = Math.max(r.updated || 0, reverted);
+    return r;
+  };
+
   // Studio only republished job packs after a local edit, so partners waited for someone
   // to change something before seeing scorecards or new job details. Ride along with the
   // regular pull: refresh partner planning data and republish packs every 2 minutes
