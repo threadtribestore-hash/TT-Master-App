@@ -325,7 +325,7 @@
     } else if(act === 'file-add'){
       const url = (document.getElementById('pjFileUrl').value || '').trim();
       if(!isUrl(url)){ showToast('Paste a full https:// link'); return; }
-      await addItem(p.id, 'file', { label: (document.getElementById('pjFileLabel').value || '').trim().slice(0, 120), url: url }); render();
+      await addItem(p.id, 'file', { label: (document.getElementById('pjFileLabel').value || '').trim().slice(0, 120), url: url, internal: true }); render();
     } else if(act === 'req-done' || act === 'req-decline'){
       const row = items(p.id, 'request').find(function(x){ return x.id === id; }); if(!row) return;
       const inp = tab.querySelector('[data-reqreply="' + id + '"]');
