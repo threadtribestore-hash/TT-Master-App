@@ -211,10 +211,12 @@
         photo: w.photo, base: Math.round(w.retail || 0), price: tierPrice(Math.round(w.retail || 0), orderDiscount(pct, terms().minPerProduct)), retail: w.retail, onRequest: !(w.retail > 0) });
     });
     // Designs added in Studio's Shop tab (shop-admin.js).
-    const have = {}; out.forEach(function(x){ have[nameKey(x.name)] = 1; });
+    // A Shop design replaces a same-named catalogue item that has no MRP yet.
+    const have = {}; out.forEach(function(x){ if(!x.onRequest) have[nameKey(x.name)] = 1; });
     (window.TTShop ? window.TTShop.list() : []).forEach(function(sp){
       if(have[nameKey(sp.name)]) return;
       const mrp = Math.round(+sp.mrp || 0);
+      for(let k = out.length - 1; k >= 0; k--){ if(out[k].onRequest && nameKey(out[k].name) === nameKey(sp.name)) out.splice(k, 1); }
       out.push({ id: 'sp:' + sp.id, name: sp.name, category: sp.category, kind: /toy|clicker/i.test(sp.category) ? 'toy' : 'goods', weight: +sp.weight || 0, hours: +sp.hours || 0,
         color: '', size: '', material: '', photo: (sp.photos || [])[0] || '', base: mrp, price: tierPrice(mrp, orderDiscount(pct, terms().minPerProduct)), retail: mrp, onRequest: !(mrp > 0) });
     });
