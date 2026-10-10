@@ -109,7 +109,7 @@
       const views = current.concat(recent);
       const days = last ? Math.round((new Date(today() + 'T00:00:00') - new Date(last.slice(0, 10) + 'T00:00:00')) / 86400000) : null;
       return { id: c.id, name: c.name || 'Client', type: c.type || '', city: c.city || '', contact: c.contact || '', phone: c.phone || '', email: c.email || '',
-        address: c.address || '', gstin: c.gstin || '', channel: ch, buyerApp: !!c.buyerApp, lastOrder: last.slice(0, 10), daysSince: days,
+        address: c.address || '', gstin: c.gstin || '', instagram: c.instagram || '', channel: ch, buyerApp: !!c.buyerApp, lastOrder: last.slice(0, 10), daysSince: days,
         value90: Math.round(value90), lifetime: Math.round(lifetime), orderCount: count, openOrders: current.length,
         due: views.reduce(function(t, o){ return t + (o.due || 0); }, 0), orders: current, recent: recent };
     }).filter(Boolean);
@@ -198,7 +198,7 @@
       const d = l.data || {};
       const matches = (state.clients || []).filter(function(c){ const a = (c.name || '').toLowerCase(), b = (d.business || '').toLowerCase(); return b && a && (a.indexOf(b) !== -1 || b.indexOf(a) !== -1); });
       return '<div class="sa-row"><div><b>' + esc(d.business || d.contact || 'Lead') + '</b> <span class="sa-dim">' + CH_ICON[l.channel] + ' ' + esc(CH[l.channel] || '') + ' · won by ' + esc(repName(l.owner_email)) + (d.wonValue ? ' · first order ~' + money(d.wonValue) : '') + '</span>' +
-        '<div class="sa-dim">' + esc([d.contact, d.phone, d.email, d.market, d.city, d.gstin].filter(Boolean).join(' · ')) + '</div>' + (d.wonNote ? '<div>“' + esc(d.wonNote) + '”</div>' : '') + '</div>' +
+        '<div class="sa-dim">' + esc([d.contact, d.phone, d.email, d.instagram ? '@' + d.instagram : '', d.market, d.city, d.gstin].filter(Boolean).join(' · ')) + '</div>' + (d.wonNote ? '<div>“' + esc(d.wonNote) + '”</div>' : '') + '</div>' +
         '<div><button class="sa-btn primary" data-sa="make-client" data-id="' + esc(l.id) + '">Create client</button>' +
         (matches.length ? '<select data-sa-link="' + esc(l.id) + '"><option value="">…or link to existing</option>' + matches.map(function(c){ return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>'; }).join('') + '</select>' : '') + '</div></div>';
     }).join('') + '</div>';
@@ -283,7 +283,7 @@
       const d = l.data || {};
       if(!confirm('Create client “' + (d.business || d.contact) + '” in Studio?')) return;
       const c = { id: newId(), name: (d.business || d.contact || 'Client').slice(0, 120), type: d.type || CH_TYPE[l.channel] || '', city: d.city || '', address: [d.address, d.market].filter(Boolean).join(', '),
-        contact: d.contact || '', phone: d.phone || '', email: d.email || '', instagram: '', gstin: d.gstin || '', totalOrders: 0, revenue: 0, salesChannel: l.channel,
+        contact: d.contact || '', phone: d.phone || '', email: d.email || '', instagram: d.instagram ? '@' + d.instagram : '', gstin: d.gstin || '', totalOrders: 0, revenue: 0, salesChannel: l.channel,
         notes: 'Won by ' + repName(l.owner_email) + ' (Sales app' + (d.source ? ', via ' + d.source : '') + ').' + (d.wonNote ? ' ' + d.wonNote : '') };
       state.clients.push(c);
       scheduleSave(); if(typeof renderClients === 'function') renderClients();
