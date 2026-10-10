@@ -8,7 +8,7 @@
 (function(){
   if(window.TT_STOCK_MODE) return;
 
-  const X = { items: [], loaded: false, missing: false, drafts: [], publishing: false, progress: '', bulk: { category: '', mrp: '' } };
+  const X = { items: [], loaded: false, missing: false, drafts: [], publishing: false, progress: '', bulk: { category: '', mrp: '' }, justPublished: [] };
   function esc(s){ return escapeHtml(s == null ? '' : String(s)); }
   function on(){ return typeof cloudIsOn === 'function' && cloudIsOn(); }
   function money(v){ return '₹' + Math.round(v || 0).toLocaleString('en-IN'); }
@@ -27,6 +27,47 @@
     find: function(pid){ const id = /^sp:/.test(pid || '') ? pid.slice(3) : null; return id ? X.items.find(function(x){ return x.id === id; }) : null; },
     load: load
   };
+
+  // ---------- Product Catalog link ----------
+  // A published design can become a full Studio product (weight, print time, material, colour)
+  // so orders, the production queue and costing work for it like any other product.
+  function catalogItemFor(x){
+    const cat = state.productCatalog || [], key = String(x.name || '').trim().toLowerCase();
+    return cat.find(function(i){ return i.shopId === x.id; }) || cat.find(function(i){ return String(i.name || '').trim().toLowerCase() === key; }) || null;
+  }
+  async function addAsProduct(id, f){
+    const x = X.items.find(function(i){ return i.id === id; }); if(!x) return false;
+    const weight = Math.max(0, parseFloat(f.weight) || 0), hours = Math.max(0, parseFloat(f.hours) || 0);
+    if(!(weight > 0) || !(hours > 0)){ showToast('Add the weight and print time'); return false; }
+    if(!state.productCatalog) state.productCatalog = [];
+    let item = catalogItemFor(x), created = false;
+    if(!item){ item = { id: newId(), name: x.name, category: x.category, size: '', wholesalePrice: null }; state.productCatalog.push(item); created = true; }
+    Object.assign(item, { shopId: x.id, weight: weight, hours: hours, material: String(f.material || 'PLA').trim() || 'PLA', color: String(f.color || '').trim(),
+      d2cPrice: Math.round(+x.mrp || 0), photo: (x.photos || [])[0] || item.photo || '' });
+    if(typeof ensureCatalogItemDefaults === 'function') ensureCatalogItemDefaults(item);
+    scheduleSave();
+    if(typeof renderProductCatalog === 'function') renderProductCatalog();
+    // Keep the shop's copy in step for the below-cost check.
+    const r = await cloud.sb.from('shop_products').update({ weight: weight, hours: hours }).eq('id', id);
+    if(!r.error){ x.weight = weight; x.hours = hours; }
+    return created ? 'added' : 'updated';
+  }
+  function productForm(x, compact){
+    const it = catalogItemFor(x) || {};
+    const cost = it.weight && typeof unitProductionCost === 'function' ? unitProductionCost({ fil: it.weight, hrs: it.hours, material: it.material, color: it.color }) : 0;
+    return '<div class="sh-pf" data-pf="' + esc(x.id) + '">' +
+      '<label>Weight g<input type="number" min="0" step="0.1" data-pff="weight" value="' + esc(it.weight || x.weight || '') + '"></label>' +
+      '<label>Print time h<input type="number" min="0" step="0.05" data-pff="hours" value="' + esc(it.hours || x.hours || '') + '"></label>' +
+      '<label>Material<input data-pff="material" value="' + esc(it.material || 'PLA') + '" style="width:70px"></label>' +
+      '<label>Colour<input data-pff="color" value="' + esc(it.color || '') + '" placeholder="optional" style="width:90px"></label>' +
+      '<button class="sh-btn primary" data-sh="add-product" data-id="' + esc(x.id) + '">' + (it.id ? 'Update product' : 'Add as product') + '</button>' +
+      (cost ? '<span class="sh-dim">costs ' + money(cost) + ' to make · ' + Math.round(100 * (1 - cost / x.mrp)) + '% max safe discount</span>' : '') + '</div>';
+  }
+  function readProductForm(id){
+    const el = document.querySelector('#tabShop [data-pf="' + id + '"]'), f = {};
+    if(el) el.querySelectorAll('[data-pff]').forEach(function(i){ f[i.getAttribute('data-pff')] = i.value; });
+    return f;
+  }
 
   // ---------- categories offered in the shop ----------
   function categories(){
@@ -100,6 +141,7 @@
         const r = await cloud.sb.from('shop_products').insert(row);
         if(r.error) throw r.error;
         X.items.unshift(Object.assign({ created_at: new Date().toISOString() }, row));
+        X.justPublished.push(id);
         X.drafts = X.drafts.filter(function(x){ return x !== d; });
         done++;
       }catch(e){ d.err = 'Couldn’t publish: ' + (e.message || e); failed++; }
@@ -132,16 +174,20 @@
         '<button class="sh-btn primary big" data-sh="publish"' + (X.publishing ? ' disabled' : '') + '>' + (X.publishing ? esc(X.progress) : '2 · Publish ' + X.drafts.length + ' design' + (X.drafts.length === 1 ? '' : 's')) + '</button>';
     }
     h += '</div>';
+    // after publishing: make them full products
+    const fresh = X.justPublished.map(function(id){ return X.items.find(function(i){ return i.id === id; }); }).filter(function(x){ return x && !catalogItemFor(x); });
+    if(fresh.length) h += '<div class="panel sh-next"><div class="panel-title" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>Published ✓ — add ' + (fresh.length === 1 ? 'it as a product' : 'them as products') + '</span><button class="sh-btn" data-sh="skip-products">Later</button></div>' +
+      fresh.map(function(x){ return '<div class="sh-row">' + (x.photos && x.photos[0] ? '<img class="sh-th" src="' + esc(x.photos[0]) + '" alt="">' : '') + '<b>' + esc(x.name) + '</b> <span class="sh-dim">' + esc(x.category) + ' · MRP ' + money(x.mrp) + '</span>' + productForm(x) + '</div>'; }).join('') + '</div>';
     // manage
     h += '<div class="panel"><div class="panel-title">Shop designs <span class="sh-dim">' + live + ' live' + (X.items.length > live ? ' · ' + (X.items.length - live) + ' hidden' : '') + '</span></div>' +
-      (X.items.length ? '<p class="sh-dim">Changes save as you type. Weight and print time are optional — they feed the below-cost check and production planning.</p><div style="overflow-x:auto"><table class="ba-table"><tr><th></th><th>Name</th><th>Category</th><th class="num">MRP ₹</th><th class="num">Weight g</th><th class="num">Print h</th><th>Status</th><th></th></tr>' +
+      (X.items.length ? '<div style="overflow-x:auto"><table class="ba-table"><tr><th></th><th>Name</th><th>Category</th><th class="num">MRP ₹</th><th>Product</th><th>Status</th><th></th></tr>' +
         X.items.map(function(x){
           return '<tr' + (x.status === 'live' ? '' : ' style="opacity:.55"') + '><td>' + (x.photos && x.photos[0] ? '<img class="sh-th" src="' + esc(x.photos[0]) + '" alt="">' : '') + '</td>' +
             '<td><input data-item="' + esc(x.id) + '" data-f="name" value="' + esc(x.name) + '"></td>' +
             '<td><input data-item="' + esc(x.id) + '" data-f="category" list="shCats" value="' + esc(x.category) + '" style="width:140px"></td>' +
             '<td class="num"><input data-item="' + esc(x.id) + '" data-f="mrp" type="number" min="1" value="' + esc(x.mrp) + '" style="width:80px"></td>' +
-            '<td class="num"><input data-item="' + esc(x.id) + '" data-f="weight" type="number" min="0" value="' + esc(x.weight || '') + '" style="width:70px"></td>' +
-            '<td class="num"><input data-item="' + esc(x.id) + '" data-f="hours" type="number" min="0" step="0.1" value="' + esc(x.hours || '') + '" style="width:60px"></td>' +
+            '<td>' + (function(){ const it = catalogItemFor(x); return it ? '<span class="sh-dim">✓ ' + (it.weight || 0) + ' g · ' + (it.hours || 0) + ' h</span> <button class="sh-btn" data-sh="edit-product" data-id="' + esc(x.id) + '">Edit</button>'
+              : '<button class="sh-btn" data-sh="edit-product" data-id="' + esc(x.id) + '">Add as product</button>'; })() + (X.editing === x.id ? productForm(x) : '') + '</td>' +
             '<td><button class="sh-btn" data-sh="toggle" data-id="' + esc(x.id) + '">' + (x.status === 'live' ? 'Live' : 'Hidden') + '</button></td>' +
             '<td><button class="sh-btn" data-sh="delete" data-id="' + esc(x.id) + '">Delete</button></td></tr>';
         }).join('') + '</table></div>' : '<p class="sh-dim">' + (X.loaded ? 'No designs added here yet.' : 'Loading…') + '</p>') + '</div>';
@@ -152,9 +198,14 @@
   // ---------- events ----------
   async function saveItem(id, patch){
     const x = X.items.find(function(i){ return i.id === id; }); if(!x) return;
+    const linked = catalogItemFor(x);
     const r = await cloud.sb.from('shop_products').update(patch).eq('id', id);
     if(r.error){ showNoticeModal('Couldn’t save: ' + r.error.message); return; }
     Object.assign(x, patch); showToast('Saved');
+    if(linked && (patch.name || patch.category || patch.mrp)){
+      if(patch.name) linked.name = patch.name; if(patch.category) linked.category = patch.category; if(patch.mrp) linked.d2cPrice = patch.mrp;
+      scheduleSave(); if(typeof renderProductCatalog === 'function') renderProductCatalog();
+    }
     if(typeof cloudPublishPacks === 'function') cloudPublishPacks();
   }
   document.addEventListener('click', async function(e){
@@ -162,6 +213,12 @@
     const b = e.target.closest('[data-sh]'); if(!b) return;
     const act = b.getAttribute('data-sh'), id = b.getAttribute('data-id');
     if(act === 'publish') publish();
+    else if(act === 'add-product'){
+      const res = await addAsProduct(id, readProductForm(id));
+      if(res){ X.editing = null; render(); showToast(res === 'added' ? 'Added to the Product Catalog' : 'Product updated'); if(typeof cloudPublishPacks === 'function') cloudPublishPacks(); }
+    }
+    else if(act === 'edit-product'){ X.editing = X.editing === id ? null : id; render(); }
+    else if(act === 'skip-products'){ X.justPublished = []; render(); }
     else if(act === 'drop-draft'){ readDraftInputs(); X.drafts = X.drafts.filter(function(d){ return d.key !== b.getAttribute('data-k'); }); render(); }
     else if(act === 'clear-drafts'){ X.drafts = []; render(); }
     else if(act === 'apply-all'){
@@ -223,6 +280,8 @@
     '#tabShop .sh-x{position:absolute;top:12px;right:12px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:12px;width:24px;height:24px;cursor:pointer}' +
     '#tabShop .sh-err{color:var(--red);font-size:12px}' +
     '#tabShop input{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:12.5px inherit}' +
-    '#tabShop .sh-card input{width:100%;box-sizing:border-box} #tabShop .sh-th{width:40px;height:40px;object-fit:cover;border-radius:6px}';
+    '#tabShop .sh-card input{width:100%;box-sizing:border-box} #tabShop .sh-th{width:40px;height:40px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px}' +
+    '#tabShop .sh-next{border:1px solid var(--cyan)} #tabShop .sh-row{padding:10px 0;border-bottom:1px dashed var(--line)}' +
+    '#tabShop .sh-pf{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px} #tabShop .sh-pf label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--dim)} #tabShop .sh-pf input{width:80px}';
   document.head.appendChild(css);
 })();
