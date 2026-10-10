@@ -46,9 +46,15 @@
     };
     return test(item.category) || test(item.name);
   }
+  // Toys: weight x Rs 4. Other shop products (organisers, vases, hampers…): the wholesale price
+  // set in the Product Catalog. Anything without one is "price on request". Lamps aren't offered.
   function basePrice(item){
+    const k = kindOf(item);
+    if(k === 'lamp') return 0;
     const g = parseFloat(item.weight) || 0;
-    return g > 0 && kindOf(item) === 'toy' ? Math.round(g * TOY_RATE) : 0;
+    if(k === 'toy') return g > 0 ? Math.round(g * TOY_RATE) : 0;
+    const w = parseFloat(item.wholesalePrice) || 0;
+    return w > 0 ? Math.round(w) : 0;
   }
   function tierPrice(base, pct){ return Math.round(base * (1 - (pct || 0) / 100)); }
 
@@ -117,16 +123,28 @@
     if(/^https?:\/\//.test(item.photo)) return item.photo;
     return B.thumbs[thumbKey(item)] || '';
   }
-  // ---------- website toys (threadtribe.co) ----------
-  // Every toy on the store shows in the Buyer app with its photo and retail price.
-  // Toys also in Studio's catalogue with a weight are priced from it (weight x Rs 4);
-  // the rest are "price on request" until they get a weight, and Studio sets their
-  // price when it confirms the order.
-  const SHOP_URL = 'https://threadtribe.co', SHOP_TYPES = ['Flexi Toys', 'Fidget Clickers'], WEB_KEY = 'tt-buyer-web-toys-v1';
+  // ---------- website products (threadtribe.co) ----------
+  // Every product on the store except lamps shows in the Buyer app with its photo and MRP.
+  // Products also in Studio's catalogue are priced from it (toys by weight, the rest by their
+  // wholesale price); the rest are "price on request" and Studio sets the price on confirming.
+  const SHOP_URL = 'https://threadtribe.co', WEB_KEY = 'tt-buyer-web-shop-v2';
   const WEB = { items: [], at: 0, loading: null };
   try{ const c = JSON.parse(localStorage.getItem(WEB_KEY)); if(c && Array.isArray(c.items)){ WEB.items = c.items; WEB.at = c.at || 0; } }catch(e){}
   function cleanName(t){ return String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim(); }
   function nameKey(t){ return cleanName(t).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  // Shop category for a website product; '' leaves it out (lamps and lamp parts, gift cards, add-ons).
+  function webCategory(x){
+    const t = String(x.product_type || '').trim(), n = cleanName(x.title).toLowerCase(), tags = (x.tags || []).join(' ').toLowerCase(), tn = t.toLowerCase() + ' ' + n;
+    if(/lamp|light|pendant|chandelier|sconce|lantern/.test(tn) || /\blamp/.test(tags)) return '';
+    if(/gift card/.test(n) || /^(accessory|accessories|add-on|add on)$/i.test(t)) return '';
+    if(t === 'Flexi Toys' || /\bflexi\b/.test(tags)) return 'Flexi Toys';
+    if(t === 'Fidget Clickers') return 'Fidget Clickers';
+    if(/hamper|upcycling box/.test(tn)) return 'Gift Hampers';
+    if(/coaster/.test(n)) return 'Coasters';
+    if(/vase|planter/.test(tn)) return 'Vases & Planters';
+    if(/organi[sz]er|desk|pen (stand|holder)|cable|phone rest|laptop|wrist rest|headphone|calendar|clip|tray/.test(tn)) return 'Desk & Organisers';
+    return 'Home & Living';
+  }
   function loadWebToys(force){
     if(WEB.loading) return WEB.loading;
     if(!force && WEB.at && Date.now() - WEB.at < 6 * 3600 * 1000) return Promise.resolve();
@@ -140,10 +158,10 @@
           all = all.concat(ps);
           if(ps.length < 250) break;
         }
-        const items = all.filter(function(x){ return SHOP_TYPES.indexOf(x.product_type) !== -1; }).map(function(x){
+        const items = all.filter(function(x){ return !!webCategory(x); }).map(function(x){
           const img = x.images && x.images[0] ? x.images[0].src : '';
           const prices = (x.variants || []).map(function(v){ return parseFloat(v.price) || 0; }).filter(function(v){ return v > 0; });
-          return { handle: x.handle, name: cleanName(x.title), category: x.product_type, retail: prices.length ? Math.min.apply(null, prices) : 0, published: (x.published_at || x.created_at || '').slice(0, 10),
+          return { handle: x.handle, name: cleanName(x.title), category: webCategory(x), retail: prices.length ? Math.min.apply(null, prices) : 0, published: (x.published_at || x.created_at || '').slice(0, 10),
             photo: img ? img + (img.indexOf('?') === -1 ? '?' : '&') + 'width=600' : '' };
         });
         if(items.length){ WEB.items = items; WEB.at = Date.now(); try{ localStorage.setItem(WEB_KEY, JSON.stringify({ items: items, at: WEB.at })); }catch(e){} }
@@ -156,7 +174,12 @@
     const h = /^web:/.test(productId || '') ? productId.slice(4) : null;
     return h ? WEB.items.find(function(w){ return w.handle === h; }) : null;
   }
-  function studioToys(){ return (state.productCatalog || []).filter(function(i){ return (i.name || '').trim() && kindOf(i) === 'toy'; }); }
+  // Studio catalogue items offered in the Buyer app: every toy, plus any other non-lamp product
+  // that is also on the website (so private or custom one-off items never show).
+  function studioToys(){
+    const web = {}; WEB.items.forEach(function(w){ web[nameKey(w.name)] = 1; });
+    return (state.productCatalog || []).filter(function(i){ const k = kindOf(i); return (i.name || '').trim() && (k === 'toy' || (k !== 'lamp' && web[nameKey(i.name)])); });
+  }
 
   function catalogue(pct){
     const web = {};
@@ -168,13 +191,13 @@
       // Suggested retail: a D2C price set by hand, else the website price. The auto D2C
       // formula is lamp-only and would put a 10 g clicker at Rs 500.
       const retail = i.d2cPrice != null ? (parseFloat(i.d2cPrice) || 0) : (w ? w.retail : 0);
-      return { id: i.id, name: i.name.trim(), category: i.category || (w && w.category) || '', kind: 'toy', weight: parseFloat(i.weight) || 0, hours: parseFloat(i.hours) || 0,
+      return { id: i.id, name: i.name.trim(), category: (w && w.category) || i.category || '', kind: kindOf(i) === 'toy' ? 'toy' : 'goods', weight: parseFloat(i.weight) || 0, hours: parseFloat(i.hours) || 0,
         color: i.color || '', size: i.size || '', material: i.material || '', photo: photoOf(i) || (w ? w.photo : ''),
         base: base, price: tierPrice(base, pct), retail: retail, onRequest: base <= 0 };
     });
     WEB.items.forEach(function(w){
       if(used[w.handle]) return;
-      out.push({ id: 'web:' + w.handle, name: w.name, category: w.category, kind: 'toy', weight: 0, hours: 0, color: '', size: '', material: '',
+      out.push({ id: 'web:' + w.handle, name: w.name, category: w.category, kind: /toy|clicker/i.test(w.category) ? 'toy' : 'goods', weight: 0, hours: 0, color: '', size: '', material: '',
         photo: w.photo, base: 0, price: 0, retail: w.retail, onRequest: true });
     });
     return out.sort(function(a, b){ return a.name.localeCompare(b.name); });
@@ -326,7 +349,7 @@
       const item = (state.productCatalog || []).find(function(i){ return i.id === l.productId; });
       const web = item ? null : webItem(l.productId);
       const base = item ? basePrice(item) : 0;
-      return { line: l, item: item, web: web, name: item ? item.name : web ? web.name : (l.name || '?'), offered: item ? kindOf(item) === 'toy' : !!web || /^web:/.test(l.productId || ''),
+      return { line: l, item: item, web: web, name: item ? item.name : web ? web.name : (l.name || '?'), offered: item ? kindOf(item) !== 'lamp' : !!web || /^web:/.test(l.productId || ''),
         qty: Math.max(0, Math.round(parseFloat(l.qty) || 0)), base: base, seen: parseFloat(l.unitPrice) || 0 };
     });
     // Every toy counts toward the order size, priced or on request.
@@ -491,7 +514,7 @@
     const done = B.requests.filter(function(q){ return q.status !== 'open'; }).slice(0, 30);
     const hiddenD2c = (state.clients || []).filter(function(c){ return !isTrade(c); }).length;
     const clients = (state.clients || []).filter(isTrade).sort(function(a, b){ return (b.buyerApp ? 1 : 0) - (a.buyerApp ? 1 : 0) || (a.name || '').localeCompare(b.name || ''); });
-    const cat = (state.productCatalog || []).filter(function(i){ return (i.name || '').trim() && kindOf(i) === 'toy'; });
+    const cat = studioToys();
     const priced = cat.filter(function(i){ return basePrice(i) > 0; });
     const unpriced = cat.filter(function(i){ return basePrice(i) <= 0; });
     const T = terms();
