@@ -10,7 +10,7 @@
 
   const CH = { toys: 'Toys', lighting: 'Lighting', gifting: 'HoReCa & gifting' };
   const CH_ICON = { toys: '🧸', lighting: '💡', gifting: '🎁' };
-  const CH_TYPE = { toys: 'Reseller', lighting: 'Designers & Studio', gifting: 'Corporate' };
+  const CH_TYPE = { toys: 'Reseller', lighting: 'Lamp wholesaler', gifting: 'Corporate' };
   const SALES_APP_URL = 'https://threadtribestore-hash.github.io/TT-Sales-App/';
   const STAGES = [['new', 'New'], ['contacted', 'Contacted'], ['meeting', 'Meeting'], ['quote', 'Quote / sample'], ['won', 'Won'], ['lost', 'Lost']];
   const X = { reps: [], leads: [], acts: [], missing: false, loaded: false, hashes: {}, publishing: false };
@@ -29,7 +29,7 @@
   function inferChannel(c){
     const t = ((c.type || '') + ' ' + (c.notes || '')).toLowerCase();
     if(/\bd2c\b|consumer|individual/.test(t)) return '';
-    if(/design|architect|interior|studio|light|lamp|builder/.test(t)) return 'lighting';
+    if(/design|architect|interior|studio|light|lamp|electrical|builder/.test(t)) return 'lighting';
     if(/hotel|restaurant|caf[eé]|horeca|corporate|gift|hamper|event/.test(t)) return 'gifting';
     return 'toys';
   }
