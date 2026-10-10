@@ -255,7 +255,7 @@
       client: { id: c.id, name: c.name || '', contact: c.contact || '', phone: c.phone || '', email: emailOf(c), gstin: gstinOf(c), address: c.address || '', city: c.city || '', state: c.state || '' },
       // The tier name is not sent: buyers see their price, not their rank.
       terms: Object.assign(terms(), { tierPct: tier.pct, note: 'Prices are ex-GST. Orders are confirmed by Thread Tribe before production starts.' }),
-      catalogue: catalogue(tier.pct),
+      catalogue: catalogue(tier.pct).filter(function(i){ return !i.onRequest; }),
       trending: trending(),
       collections: activeCollections(),
       orders: ordersFor(c.id)
@@ -583,7 +583,7 @@
 
     const all = catalogue(0), noMrp = all.filter(function(x){ return x.onRequest; });
     html += '<div class="panel"><div class="panel-title">Price check</div><p class="ba-dim">The Buyer app shows ' + all.length + ' products (every non-lamp product on threadtribe.co plus the toys in your Product Catalog). ' +
-      (all.length - noMrp.length) + ' have an MRP, so they’re priced automatically from the discount table; ' + noMrp.length + ' show as <b>price on request</b> until they get one (set a D2C price in the Product Catalog, or a price on the website).</p>' +
+      (all.length - noMrp.length) + ' have an MRP, so they’re priced automatically from the discount table. ' + (noMrp.length ? noMrp.length + ' have no MRP and are <b>hidden from the Buyer app</b> until they get one (set a D2C price in the Product Catalog, or a price on the website):' : 'Every product has an MRP.') + '</p>' +
       (noMrp.length ? '<ul class="ba-list">' + noMrp.slice(0, 60).map(function(i){ return '<li>' + esc(i.name) + ' <span class="ba-dim">(' + esc(i.category || 'no category') + ')</span></li>'; }).join('') + '</ul>' : '') + '</div>';
 
     root.innerHTML = html;

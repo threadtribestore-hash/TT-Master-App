@@ -63,6 +63,7 @@
     const out = { toys: [], lighting: [], gifting: [] };
     const toys = window.TTBuyers && window.TTBuyers.catalogue ? window.TTBuyers.catalogue() : [];
     toys.forEach(function(t){
+      if(t.onRequest) return;
       const handle = /^web:/.test(t.id) ? t.id.slice(4) : '';
       out.toys.push({ id: t.id, name: t.name, category: t.category || '', photo: httpPhoto(t.photo), trade: t.onRequest ? 0 : t.price, mrp: t.retail || 0,
         url: handle ? 'https://threadtribe.co/products/' + handle : '' });
