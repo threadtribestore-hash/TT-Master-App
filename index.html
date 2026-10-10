@@ -1722,6 +1722,7 @@
       <button class="tab-btn active" data-tab="home">Home</button>
       <button class="tab-btn" data-tab="control">Control Room</button>
       <button class="tab-btn" data-tab="projects">Projects</button>
+      <button class="tab-btn" data-tab="sales">Sales</button>
       <div class="tab-group-label">Operations</div>
       <button class="tab-btn" data-tab="orders">Orders</button>
       <button class="tab-btn" data-tab="clients">Clients</button>
@@ -1746,6 +1747,7 @@
 
   <div id="tabControl" style="display:none;"><div id="controlRoot"></div></div>
   <div id="tabProjects" style="display:none;"><div id="projectsRoot"></div></div>
+  <div id="tabSales" style="display:none;"><div id="salesRoot"></div></div>
 
   <div id="tabHome">
     <!-- KPI Cards -->
@@ -3025,6 +3027,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     document.getElementById('tabHome').style.display = target === 'home' ? '' : 'none';
     document.getElementById('tabControl').style.display = target === 'control' ? '' : 'none';
     document.getElementById('tabProjects').style.display = target === 'projects' ? '' : 'none';
+    document.getElementById('tabSales').style.display = target === 'sales' ? '' : 'none';
     document.getElementById('tabBI').style.display = target === 'bi' ? '' : 'none';
     document.getElementById('tabProduction').style.display = target === 'production' ? '' : 'none';
     document.getElementById('tabOrders').style.display = target === 'orders' ? '' : 'none';
@@ -3043,6 +3046,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     if(target === 'home') renderHome();
     if(target === 'control' && typeof renderControlRoom === 'function') renderControlRoom();
     if(target === 'projects' && typeof renderProjects === 'function') renderProjects();
+    if(target === 'sales' && typeof renderSales === 'function') renderSales();
     // Orders / Quotes / Lifetime Revenue are computed from linked orders, so recompute
     // fresh whenever this tab is opened rather than trying to track every order edit.
     if(target === 'clients') renderClients();
@@ -17837,10 +17841,11 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
-<script src="buyers-admin.js?v=14"></script>
+<script src="buyers-admin.js?v=15"></script>
 <script src="partner-planning.js?v=3"></script>
 <script src="control-room.js?v=4"></script>
 <script src="projects.js?v=8"></script>
+<script src="sales-admin.js?v=1"></script>
 
 
 <datalist id="indianStatesList">
