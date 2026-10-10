@@ -13,7 +13,7 @@
   const CH_TYPE = { toys: 'Reseller', lighting: 'Designers & Studio', gifting: 'Corporate' };
   const SALES_APP_URL = 'https://threadtribestore-hash.github.io/TT-Sales-App/';
   const STAGES = [['new', 'New'], ['contacted', 'Contacted'], ['meeting', 'Meeting'], ['quote', 'Quote / sample'], ['won', 'Won'], ['lost', 'Lost']];
-  const X = { reps: [], leads: [], acts: [], missing: false, loaded: false, hash: '', publishing: false };
+  const X = { reps: [], leads: [], acts: [], missing: false, loaded: false, hashes: {}, publishing: false };
 
   function esc(s){ return escapeHtml(s == null ? '' : String(s)); }
   function on(){ return typeof cloudIsOn === 'function' && cloudIsOn(); }
@@ -76,21 +76,42 @@
     Object.keys(out).forEach(function(k){ out[k].sort(function(a, b){ return a.name.localeCompare(b.name); }); });
     return out;
   }
-  function accounts(){
+  // An order as the sales team sees it: status, pieces made, dispatch, tracking and what's still to collect.
+  function orderView(o){
+    if(window.TTBuyers && window.TTBuyers.orderView){
+      const v = window.TTBuyers.orderView(o);
+      return { id: v.id, displayId: v.displayId, name: v.name, status: v.status, orderedDate: v.orderedDate, dueDate: v.dueDate, dispatchBy: v.dispatchBy, shippedDate: v.shippedDate,
+        deliveryDate: v.deliveryDate, courier: v.courier, trackingNo: v.trackingNo, lines: v.lines.map(function(l){ return { name: l.name, color: l.color, qty: l.qty, made: l.made, unitPrice: l.unitPrice }; }),
+        total: Math.round(v.total), paid: Math.round(v.paid), due: Math.round(v.due), paymentStatus: v.paymentStatus, invoiceNumber: v.invoiceNumber,
+        printers: v.production ? v.production.printingNow : 0 };
+    }
+    const t = orderTotals(o);
+    return { id: o.id, displayId: o.displayId || '', name: o.name || '', status: o.status === 'production_done' && o.shippedDate ? 'shipped' : o.status, orderedDate: orderDate(o), dueDate: o.dueDate || '',
+      dispatchBy: o.dispatchBy || '', shippedDate: o.shippedDate || '', deliveryDate: o.deliveryDate || '', courier: o.courier || '', trackingNo: o.trackingNo || '',
+      lines: (o.products || []).filter(function(p){ return (p.qty || 0) > 0; }).map(function(p){ return { name: p.name || '', color: p.color || '', qty: p.qty || 0, made: Math.min(p.already || 0, p.qty || 0), unitPrice: p.actualPrice || 0 }; }),
+      total: Math.round(t.grandTotal || t.orderValue || 0), paid: Math.round(o.amountPaid || 0), due: 0, paymentStatus: o.paymentStatus || 'unpaid', invoiceNumber: o.invoiceNumber || '', printers: 0 };
+  }
+  function accounts(ch){
     const cut90 = daysAgo(90);
     return (state.clients || []).map(function(c){
-      const ch = channelOf(c); if(!ch) return null;
-      let last = '', value90 = 0, openOrders = 0;
-      state.orders.forEach(function(o){
-        if(o.clientId !== c.id || !counts(o)) return;
-        const d = orderDate(o);
+      if(channelOf(c) !== ch) return null;
+      let last = '', value90 = 0, lifetime = 0, count = 0;
+      const mine = state.orders.filter(function(o){ return o.clientId === c.id && counts(o); });
+      mine.forEach(function(o){
+        const d = orderDate(o), v = orderTotals(o).orderValue || 0;
         if(d > last) last = d;
-        if(d >= cut90) value90 += orderTotals(o).orderValue || 0;
-        if(['booked', 'in_production', 'production_done'].indexOf(o.status) !== -1) openOrders++;
+        if(d >= cut90) value90 += v;
+        lifetime += v; count++;
       });
+      const isOpen = function(o){ return ['booked', 'in_production', 'production_done'].indexOf(o.status) !== -1; };
+      const current = mine.filter(isOpen).sort(function(a, b){ return orderDate(a).localeCompare(orderDate(b)); }).slice(0, 20).map(orderView);
+      const recent = mine.filter(function(o){ return !isOpen(o); }).sort(function(a, b){ return orderDate(b).localeCompare(orderDate(a)); }).slice(0, 5).map(orderView);
+      const views = current.concat(recent);
       const days = last ? Math.round((new Date(today() + 'T00:00:00') - new Date(last.slice(0, 10) + 'T00:00:00')) / 86400000) : null;
-      return { id: c.id, name: c.name || 'Client', type: c.type || '', city: c.city || '', contact: c.contact || '', phone: c.phone || '', channel: ch,
-        buyerApp: !!c.buyerApp, lastOrder: last.slice(0, 10), daysSince: days, value90: Math.round(value90), openOrders: openOrders };
+      return { id: c.id, name: c.name || 'Client', type: c.type || '', city: c.city || '', contact: c.contact || '', phone: c.phone || '', email: c.email || '',
+        address: c.address || '', gstin: c.gstin || '', channel: ch, buyerApp: !!c.buyerApp, lastOrder: last.slice(0, 10), daysSince: days,
+        value90: Math.round(value90), lifetime: Math.round(lifetime), orderCount: count, openOrders: current.length,
+        due: views.reduce(function(t, o){ return t + (o.due || 0); }, 0), orders: current, recent: recent };
     }).filter(Boolean);
   }
   function actuals(){
@@ -119,13 +140,16 @@
     X.publishing = true;
     try{
       if(window.TTBuyers && window.TTBuyers.loadWeb){ try{ await window.TTBuyers.loadWeb(); }catch(e){} }
-      const pack = { targets: targets(), accounts: accounts(), catalogue: catalogue(), actuals: actuals(), salesAppUrl: salesUrl() };
-      const h = JSON.stringify(pack);
-      if(h === X.hash) return;
-      pack.generatedAt = new Date().toISOString();
-      const r = await cloud.sb.from('sales_pack').upsert({ id: 'main', pack: pack }, { onConflict: 'id' });
+      // 'main' is for the whole team; each channel's clients, orders and catalogue go in their own row,
+      // which only that channel's salesperson (and admins) can read.
+      const cat = catalogue(), rows = [{ id: 'main', pack: { targets: targets(), actuals: actuals(), salesAppUrl: salesUrl() } }];
+      Object.keys(CH).forEach(function(ch){ rows.push({ id: ch, pack: { channel: ch, accounts: accounts(ch), catalogue: cat[ch] } }); });
+      const changed = rows.filter(function(r){ return JSON.stringify(r.pack) !== X.hashes[r.id]; });
+      if(!changed.length) return;
+      const at = new Date().toISOString();
+      const r = await cloud.sb.from('sales_pack').upsert(changed.map(function(x){ return { id: x.id, pack: Object.assign({ generatedAt: at }, x.pack) }; }), { onConflict: 'id' });
       if(r.error){ if(/sales_pack|does not exist|schema cache|relation/i.test(r.error.message || '')) X.missing = true; return; }
-      X.hash = h;
+      changed.forEach(function(x){ X.hashes[x.id] = JSON.stringify(x.pack); });
     } finally { X.publishing = false; }
   }
   if(typeof cloudPublishPacks === 'function'){

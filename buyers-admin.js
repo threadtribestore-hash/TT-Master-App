@@ -626,7 +626,7 @@
     requests: function(){ return B.requests; }, prod: function(){ return B.prod; },
     reply: reply, clientName: clientName, refresh: function(){ return pull(); },
     // Toys with trade (base) price and MRP, for the Sales app's catalogue.
-    catalogue: function(){ return catalogue(0); }, loadWeb: function(){ return WEB.at ? Promise.resolve() : loadWebToys(); }
+    catalogue: function(){ return catalogue(0); }, orderView: orderView, loadWeb: function(){ return WEB.at ? Promise.resolve() : loadWebToys(); }
   };
   window.renderBuyers = function(){
     if(!WEB.at) loadWebToys().then(function(){ refreshViews(); });
