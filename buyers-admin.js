@@ -18,19 +18,24 @@
 (function(){
   if(window.TT_STOCK_MODE) return;
 
-  const TOY_RATE = 4;
   const TIER_DAYS = 30, HISTORY_DAYS = 365;
-  const DEFAULT_TERMS = { minPerProduct: 10, minOrder: 25, maxDiscount: 20,
-    slabs: [{ min: 100, pct: 3 }, { min: 250, pct: 5 }, { min: 500, pct: 8 }, { min: 1000, pct: 12 }] };
+  // Trade price = MRP less a discount set by how many pieces of that product are ordered
+  // (per product, not the order total), plus the brand partner's loyalty tier — capped.
+  const DEFAULT_TERMS = { model: 'mrp', minPerProduct: 10, minOrder: 10, maxDiscount: 55,
+    slabs: [{ min: 10, pct: 10 }, { min: 25, pct: 15 }, { min: 50, pct: 20 }, { min: 100, pct: 25 }, { min: 250, pct: 30 },
+      { min: 500, pct: 35 }, { min: 1000, pct: 40 }, { min: 2500, pct: 45 }, { min: 5000, pct: 50 }, { min: 10000, pct: 55 }] };
   function terms(){
-    const t = Object.assign({}, DEFAULT_TERMS, state.buyerSettings || {});
+    // Settings saved under the old weight-based model don't carry over (only the per-product minimum does).
+    const saved = state.buyerSettings || {};
+    const t = Object.assign({}, DEFAULT_TERMS, saved.model === 'mrp' ? saved : { minPerProduct: saved.minPerProduct || DEFAULT_TERMS.minPerProduct });
     t.slabs = (Array.isArray(t.slabs) ? t.slabs : DEFAULT_TERMS.slabs)
       .map(function(x){ return { min: Math.max(1, Math.round(+x.min || 0)), pct: Math.max(0, Math.min(100, +x.pct || 0)) }; })
       .filter(function(x){ return x.min > 0; }).sort(function(a, b){ return a.min - b.min; });
     return t;
   }
-  function slabPct(totalQty){ let p = 0; terms().slabs.forEach(function(x){ if(totalQty >= x.min) p = x.pct; }); return p; }
-  function orderDiscount(tierPct, totalQty){ return Math.min(terms().maxDiscount, (tierPct || 0) + slabPct(totalQty)); }
+  function slabPct(qty){ let p = 0; terms().slabs.forEach(function(x){ if(qty >= x.min) p = x.pct; }); return p; }
+  // Discount for `qty` pieces of one product.
+  function orderDiscount(tierPct, qty){ return Math.min(terms().maxDiscount, (tierPct || 0) + slabPct(qty)); }
   const HASH_KEY = 'tt-buyer-pack-hashes-v1';
   const B = { requests: [], prod: {}, known: null, hashes: {}, missing: false, seen: {}, at: 0, showDone: false, thumbs: {}, publishing: false };
   try{ B.hashes = JSON.parse(localStorage.getItem(HASH_KEY)) || {}; }catch(e){}
@@ -46,15 +51,20 @@
     };
     return test(item.category) || test(item.name);
   }
-  // Toys: weight x Rs 4. Other shop products (organisers, vases, hampers…): the wholesale price
-  // set in the Product Catalog. Anything without one is "price on request". Lamps aren't offered.
-  function basePrice(item){
-    const k = kindOf(item);
-    if(k === 'lamp') return 0;
-    const g = parseFloat(item.weight) || 0;
-    if(k === 'toy') return g > 0 ? Math.round(g * TOY_RATE) : 0;
-    const w = parseFloat(item.wholesalePrice) || 0;
-    return w > 0 ? Math.round(w) : 0;
+  // Base for trade pricing is the MRP: the D2C price set in the Product Catalog, else the
+  // website price. No MRP means "price on request". Lamps aren't offered in the Buyer app.
+  function mrpOf(item){
+    const d = parseFloat(item.d2cPrice) || 0;
+    if(d > 0) return Math.round(d);
+    const w = WEB.items.find(function(x){ return nameKey(x.name) === nameKey(item.name || ''); });
+    return w ? Math.round(w.retail || 0) : 0;
+  }
+  function basePrice(item){ return kindOf(item) === 'lamp' ? 0 : mrpOf(item); }
+  // What one piece costs to make (Studio's own formula), for the below-cost check.
+  function makeCost(item){
+    const g = parseFloat(item.weight) || 0, h = parseFloat(item.hours) || 0;
+    if(!(g > 0) || typeof unitProductionCost !== 'function') return 0;
+    return unitProductionCost({ fil: g, hrs: h, material: item.material, color: item.color });
   }
   function tierPrice(base, pct){ return Math.round(base * (1 - (pct || 0) / 100)); }
 
@@ -125,8 +135,8 @@
   }
   // ---------- website products (threadtribe.co) ----------
   // Every product on the store except lamps shows in the Buyer app with its photo and MRP.
-  // Products also in Studio's catalogue are priced from it (toys by weight, the rest by their
-  // wholesale price); the rest are "price on request" and Studio sets the price on confirming.
+  // Everything is priced from its MRP with the per-product discount table; products with no
+  // MRP anywhere are "price on request" and Studio sets the price on confirming.
   const SHOP_URL = 'https://threadtribe.co', WEB_KEY = 'tt-buyer-web-shop-v2';
   const WEB = { items: [], at: 0, loading: null };
   try{ const c = JSON.parse(localStorage.getItem(WEB_KEY)); if(c && Array.isArray(c.items)){ WEB.items = c.items; WEB.at = c.at || 0; } }catch(e){}
@@ -190,15 +200,15 @@
       if(w) used[w.handle] = 1;
       // Suggested retail: a D2C price set by hand, else the website price. The auto D2C
       // formula is lamp-only and would put a 10 g clicker at Rs 500.
-      const retail = i.d2cPrice != null ? (parseFloat(i.d2cPrice) || 0) : (w ? w.retail : 0);
+      const retail = basePrice(i);
       return { id: i.id, name: i.name.trim(), category: (w && w.category) || i.category || '', kind: kindOf(i) === 'toy' ? 'toy' : 'goods', weight: parseFloat(i.weight) || 0, hours: parseFloat(i.hours) || 0,
         color: i.color || '', size: i.size || '', material: i.material || '', photo: photoOf(i) || (w ? w.photo : ''),
-        base: base, price: tierPrice(base, pct), retail: retail, onRequest: base <= 0 };
+        base: base, price: tierPrice(base, orderDiscount(pct, terms().minPerProduct)), retail: retail, onRequest: base <= 0 };
     });
     WEB.items.forEach(function(w){
       if(used[w.handle]) return;
       out.push({ id: 'web:' + w.handle, name: w.name, category: w.category, kind: /toy|clicker/i.test(w.category) ? 'toy' : 'goods', weight: 0, hours: 0, color: '', size: '', material: '',
-        photo: w.photo, base: 0, price: 0, retail: w.retail, onRequest: true });
+        photo: w.photo, base: Math.round(w.retail || 0), price: tierPrice(Math.round(w.retail || 0), orderDiscount(pct, terms().minPerProduct)), retail: w.retail, onRequest: !(w.retail > 0) });
     });
     return out.sort(function(a, b){ return a.name.localeCompare(b.name); });
   }
@@ -348,15 +358,15 @@
     const rows = ((q.payload && q.payload.lines) || []).map(function(l){
       const item = (state.productCatalog || []).find(function(i){ return i.id === l.productId; });
       const web = item ? null : webItem(l.productId);
-      const base = item ? basePrice(item) : 0;
+      const base = item ? basePrice(item) : web ? Math.round(web.retail || 0) : 0;
       return { line: l, item: item, web: web, name: item ? item.name : web ? web.name : (l.name || '?'), offered: item ? kindOf(item) !== 'lamp' : !!web || /^web:/.test(l.productId || ''),
         qty: Math.max(0, Math.round(parseFloat(l.qty) || 0)), base: base, seen: parseFloat(l.unitPrice) || 0 };
     });
-    // Every toy counts toward the order size, priced or on request.
+    // Each product's discount comes from its own quantity.
     const total = rows.reduce(function(s, x){ return s + (x.offered ? x.qty : 0); }, 0);
-    const pct = orderDiscount(tierPct, total);
-    rows.forEach(function(x){ x.price = tierPrice(x.base, pct); });
-    rows.pct = pct; rows.tierPct = tierPct; rows.slabPct = slabPct(total); rows.totalQty = total;
+    let list = 0, net = 0;
+    rows.forEach(function(x){ x.pct = orderDiscount(tierPct, x.qty); x.price = tierPrice(x.base, x.pct); list += x.base * x.qty; net += x.price * x.qty; });
+    rows.pct = list > 0 ? Math.round(100 * (1 - net / list)) : 0; rows.tierPct = tierPct; rows.totalQty = total;
     return rows;
   }
 
@@ -382,9 +392,9 @@
     state.orders.push(order);
     renderOrders(); recalcQueue(); renderInventory(); scheduleSave();
     reply(q.id, 'accepted', 'Confirmed as order ' + order.displayId + '.' +
-      (onRequest.length ? ' We’ll confirm the price of ' + onRequest.length + ' toy' + (onRequest.length === 1 ? '' : 's') + ' shortly.' : ' We’ll update you as it moves through production.'));
-    if(onRequest.length) showNoticeModal('Order ' + order.displayId + ' created. ' + onRequest.length + ' toy' + (onRequest.length === 1 ? ' is' : 's are') + ' price on request (' +
-      onRequest.map(function(x){ return x.name; }).join(', ') + '): open the order in Orders and set the price — and add a weight in the Product Catalog so it’s priced automatically next time.');
+      (onRequest.length ? ' We’ll confirm the price of ' + onRequest.length + ' product' + (onRequest.length === 1 ? '' : 's') + ' shortly.' : ' We’ll update you as it moves through production.'));
+    if(onRequest.length) showNoticeModal('Order ' + order.displayId + ' created. ' + onRequest.length + ' product' + (onRequest.length === 1 ? ' is' : 's are') + ' price on request (' +
+      onRequest.map(function(x){ return x.name; }).join(', ') + '): open the order in Orders and set the price — and add an MRP (D2C price) in the Product Catalog so it’s priced automatically next time.');
     else showToast('Order ' + order.displayId + ' created for ' + (c.name || 'client'));
   }
 
@@ -464,10 +474,10 @@
             (x.qty < terms().minPerProduct ? ' <span class="ba-pill warn">below ' + terms().minPerProduct + ' per product</span>' : '');
           const diff = x.item && x.seen && Math.round(x.seen) !== x.price ? ' class="ba-warn"' : '';
           const por = x.offered && x.base <= 0;
-          return '<tr><td>' + esc(x.name) + (x.line.color ? ' · ' + esc(x.line.color) : '') + warn + '</td><td class="num">' + x.qty +
+          return '<tr><td>' + esc(x.name) + (x.line.color ? ' · ' + esc(x.line.color) : '') + warn + (x.base > 0 ? ' <span class="ba-dim">MRP ' + money(x.base) + ' · ' + x.pct + '% off</span>' : '') + '</td><td class="num">' + x.qty +
             '</td><td class="num">' + (por ? 'on request' : money(x.price)) + '</td><td class="num"' + diff + '>' + (por ? '—' : money(x.seen)) + '</td><td class="num">' + (por ? '—' : money(x.price * x.qty)) + '</td></tr>';
         }).join('') +
-        '<tr><td colspan="4"><b>Total (ex-GST)</b> <span class="ba-dim">' + rows.totalQty + ' pcs · ' + rows.pct + '% off (tier ' + rows.tierPct + '% + quantity ' + rows.slabPct + '%' + (rows.tierPct + rows.slabPct > rows.pct ? ', capped' : '') + ')' +
+        '<tr><td colspan="4"><b>Total (ex-GST)</b> <span class="ba-dim">' + rows.totalQty + ' pcs · ' + rows.pct + '% off MRP overall (each product by its quantity' + (rows.tierPct ? ' + tier ' + rows.tierPct + '%' : '') + ', max ' + terms().maxDiscount + '%)' +
           (rows.totalQty < terms().minOrder ? ' · <span class="ba-warn">below ' + terms().minOrder + ' pcs order minimum</span>' : '') + '</span></td><td class="num"><b>' + money(total) + '</b></td></tr></table>' +
         (q.payload.reorderOf ? '<div class="ba-dim">Repeat of ' + esc(q.payload.reorderOf) + '</div>' : '') +
         (q.payload.notes ? '<div class="ba-note">“' + esc(q.payload.notes) + '”</div>' : '');
@@ -515,8 +525,6 @@
     const hiddenD2c = (state.clients || []).filter(function(c){ return !isTrade(c); }).length;
     const clients = (state.clients || []).filter(isTrade).sort(function(a, b){ return (b.buyerApp ? 1 : 0) - (a.buyerApp ? 1 : 0) || (a.name || '').localeCompare(b.name || ''); });
     const cat = studioToys();
-    const priced = cat.filter(function(i){ return basePrice(i) > 0; });
-    const unpriced = cat.filter(function(i){ return basePrice(i) <= 0; });
     const T = terms();
 
     let html = '<div class="panel"><div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><span>Buyer App</span>' +
@@ -560,26 +568,23 @@
       '<datalist id="baCouriers">' + ['Delhivery', 'Blue Dart', 'DTDC', 'Shiprocket', 'India Post', 'Ekart', 'Xpressbees', 'Ecom Express', 'Shadowfax', 'Professional Couriers', 'Porter', 'Own delivery'].map(function(c){ return '<option value="' + c + '">'; }).join('') + '</datalist></div>';
 
     html += '<div class="panel"><div class="panel-title">Order discounts</div>' +
-      '<p class="ba-dim">Buyers can mix products. Discount = tier % + quantity %, on the order’s total pieces, capped. Changes reach buyers on the next sync.</p>' +
+      '<p class="ba-dim">Trade price = MRP minus a discount set by how many pieces of <b>that product</b> are ordered, plus the brand partner’s loyalty tier, never more than the max. Changes reach buyers on the next sync.</p>' +
       '<div class="ba-form"><label>Min per product <input type="number" min="1" data-bs="minPerProduct" value="' + T.minPerProduct + '"></label>' +
       '<label>Min per order <input type="number" min="1" data-bs="minOrder" value="' + T.minOrder + '"></label>' +
       '<label>Max total discount % <input type="number" min="0" max="100" data-bs="maxDiscount" value="' + T.maxDiscount + '"></label></div>' +
-      '<table class="ba-table" style="max-width:420px"><tr><th>Order total (pcs) from</th><th class="num">Extra discount %</th><th></th></tr>' +
+      '<table class="ba-table" style="max-width:420px"><tr><th>Pieces of a product from</th><th class="num">Discount off MRP %</th><th></th></tr>' +
       T.slabs.map(function(x, i){ return '<tr><td><input type="number" min="1" data-slab="' + i + '" data-f="min" value="' + x.min + '"></td><td class="num"><input type="number" min="0" max="100" step="0.5" data-slab="' + i + '" data-f="pct" value="' + x.pct + '"></td><td><button class="ba-btn" data-ba="slab-del" data-i="' + i + '">✕</button></td></tr>'; }).join('') +
-      '</table><button class="ba-btn" data-ba="slab-add">+ Add slab</button></div>';
+      '</table><button class="ba-btn" data-ba="slab-add">+ Add slab</button>' + belowCostHtml() + '</div>';
 
     html += '<div class="panel"><div class="panel-title">Collections</div>' + collectionsHtml() + '</div>';
     const tr = trending();
     html += '<div class="panel"><div class="panel-title">Trending · what buyers see</div>' + (tr.length ? '<p class="ba-dim">' + tr.map(function(n, i){ return (i + 1) + '. ' + esc(n); }).join(' · ') + '</p>' : '<p class="ba-dim">Nothing yet — builds from trade orders in the last 60 days.</p>') + '</div>';
     html += '<div class="panel"><div class="panel-title">Brand partners’ sales · last 90 days</div>' + resaleHtml() + '</div>';
 
-    const webOnly = catalogue(0).filter(function(x){ return /^web:/.test(x.id); });
-    html += '<div class="panel"><div class="panel-title">Price check</div><p class="ba-dim">The Buyer app shows every toy on threadtribe.co (' + WEB.items.length + ') plus the toys in your Product Catalog. ' +
-      priced.length + ' have a trade price (₹' + TOY_RATE + '/g, before discounts, ex-GST); the rest show as <b>price on request</b> and you set their price when you confirm the order.</p>' +
-      (webOnly.length ? '<p class="ba-dim"><b>On the website but not in your Product Catalog</b> — import them with weights to price them automatically:</p><ul class="ba-list">' +
-        webOnly.map(function(x){ return '<li>' + esc(x.name) + ' <span class="ba-dim">(' + esc(x.category) + ', retail ' + money(x.retail) + ')</span></li>'; }).join('') + '</ul>' : '') +
-      (unpriced.length ? '<p class="ba-dim"><b>In your catalogue without a weight</b>:</p><ul class="ba-list">' +
-        unpriced.slice(0, 60).map(function(i){ return '<li>' + esc(i.name) + ' <span class="ba-dim">(' + esc(i.category || 'no category') + ')</span></li>'; }).join('') + '</ul>' : '') + '</div>';
+    const all = catalogue(0), noMrp = all.filter(function(x){ return x.onRequest; });
+    html += '<div class="panel"><div class="panel-title">Price check</div><p class="ba-dim">The Buyer app shows ' + all.length + ' products (every non-lamp product on threadtribe.co plus the toys in your Product Catalog). ' +
+      (all.length - noMrp.length) + ' have an MRP, so they’re priced automatically from the discount table; ' + noMrp.length + ' show as <b>price on request</b> until they get one (set a D2C price in the Product Catalog, or a price on the website).</p>' +
+      (noMrp.length ? '<ul class="ba-list">' + noMrp.slice(0, 60).map(function(i){ return '<li>' + esc(i.name) + ' <span class="ba-dim">(' + esc(i.category || 'no category') + ')</span></li>'; }).join('') + '</ul>' : '') + '</div>';
 
     root.innerHTML = html;
   }
@@ -684,7 +689,7 @@
     } else if(act === 'toggle-done'){ B.showDone = !B.showDone; render(); }
     else if(act === 'col-add'){ const list = collections().slice(); list.push({ id: newId(), name: '', note: '', until: '', items: [] }); saveCollections(list); render(); }
     else if(act === 'col-del'){ if(confirm('Delete this collection?')){ saveCollections(collections().filter(function(x){ return x.id !== id; })); render(); } }
-    else if(act === 'slab-add'){ const t = terms(); const last = t.slabs[t.slabs.length - 1]; t.slabs.push({ min: last ? last.min * 2 : 100, pct: last ? last.pct + 2 : 3 }); saveTerms(t); render(); }
+    else if(act === 'slab-add'){ const t = terms(); const last = t.slabs[t.slabs.length - 1]; t.slabs.push({ min: last ? last.min * 2 : 10, pct: last ? Math.min(t.maxDiscount, last.pct + 5) : 10 }); saveTerms(t); render(); }
     else if(act === 'slab-del'){ const t = terms(); t.slabs.splice(+b.getAttribute('data-i'), 1); saveTerms(t); render(); }
     else if(act === 'copy-link'){
       const msg = inviteMessage(null);
@@ -759,7 +764,23 @@
       }).join('') + '<button class="ba-btn" data-ba="col-add">+ New collection</button>';
   }
 
-  function saveTerms(t){ state.buyerSettings = { minPerProduct: t.minPerProduct, minOrder: t.minOrder, maxDiscount: t.maxDiscount, slabs: t.slabs }; scheduleSave(); }
+  function saveTerms(t){ state.buyerSettings = { model: 'mrp', minPerProduct: t.minPerProduct, minOrder: t.minOrder, maxDiscount: t.maxDiscount, slabs: t.slabs }; scheduleSave(); }
+  // Products whose price at the deepest discount would be below what they cost to make.
+  function belowCostHtml(){
+    const T = terms(), deepest = T.maxDiscount;
+    const rows = studioToys().map(function(i){
+      const mrp = basePrice(i), cost = makeCost(i);
+      if(!(mrp > 0) || !(cost > 0)) return null;
+      const floor = tierPrice(mrp, deepest);
+      return floor < cost ? { name: i.name, mrp: mrp, cost: cost, floor: floor, safe: Math.max(0, Math.floor(100 * (1 - cost / mrp))) } : null;
+    }).filter(Boolean);
+    const unknown = studioToys().filter(function(i){ return basePrice(i) > 0 && !(makeCost(i) > 0); }).length;
+    return '<div style="margin-top:12px"><b>Below-cost check</b> <span class="ba-dim">at ' + deepest + '% off MRP</span>' +
+      (rows.length ? '<table class="ba-table"><tr><th>Product</th><th class="num">MRP</th><th class="num">Price at ' + deepest + '% off</th><th class="num">Cost to make</th><th class="num">Safe max discount</th></tr>' +
+        rows.map(function(r){ return '<tr><td>' + esc(r.name) + '</td><td class="num">' + money(r.mrp) + '</td><td class="num ba-warn">' + money(r.floor) + '</td><td class="num">' + money(r.cost) + '</td><td class="num">' + r.safe + '%</td></tr>'; }).join('') + '</table>'
+        : '<p class="ba-dim">Every product with a weight in the Product Catalog stays above its making cost at ' + deepest + '% off.</p>') +
+      (unknown ? '<p class="ba-dim">' + unknown + ' product' + (unknown === 1 ? '' : 's') + ' have no weight in the Product Catalog, so their cost can’t be checked.</p>' : '') + '</div>';
+  }
   document.addEventListener('change', function(e){
     const tab = document.getElementById('tabBuyers');
     if(tab && tab.contains(e.target) && (e.target.hasAttribute('data-col') || e.target.hasAttribute('data-colitem'))){
