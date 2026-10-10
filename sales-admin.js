@@ -83,7 +83,7 @@
       return { id: v.id, displayId: v.displayId, name: v.name, status: v.status, orderedDate: v.orderedDate, dueDate: v.dueDate, dispatchBy: v.dispatchBy, shippedDate: v.shippedDate,
         deliveryDate: v.deliveryDate, courier: v.courier, trackingNo: v.trackingNo, lines: v.lines.map(function(l){ return { name: l.name, color: l.color, qty: l.qty, made: l.made, unitPrice: l.unitPrice }; }),
         total: Math.round(v.total), paid: Math.round(v.paid), due: Math.round(v.due), paymentStatus: v.paymentStatus, invoiceNumber: v.invoiceNumber,
-        printers: v.production ? v.production.printingNow : 0 };
+        printers: v.production ? v.production.printingNow : 0, printedGood: v.production ? v.production.unitsGood : 0 };
     }
     const t = orderTotals(o);
     return { id: o.id, displayId: o.displayId || '', name: o.name || '', status: o.status === 'production_done' && o.shippedDate ? 'shipped' : o.status, orderedDate: orderDate(o), dueDate: o.dueDate || '',
