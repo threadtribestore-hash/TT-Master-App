@@ -210,6 +210,14 @@
       out.push({ id: 'web:' + w.handle, name: w.name, category: w.category, kind: /toy|clicker/i.test(w.category) ? 'toy' : 'goods', weight: 0, hours: 0, color: '', size: '', material: '',
         photo: w.photo, base: Math.round(w.retail || 0), price: tierPrice(Math.round(w.retail || 0), orderDiscount(pct, terms().minPerProduct)), retail: w.retail, onRequest: !(w.retail > 0) });
     });
+    // Designs added in Studio's Shop tab (shop-admin.js).
+    const have = {}; out.forEach(function(x){ have[nameKey(x.name)] = 1; });
+    (window.TTShop ? window.TTShop.list() : []).forEach(function(sp){
+      if(have[nameKey(sp.name)]) return;
+      const mrp = Math.round(+sp.mrp || 0);
+      out.push({ id: 'sp:' + sp.id, name: sp.name, category: sp.category, kind: /toy|clicker/i.test(sp.category) ? 'toy' : 'goods', weight: +sp.weight || 0, hours: +sp.hours || 0,
+        color: '', size: '', material: '', photo: (sp.photos || [])[0] || '', base: mrp, price: tierPrice(mrp, orderDiscount(pct, terms().minPerProduct)), retail: mrp, onRequest: !(mrp > 0) });
+    });
     return out.sort(function(a, b){ return a.name.localeCompare(b.name); });
   }
   function catalogIdFor(line){
@@ -358,8 +366,10 @@
     const rows = ((q.payload && q.payload.lines) || []).map(function(l){
       const item = (state.productCatalog || []).find(function(i){ return i.id === l.productId; });
       const web = item ? null : webItem(l.productId);
-      const base = item ? basePrice(item) : web ? Math.round(web.retail || 0) : 0;
-      return { line: l, item: item, web: web, name: item ? item.name : web ? web.name : (l.name || '?'), offered: item ? kindOf(item) !== 'lamp' : !!web || /^web:/.test(l.productId || ''),
+      const sp = item || web || !window.TTShop ? null : window.TTShop.find(l.productId);
+      const base = item ? basePrice(item) : web ? Math.round(web.retail || 0) : sp ? Math.round(+sp.mrp || 0) : 0;
+      return { line: l, item: item || (sp ? { weight: +sp.weight || 0, hours: +sp.hours || 0 } : null), web: web, name: item ? item.name : web ? web.name : sp ? sp.name : (l.name || '?'),
+        offered: item ? kindOf(item) !== 'lamp' : !!web || !!(sp && sp.status === 'live') || /^web:/.test(l.productId || ''),
         qty: Math.max(0, Math.round(parseFloat(l.qty) || 0)), base: base, seen: parseFloat(l.unitPrice) || 0 };
     });
     // Each product's discount comes from its own quantity.
@@ -768,13 +778,14 @@
   // Products whose price at the deepest discount would be below what they cost to make.
   function belowCostHtml(){
     const T = terms(), deepest = T.maxDiscount;
-    const rows = studioToys().map(function(i){
+    const shopItems = (window.TTShop ? window.TTShop.list() : []).map(function(sp){ return { name: sp.name, weight: sp.weight, hours: sp.hours, d2cPrice: sp.mrp, category: sp.category }; });
+    const rows = studioToys().concat(shopItems).map(function(i){
       const mrp = basePrice(i), cost = makeCost(i);
       if(!(mrp > 0) || !(cost > 0)) return null;
       const floor = tierPrice(mrp, deepest);
       return floor < cost ? { name: i.name, mrp: mrp, cost: cost, floor: floor, safe: Math.max(0, Math.floor(100 * (1 - cost / mrp))) } : null;
     }).filter(Boolean);
-    const unknown = studioToys().filter(function(i){ return basePrice(i) > 0 && !(makeCost(i) > 0); }).length;
+    const unknown = studioToys().concat(shopItems).filter(function(i){ return basePrice(i) > 0 && !(makeCost(i) > 0); }).length;
     return '<div style="margin-top:12px"><b>Below-cost check</b> <span class="ba-dim">at ' + deepest + '% off MRP</span>' +
       (rows.length ? '<table class="ba-table"><tr><th>Product</th><th class="num">MRP</th><th class="num">Price at ' + deepest + '% off</th><th class="num">Cost to make</th><th class="num">Safe max discount</th></tr>' +
         rows.map(function(r){ return '<tr><td>' + esc(r.name) + '</td><td class="num">' + money(r.mrp) + '</td><td class="num ba-warn">' + money(r.floor) + '</td><td class="num">' + money(r.cost) + '</td><td class="num">' + r.safe + '%</td></tr>'; }).join('') + '</table>'
