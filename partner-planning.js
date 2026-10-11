@@ -249,6 +249,13 @@
       return;
     }
     origRender();
+    // The Jobs table shows partner-logged printed counts: refresh them, then redraw once.
+    if(on() && !PP.loading && Date.now() - PP.at > 15000) load(true).then(function(){
+      if(ponView !== 'planning' && Date.now() - PP.at < 2000){
+        const b2 = document.getElementById('ponBody');
+        if(!(b2 && document.activeElement && b2.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) origRender();
+      }
+    });
   };
   document.addEventListener('click', function(e){
     const chip = e.target.closest('#ponViewChips [data-view="planning"]');
@@ -306,7 +313,7 @@
   };
 
   // For the Control Room: partner capacity for the calculator, pickups for the calendar.
-  window.TTPartners = { freePerDay: freePerDay, pickups: pickups, load: load, ready: function(){ return !!PP.at && !PP.missing; } };
+  window.TTPartners = { printed: printedFor, freePerDay: freePerDay, pickups: pickups, load: load, ready: function(){ return !!PP.at && !PP.missing; } };
 
   const css = document.createElement('style');
   css.textContent =

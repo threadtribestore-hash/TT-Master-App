@@ -1636,6 +1636,9 @@
   .pon-dim{ font-size:11px; color:var(--dim); font-family:'JetBrains Mono', monospace; }
   .pon-table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--panel); margin-bottom:18px; }
   .panel .pon-table-wrap{ margin-bottom:0; }
+  .pon-prog{ min-width:120px; } .pon-prog-n{ white-space:nowrap; font-size:12px; }
+  .pon-prog-bar{ height:6px; background:var(--input-bg); border-radius:4px; overflow:hidden; margin-top:5px; }
+  .pon-prog-bar i{ display:block; height:100%; background:var(--cyan); border-radius:4px; }
   .pon-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
   .pon-table th{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:0.5px; text-transform:uppercase; color:var(--dim); text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); background:var(--panel2); white-space:nowrap; font-weight:500; }
   .pon-table td{ padding:9px 12px; border-bottom:1px dotted var(--line); vertical-align:top; }
@@ -14661,7 +14664,7 @@ function ponJobsHtml(){
   if(!jobs.length){
     return html + '<div class="panel"><div class="empty-state">No jobs here. Use “+ New job” to dispatch an order line to a partner.</div></div>';
   }
-  html += '<div class="pon-table-wrap"><table class="pon-table"><thead><tr><th>Job</th><th>Partner</th><th>Product</th><th class="num">Qty</th><th class="num">Shipped / Rejects</th><th>Due</th><th>Status</th><th class="num">Payout</th></tr></thead><tbody>';
+  html += '<div class="pon-table-wrap"><table class="pon-table"><thead><tr><th>Job</th><th>Partner</th><th>Product</th><th class="num">Qty</th><th>Printed</th><th class="num">Shipped / Rejects</th><th>Due</th><th>Status</th><th class="num">Payout</th></tr></thead><tbody>';
   jobs.forEach(function(j){
     const l = ponLinked(j);
     const overdue = ponIsOverdue(j);
@@ -14671,6 +14674,7 @@ function ponJobsHtml(){
       '<td>' + escapeHtml(ponPartnerName(j.partnerId)) + '</td>' +
       '<td>' + escapeHtml(j.productName || '—') + (j.color ? '<div class="pon-dim">' + escapeHtml(j.color) + (j.material ? ' · ' + escapeHtml(j.material) : '') + '</div>' : '') + '</td>' +
       '<td class="num">' + (j.qty || 0) + '</td>' +
+      '<td>' + ponPrintedCell(j) + '</td>' +
       '<td class="num">' + (j.unitsShipped || 0) + ' / <span style="color:' + ((j.clientRejects || 0) > 0 ? 'var(--red)' : 'var(--dim)') + ';">' + (j.clientRejects || 0) + '</span></td>' +
       '<td style="color:' + (overdue ? 'var(--red)' : 'inherit') + ';">' + (j.dueDate ? formatDateDisplay(j.dueDate) : '—') + (overdue ? ' ⚠' : '') + '</td>' +
       '<td>' + ponStatusPill(j.status) + (j.partnerUpdatedAt ? '<div class="pon-dim' + (Date.now() - Date.parse(j.partnerUpdatedAt) < 600000 ? ' pon-fresh' : '') + '" title="Last update from the partner">↻ partner · ' + ponAgo(j.partnerUpdatedAt) + '</div>' : '') + '</td>' +
@@ -14678,6 +14682,19 @@ function ponJobsHtml(){
   });
   html += '</tbody></table></div>';
   return html;
+}
+
+// Pieces printed: what the partner logs day by day in the Partner app, never less than shipped.
+function ponPrinted(j){
+  const logged = (window.TTPartners && window.TTPartners.printed) ? window.TTPartners.printed(j.partnerId, j.id) : 0;
+  const done = ['shipped', 'delivered'].indexOf(j.status) !== -1 ? (j.qty || 0) : 0;
+  return Math.min(j.qty || 0, Math.max(logged, j.unitsShipped || 0, done));
+}
+function ponPrintedCell(j){
+  if(j.status === 'cancelled') return '<span class="pon-dim">—</span>';
+  const qty = j.qty || 0, n = ponPrinted(j), pct = qty ? Math.round(100 * n / qty) : 0;
+  return '<div class="pon-prog"><div class="pon-prog-n"><b>' + n.toLocaleString('en-IN') + '</b><span class="pon-dim"> / ' + qty.toLocaleString('en-IN') + ' · ' + pct + '%</span></div>' +
+    '<div class="pon-prog-bar"><i style="width:' + pct + '%' + (pct >= 100 ? ';background:var(--green)' : '') + '"></i></div></div>';
 }
 
 function ponPartnersHtml(){
@@ -17852,7 +17869,7 @@ setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
 <script src="buyers-admin.js?v=21"></script>
-<script src="partner-planning.js?v=3"></script>
+<script src="partner-planning.js?v=4"></script>
 <script src="control-room.js?v=5"></script>
 <script src="projects.js?v=9"></script>
 <script src="sales-admin.js?v=7"></script>
