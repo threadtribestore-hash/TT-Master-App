@@ -248,6 +248,14 @@
       await addItem(p.id, 'comment', { text: txt.slice(0, 2000), internal: internal }); render();
     }
   });
+  // Partner Network cards carry the same switch as the Designers row here.
+  document.addEventListener('change', function(e){
+    const id = e.target.getAttribute && e.target.getAttribute('data-pon-designer'); if(!id) return;
+    if(!state.projectDesigners) state.projectDesigners = {};
+    if(e.target.checked) state.projectDesigners[id] = true; else delete state.projectDesigners[id];
+    scheduleSave(); if(typeof cloudPublishPacks === 'function') cloudPublishPacks();
+    showToast(e.target.checked ? 'Designer profile switched on in their Partner app' : 'Designer profile removed');
+  });
   document.addEventListener('change', async function(e){
     const tab = document.getElementById('tabProjects'); if(!tab || !tab.contains(e.target)) return;
     const dz = e.target.getAttribute('data-pj-designer');
