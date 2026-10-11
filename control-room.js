@@ -41,6 +41,16 @@
         (PRIORITY[a.priority || 'normal'] - PRIORITY[b.priority || 'normal']) || (target(a) || '9').localeCompare(target(b) || '9');
     });
   }
+  // Queue clear date = queued print hours ÷ printers running, counted from now with the
+  // printers going round the clock. The forecast below is the slower, hours-per-day view.
+  function printersRunning(){ return (state.printers || []).filter(function(p){ return p.status !== 'down'; }).length || (state.fleet && state.fleet.printers) || 0; }
+  function queueClear(hours){
+    const n = printersRunning();
+    if(!n) return null;
+    const each = hours / n;
+    return { n: n, each: each, at: new Date(Date.now() + each * 3600000) };
+  }
+  function fmtWhen(d){ return d.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); }
   // Serial forecast in queue order against the fleet's daily print hours.
   function forecast(){
     const cap = capacityPerDay(), out = {};
@@ -415,7 +425,8 @@
   function queueHtml(fc){
     const q = queue(), ps = prodStats();
     if(!q.length) return '<p class="cr-dim">Nothing booked or in production.</p>';
-    return '<p class="cr-dim">' + Math.round(fc.hours) + ' print-hours queued' + (fc.cap ? ' ≈ ' + (Math.round(fc.days * 10) / 10) + ' days on ' + Math.round(fc.cap) + ' printer-hours a day' : ' — set printers and hours per day in Settings to forecast') + '.</p>' +
+    const qc = queueClear(fc.hours);
+    return '<p class="cr-dim">' + (qc ? 'Queue clears ≈ <b>' + fmtWhen(qc.at) + '</b> (' + Math.round(fc.hours) + ' h ÷ ' + qc.n + ' printers). ' : '') + Math.round(fc.hours) + ' print-hours queued' + (fc.cap ? ' ≈ ' + (Math.round(fc.days * 10) / 10) + ' days on ' + Math.round(fc.cap) + ' printer-hours a day' : ' — set printers and hours per day in Settings to forecast') + '.</p>' +
       q.map(function(o){
         const pr = orderProgress(o), t = orderTotals(o), s = ps[o.id], due = target(o), fin = fc.finish[o.id], late = due && fin && fin > due;
         return '<div class="cr-q"><div class="cr-q-h">' + orderLink(o) + '<span class="cr-who">' + esc(who(o)) + '</span>' + pill(o.status, o) +
@@ -517,6 +528,9 @@
       '<div class="cr-kpis">' +
         '<div class="cr-kpi"><div class="k">In production</div><div class="v">' + state.orders.filter(function(o){ return o.status === 'in_production'; }).length + '</div><div class="s">' + state.orders.filter(function(o){ return o.status === 'booked'; }).length + ' booked next</div></div>' +
         '<div class="cr-kpi"><div class="k">Print hours queued</div><div class="v">' + Math.round(fc.hours) + '</div><div class="s">' + (fc.cap ? '≈ ' + Math.ceil(fc.days) + ' day' + (Math.ceil(fc.days) === 1 ? '' : 's') : 'set capacity') + '</div></div>' +
+        (function(){ const qc = queueClear(fc.hours);
+          return '<div class="cr-kpi" title="Queue time ÷ printers running: ' + Math.round(fc.hours) + ' h ÷ ' + (qc ? qc.n : 0) + ' = ' + (qc ? Math.round(qc.each * 10) / 10 : 0) + ' h on each printer, from now"><div class="k">Queue clear date</div><div class="v">' +
+            (!fc.hours ? 'Clear' : qc ? fmt(iso(qc.at)) : '—') + '</div><div class="s">' + (!fc.hours ? 'nothing queued' : qc ? Math.round(fc.hours) + ' h ÷ ' + qc.n + ' printers = ' + (Math.round(qc.each * 10) / 10) + ' h' : 'add printers in Settings') + '</div></div>'; })() +
         '<div class="cr-kpi"><div class="k">Due in 7 days</div><div class="v">' + dueWeek + '</div><div class="s">to dispatch</div></div>' +
         '<div class="cr-kpi ' + (p.overdue.length + p.risk.length ? 'bad' : '') + '"><div class="k">Late or at risk</div><div class="v">' + (p.overdue.length + p.risk.length) + '</div><div class="s">' + p.overdue.length + ' overdue</div></div>' +
         '<div class="cr-kpi ' + (waiting ? 'warn' : '') + '"><div class="k">Chats waiting</div><div class="v">' + waiting + '</div><div class="s">need a reply</div></div>' +
