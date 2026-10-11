@@ -14816,7 +14816,7 @@ function ponNewJobDraft(partnerId){
 
 function ponEligibleOrders(currentOrderId){
   return state.orders.filter(function(o){
-    return o.id === currentOrderId || ['booked', 'in_production', 'quoted'].indexOf(o.status) !== -1;
+    return o.id === currentOrderId || ['lost', 'cancelled'].indexOf(o.status) === -1;
   }).sort(function(a, b){ return (b.displayId || '').localeCompare(a.displayId || '', undefined, { numeric: true }); });
 }
 
@@ -14844,7 +14844,10 @@ function ponJobModalHtml(){
     '<div><label>Partner</label><select class="pon-select" data-jf="partnerId">' + ponPartnerOptions(d.partnerId, true) + '</select></div>' +
     f('Rate (₹ / gram)', 'ratePerGram', 'number', ' min="0" step="0.05"') +
     '<div><label>Link to order</label><select class="pon-select" data-jf="orderId"><option value="">— Not linked —</option>' +
-      orders.map(function(o){ return '<option value="' + o.id + '"' + (o.id === d.orderId ? ' selected' : '') + '>' + escapeHtml((o.displayId || '') + ' · ' + (o.clientName || o.name || '')) + (o.status === 'quoted' ? ' (quote)' : '') + '</option>'; }).join('') +
+      [['Open orders', function(o){ return ['booked', 'in_production', 'quoted'].indexOf(o.status) !== -1; }], ['Older orders', function(o){ return ['booked', 'in_production', 'quoted'].indexOf(o.status) === -1; }]].map(function(g){
+        const rows = orders.filter(g[1]);
+        return rows.length ? '<optgroup label="' + g[0] + '">' + rows.map(function(o){ return '<option value="' + o.id + '"' + (o.id === d.orderId ? ' selected' : '') + '>' + escapeHtml((o.displayId || '') + ' · ' + (o.clientName || o.name || '')) + (o.status === 'quoted' ? ' (quote)' : o.status === 'delivered' ? ' (delivered)' : o.status === 'production_done' ? (o.shippedDate ? ' (shipped)' : ' (ready)') : '') + '</option>'; }).join('') + '</optgroup>' : '';
+      }).join('') +
     '</select></div>';
   if(l){
     html += '<div><label>Order line</label><select class="pon-select" data-jf="lineId"><option value="">Pick a line…</option>' +
