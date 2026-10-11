@@ -16,7 +16,7 @@
   const OPEN = ['booked', 'in_production'];
   const PRIORITY = { urgent: 0, high: 1, normal: 2, low: 3 };
   const KEEP_DAYS = 45, KEEP_MSGS = 3000;
-  const V = { chat: 'app', filter: 'reply', importing: false };
+  const V = { chat: 'week', filter: 'reply', importing: false };
 
   function esc(s){ return escapeHtml(s == null ? '' : String(s)); }
   function money(v){ return '₹' + Math.round(v || 0).toLocaleString('en-IN'); }
@@ -310,6 +310,95 @@
     V.importing = false; render();
   }
 
+  // ---------- this week's clients ----------
+  // Every client with an order to dispatch in the next 7 days (or late, or shipped in the
+  // last 3 days and not yet delivered), with one-tap WhatsApp updates. Studio can't read
+  // replies, so each send is logged on the order and clients go quiet-flagged after 3 days.
+  const QUIET_DAYS = 3;
+  function waPhone(raw){
+    let d = String(raw || '').replace(/\D/g, '');
+    if(d.length === 10) d = '91' + d;
+    if(d.length === 11 && d[0] === '0') d = '91' + d.slice(1);
+    return d.length >= 11 ? d : '';
+  }
+  function owed(o){ return o.paymentStatus === 'paid' || o.paymentStatus === 'refunded' ? 0 : Math.max(0, Math.round(orderTotals(o).grandTotal - (o.amountPaid || 0))); }
+  function weekOrders(){
+    const t = today(), end = addDays(t, 7), recent = addDays(t, -3);
+    return state.orders.filter(function(o){
+      if(['quoted', 'lost', 'cancelled', 'delivered'].indexOf(o.status) !== -1) return false;
+      if(o.shippedDate) return o.shippedDate >= recent;
+      if(['booked', 'in_production', 'production_done'].indexOf(o.status) === -1) return false;
+      const d = target(o);
+      return !d || d <= end;
+    });
+  }
+  function lastSent(o){ const l = o.waLog || []; return l.length ? l[l.length - 1] : null; }
+  function linkedGroup(key, name){
+    const n = String(name || '').toLowerCase().trim();
+    return chats().groups.find(function(g){ return g.clientKey === key; }) ||
+      (n.length > 2 ? chats().groups.find(function(g){ return !g.clientKey && g.name.toLowerCase().indexOf(n) !== -1; }) : null);
+  }
+  function weekClients(){
+    const by = {}, t = today();
+    weekOrders().forEach(function(o){
+      const key = o.clientId || ('n:' + who(o).toLowerCase());
+      const c = client(o.clientId);
+      const w = by[key] = by[key] || { key: key, name: who(o), phone: waPhone((c && c.phone) || o.clientPhone), orders: [], last: '' };
+      if(!w.phone) w.phone = waPhone(o.clientPhone);
+      w.orders.push(o);
+      const ls = lastSent(o); if(ls && ls.t > w.last) w.last = ls.t;
+    });
+    return Object.keys(by).map(function(k){
+      const w = by[k];
+      w.orders.sort(function(a, b){ return (target(a) || '9999').localeCompare(target(b) || '9999'); });
+      w.group = linkedGroup(w.key, w.name);
+      w.waiting = w.group && w.group.team.length ? needsReply(w.group).length : 0;
+      w.quiet = !w.last || dayDiff(t, w.last.slice(0, 10)) >= QUIET_DAYS;
+      return w;
+    }).sort(function(a, b){
+      return (b.waiting - a.waiting) || ((b.quiet ? 1 : 0) - (a.quiet ? 1 : 0)) || (target(a.orders[0]) || '9999').localeCompare(target(b.orders[0]) || '9999');
+    });
+  }
+  function itemsText(o){ return (o.products || []).filter(function(p){ return p.name; }).map(function(p){ return p.name + ' × ' + (p.qty || 0); }).join(', '); }
+  function waText(o, kind, name){
+    const biz = (state.business && state.business.name) || 'Thread Tribe', hi = 'Hi ' + String(name || '').split(' ')[0] + ', ';
+    const ref = o.displayId || 'your order', d = target(o), when = d ? fmtLong(d) : '';
+    if(kind === 'pay') return hi + 'a gentle reminder that ' + money(owed(o)) + ' is due for ' + ref + '. Payment details are on your invoice. Thank you!\n— ' + biz;
+    if(o.shippedDate) return hi + ref + ' has been dispatched' + (o.courier ? ' via ' + o.courier : '') + (o.trackingNo ? '. Tracking / AWB: ' + o.trackingNo : '') + '.\n— ' + biz;
+    if(o.status === 'production_done') return hi + 'good news: ' + ref + ' is ready and will be dispatched ' + (when ? 'by ' + when : 'shortly') + '.' + (owed(o) ? ' Balance due: ' + money(owed(o)) + '.' : '') + '\n— ' + biz;
+    if(o.status === 'in_production'){ const pr = orderProgress(o); return hi + 'quick update on ' + ref + ': ' + pr.done + ' of ' + pr.total + ' pieces made so far' + (when ? ', on track to dispatch by ' + when : '') + '.\n— ' + biz; }
+    return hi + ref + ' is confirmed and booked for production' + (itemsText(o) ? ': ' + itemsText(o) : '') + '.' + (when ? ' Expected dispatch: ' + when + '.' : '') + '\n— ' + biz;
+  }
+  function ago(iso){ const n = dayDiff(today(), iso.slice(0, 10)); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : n + ' days ago'; }
+  function weekHtml(){
+    const W = weekClients(), groups = chats().groups;
+    if(!W.length) return '<p class="cr-dim">No client orders to dispatch in the next 7 days.</p>';
+    return W.map(function(w){
+      const chat = w.group ? '<button class="cr-btn" data-crchat="' + w.group.id + '">💬 ' + (w.waiting ? w.waiting + ' waiting' : 'Chat') + '</button>' :
+        (groups.length ? '<select class="cr-link" data-crlink="' + esc(w.key) + '"><option value="">Link a chat…</option>' + groups.map(function(g){ return '<option value="' + g.id + '">' + esc(g.name) + '</option>'; }).join('') + '</select>' : '');
+      return '<div class="cr-wk' + (w.waiting ? ' open' : '') + '"><div class="cr-wk-h"><b>' + esc(w.name) + '</b>' +
+        (w.phone ? '<span class="cr-dim">+' + w.phone + '</span>' : '<span class="cr-warn">no phone, add it in Clients</span>') +
+        '<span class="' + (w.quiet ? 'cr-warn' : 'cr-dim') + '">' + (w.last ? 'Last update ' + ago(w.last) : 'No update sent') + '</span>' + chat + '</div>' +
+        w.orders.map(function(o){
+          const pr = orderProgress(o), due = owed(o), ls = lastSent(o), d = target(o);
+          return '<div class="cr-wk-o">' + orderLink(o) + pill(o.status, o) + '<span class="cr-dim">' + pr.done + '/' + pr.total + ' pcs</span>' +
+            '<span class="' + (d && d < today() && !o.shippedDate ? 'cr-bad' : 'cr-dim') + '">' + (o.shippedDate ? 'sent ' + fmt(o.shippedDate) : d ? 'dispatch ' + fmt(d) : 'no date') + '</span>' +
+            (due ? '<span class="cr-warn">' + money(due) + ' due</span>' : '') +
+            '<span class="cr-wk-a">' + (ls ? '<span class="cr-dim">' + (ls.kind === 'pay' ? 'reminded' : 'updated') + ' ' + ago(ls.t) + '</span>' : '') +
+            '<button class="cr-btn primary" data-cr="wa" data-k="update" data-id="' + o.id + '"' + (w.phone ? '' : ' disabled') + '>' + (o.shippedDate ? 'Send tracking' : 'Send update') + '</button>' +
+            (due && (o.status === 'production_done' || o.shippedDate) ? '<button class="cr-btn" data-cr="wa" data-k="pay" data-id="' + o.id + '"' + (w.phone ? '' : ' disabled') + '>Payment reminder</button>' : '') + '</span></div>';
+        }).join('') + '</div>';
+    }).join('') + '<p class="cr-dim" style="margin-top:8px">Each button opens WhatsApp with the message filled in. Edit it if you like, then send. Clients you haven’t updated in ' + QUIET_DAYS + ' days are flagged.</p>';
+  }
+  function sendWa(id, kind){
+    const o = state.orders.find(function(x){ return x.id === id; }); if(!o) return;
+    const c = client(o.clientId), phone = waPhone((c && c.phone) || o.clientPhone);
+    if(!phone){ showNoticeModal('Add a phone number for ' + who(o) + ' in the Clients tab first.'); return; }
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(waText(o, kind, who(o))), '_blank');
+    o.waLog = (o.waLog || []).concat([{ t: new Date().toISOString(), kind: kind }]).slice(-10);
+    scheduleSave(); render();
+  }
+
   // ---------- view ----------
   function pill(status, o){
     const map = { booked: 'Booked', in_production: 'In production', production_done: o && o.shippedDate ? 'Dispatched' : 'Ready', delivered: 'Delivered' };
@@ -406,12 +495,13 @@
   }
   function chatsHtml(){
     const C = chats(), appOpen = ((window.TTBuyers && window.TTBuyers.requests()) || []).filter(function(q){ return q.status === 'open'; }).length;
-    if(V.chat !== 'app' && !C.groups.some(function(g){ return g.id === V.chat; })) V.chat = 'app';
-    const tabs = '<div class="cr-tabs"><button class="' + (V.chat === 'app' ? 'on' : '') + '" data-crchat="app">Buyer app' + (appOpen ? ' · ' + appOpen : '') + '</button>' +
+    if(V.chat !== 'app' && V.chat !== 'week' && !C.groups.some(function(g){ return g.id === V.chat; })) V.chat = 'app';
+    const quiet = weekClients().filter(function(w){ return w.quiet || w.waiting; }).length;
+    const tabs = '<div class="cr-tabs"><button class="' + (V.chat === 'week' ? 'on' : '') + '" data-crchat="week">This week' + (quiet ? ' · ' + quiet : '') + '</button><button class="' + (V.chat === 'app' ? 'on' : '') + '" data-crchat="app">Buyer app' + (appOpen ? ' · ' + appOpen : '') + '</button>' +
       C.groups.map(function(g){ const n = g.team.length ? needsReply(g).length : 0; return '<button class="' + (V.chat === g.id ? 'on' : '') + '" data-crchat="' + g.id + '">💬 ' + esc(g.name) + (n ? ' · ' + n : '') + '</button>'; }).join('') +
       '<label class="cr-btn">' + (V.importing ? 'Importing…' : '+ Import WhatsApp chat') + '<input type="file" accept=".txt,.zip,text/plain,application/zip" id="crFile" hidden></label></div>';
     const g = C.groups.find(function(x){ return x.id === V.chat; });
-    return tabs + (V.chat === 'app' ? appInbox() : groupView(g)) +
+    return tabs + (V.chat === 'week' ? weekHtml() : V.chat === 'app' ? appInbox() : groupView(g)) +
       (!C.groups.length ? '<p class="cr-dim" style="margin-top:10px"><b>WhatsApp groups:</b> in the group, tap ⋮ → More → <b>Export chat</b> → Without media, save the file, then import it here. The dashboard sorts messages into orders, payments, dispatch and complaints, links TT-numbers to orders and flags questions no one from Thread Tribe has answered.</p>' : '');
   }
 
@@ -470,6 +560,7 @@
       if(!txt) return;
       window.TTBuyers.reply(id, 'done', txt).then(function(ok){ if(ok){ showToast('Reply sent'); render(); } });
     }
+    else if(act === 'wa') sendWa(id, b.getAttribute('data-k'));
     else if(act === 'handled'){ chats().handled[b.getAttribute('data-k')] = 1; scheduleSave(); render(); }
     else if(act === 'team'){ V.filter = 'setup'; render(); }
     else if(act === 'team-done'){ V.filter = 'reply'; render(); }
@@ -495,6 +586,8 @@
   }
   document.addEventListener('input', onPromiseInput);
   document.addEventListener('change', function(e){
+    const lk = e.target.closest && e.target.closest('[data-crlink]');
+    if(lk){ const g = chats().groups.find(function(x){ return x.id === lk.value; }); if(g){ g.clientKey = lk.getAttribute('data-crlink'); scheduleSave(); render(); } return; }
     if(onPromiseInput(e)) return;
     if(e.target.id === 'crFile' && e.target.files && e.target.files[0]){ importChat(e.target.files[0]); e.target.value = ''; return; }
     const tm = e.target.closest && e.target.closest('[data-crteam]');
@@ -559,6 +652,12 @@
     '#tabControl .cr-tag{font-size:10.5px;border-radius:999px;padding:1px 7px;background:var(--input-bg);color:var(--dim)}' +
     '#tabControl .cr-tag.payment{color:var(--green)} #tabControl .cr-tag.complaint,#tabControl .cr-tag.claim{color:var(--red)} #tabControl .cr-tag.dispatch{color:var(--cyan)} #tabControl .cr-tag.order{color:var(--amber)}' +
     '#tabControl .cr-reply{display:flex;gap:6px;margin-top:6px} #tabControl .cr-reply input{flex:1;background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:13px inherit}' +
+    '#tabControl .cr-wk{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px} #tabControl .cr-wk.open{border-color:var(--amber)}' +
+    '#tabControl .cr-wk-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;margin-bottom:4px} #tabControl .cr-wk-h .cr-dim{margin:0}' +
+    '#tabControl .cr-wk-o{display:flex;gap:6px 10px;align-items:center;flex-wrap:wrap;font-size:12.5px;padding:5px 0;border-top:1px dashed var(--line)} #tabControl .cr-wk-o .cr-dim{margin:0}' +
+    '#tabControl .cr-wk-a{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}' +
+    '#tabControl .cr-btn[disabled]{opacity:.45;cursor:not-allowed}' +
+    '#tabControl .cr-link{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:12px}' +
     '#tabControl .cr-senders{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 12px;font-size:13px}' +
     '#tabControl .cr-promise{border:1px solid var(--cyan)}' +
     '#tabControl .cr-pl-row{display:flex;gap:6px;margin-bottom:6px} #tabControl .cr-pl-row select{flex:1;min-width:0}' +
