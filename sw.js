@@ -1,7 +1,7 @@
 // Offline support for Thread Tribe Studio.
 // Bump VERSION whenever index.html changes so phones pick up the new build.
-const VERSION = 'tt-studio-202610130352';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './config.js', './buyers-admin.js?v=21', './partner-planning.js?v=4', './control-room.js?v=7', './projects.js?v=9', './sales-admin.js?v=8', './shop-admin.js?v=2', './owner-home.js?v=1', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
+const VERSION = 'tt-studio-202610130414';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './config.js', './buyers-admin.js?v=21', './partner-planning.js?v=4', './control-room.js?v=7', './projects.js?v=9', './sales-admin.js?v=8', './shop-admin.js?v=2', './owner-home.js?v=2', './automations.js?v=1', './app-shell.js?v=1', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
 const THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];
 
 self.addEventListener('install', function(e){
@@ -29,7 +29,7 @@ self.addEventListener('fetch', function(e){
 
 
   // Settings file and the Buyer app module: always try the network so edits arrive straight away.
-  if(url.origin === location.origin && /\/(config|buyers-admin|control-room|partner-planning|projects|sales-admin|shop-admin|owner-home)\.js$/.test(url.pathname)){
+  if(url.origin === location.origin && /\/(config|buyers-admin|control-room|partner-planning|projects|sales-admin|shop-admin|owner-home|automations|app-shell)\.js$/.test(url.pathname)){
     // no-cache: revalidate with GitHub Pages instead of using the browser's 10-minute copy.
     e.respondWith(fetch(req.url, { cache: 'no-cache' }).then(function(res){ return putInCache(req, res); }).catch(function(){ return caches.match(req); }));
     return;

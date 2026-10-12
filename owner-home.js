@@ -42,6 +42,16 @@
     return { done: done, qty: qty };
   }
 
+  // Print hours still to run: pieces not yet made x hours per piece, with the failure buffer.
+  function hoursLeft(o){
+    const ps = prod()[o.id], lines = (ps && ps.lines) || {}, buf = typeof bufferMult === 'function' ? bufferMult() : 1;
+    return (o.products || []).reduce(function(s, p){
+      const farm = lines[p.id] ? (lines[p.id].made || 0) : 0;
+      return s + Math.max(0, (+p.qty || 0) - Math.max(+p.already || 0, farm)) * (+p.hrs || 0) * buf;
+    }, 0);
+  }
+  window.TTOwnerHomeHelpers = { made: made, hoursLeft: hoursLeft };
+
   // ---------- is the automation running ----------
   function health(){
     const out = [];
@@ -115,6 +125,8 @@
       if(inv.qty !== undefined && inv.par !== undefined && inv.qty <= inv.par)
         out.push({ level: 2, score: 0, text: (inv.material || '') + ' ' + (inv.color || '') + ' is low · ' + inv.qty + ' g left', act: 'tab', id: 'filament', btn: 'Restock' });
     });
+    // Items from the rules switched on in System → Automations.
+    if(window.TTAutomations) try{ window.TTAutomations.needs().forEach(function(x){ out.push(x); }); }catch(e){ console.warn('[owner home] automations', e); }
     // Floor problems first, then requests, then money; within each, the worst first.
     out.sort(function(a, b){ return a.level - b.level || (a.rank || 0) - (b.rank || 0) || b.score - a.score; });
     return out;
@@ -160,7 +172,7 @@
       if(next.length >= 5) return;
       const m = made(o), left = Math.max(0, m.qty - m.done);
       if(!left) return;
-      const hrs = m.qty ? (orderTotals(o).hours || 0) * left / m.qty : 0;
+      const hrs = hoursLeft(o);
       const ps = prod()[o.id] || {};
       next.push({ o: o, left: left, hrs: hrs, printing: ps.printing_now || 0, failed: ps.plates_failed || 0 });
     });
@@ -294,6 +306,8 @@
     else if(act === 'order' && typeof openOrderDetailModal === 'function') openOrderDetailModal(id);
     else if(act === 'tab') goTab(id);
     else if(act === 'remind') remind(id);
+    else if(act === 'tool' && window.TTAutomations) window.TTAutomations.openTool(id);
+    else if(act === 'link') window.open(id, '_blank', 'noopener');
     else if(act === 'farm'){ const m = document.querySelector('.ttf-menu-item'); if(m) m.click(); else goTab('control'); }
     else if(act === 'printer'){
       const p = (state.printers || []).find(function(x){ return x.id === id; });
