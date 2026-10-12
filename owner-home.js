@@ -11,7 +11,7 @@
 
   const OPEN = ['booked', 'in_production'];
   const SHOW = 5;
-  const H = { all: false };
+  const H = { all: false, tool: '', text: '' };
 
   function esc(s){ return escapeHtml(s == null ? '' : String(s)); }
   function iso(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -260,6 +260,8 @@
         : '<div class="oh-empty">Nothing to ship or collect today.</div>') +
       '</div></div></div>';
 
+    h += automationsCard();
+
     h += '<div class="home-section oh-card"><div class="oh-title"><span>Promised in the next 7 days</span><span>Forecast vs due</span></div>' +
       (pr.length ? pr.map(function(x){
         return '<div class="oh-row oh-click" data-oh="order" data-id="' + esc(x.o.id) + '"><span class="oh-text">' + esc(label(x.o)) +
@@ -287,6 +289,32 @@
     root.innerHTML = h;
   }
 
+  // Pinned daily tools as tiles (they open here), rules switched on, and the latest automatic actions.
+  function automationsCard(){
+    const T = window.TTAutomations;
+    if(!T) return '';
+    const tiles = T.pinned(), recent = T.recent(3);
+    let h = '<div class="home-section oh-card"><div class="oh-title"><span>Automations</span><span>' + T.rulesOn() + ' of ' + T.rulesTotal + ' rules on' +
+      '<button class="oh-link" data-oh="tab" data-id="automations">Manage</button></span></div>';
+    h += tiles.length ? '<div class="oh-tiles">' + tiles.map(function(t){
+      return '<button class="oh-tile' + (H.tool === t.id ? ' on' : '') + '" data-oh="hometool" data-id="' + esc(t.id) + '"><b>' + esc(t.name) + '</b><span>' + esc(t.summary) + '</span></button>';
+    }).join('') + '</div>' : '<div class="oh-empty">Pin daily tools with ★ in Automations to see them here.</div>';
+    if(H.tool){
+      const out = T.runTool(H.tool);
+      if(out){
+        H.text = out.text || ''; H.html = out.html || '';
+        h += '<div class="oh-toolout"><div class="oh-title"><span>' + esc(out.name) + '</span><span>' +
+          (out.text ? '<button class="oh-link" data-oh="copytool">Copy</button><a class="oh-link" target="_blank" rel="noopener" href="' + esc(T.wa('', out.text)) + '">WhatsApp</a>' : '') +
+          (out.print ? '<button class="oh-link" data-oh="printtool">Print</button>' : '') + '<button class="oh-link" data-oh="hometool" data-id="' + esc(H.tool) + '">Close</button></span></div>' + out.html + '</div>';
+      }
+    }
+    if(recent.length) h += '<div class="oh-sub2" style="margin-top:12px">Latest actions</div>' + recent.map(function(e){
+      return '<div class="oh-row"><span class="oh-text">' + esc(e.text) + '<span class="oh-detail">' + new Date(e.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) + '</span></span>' +
+        (e.undo ? '<button class="oh-btn" data-oh="undoauto" data-id="' + e.i + '">Undo</button>' : '') + '</div>';
+    }).join('');
+    return h + '</div>';
+  }
+
   function remind(id){
     const o = state.orders.find(function(x){ return x.id === id; });
     if(!o) return;
@@ -306,7 +334,11 @@
     else if(act === 'order' && typeof openOrderDetailModal === 'function') openOrderDetailModal(id);
     else if(act === 'tab') goTab(id);
     else if(act === 'remind') remind(id);
-    else if(act === 'tool' && window.TTAutomations) window.TTAutomations.openTool(id);
+    else if(act === 'tool' && window.TTAutomations){ H.tool = id; render(); const o = document.querySelector('#ownerHome .oh-toolout'); if(o) o.scrollIntoView({ block: 'nearest' }); }
+    else if(act === 'hometool'){ H.tool = H.tool === id ? '' : id; render(); const o = document.querySelector('#ownerHome .oh-toolout'); if(o) o.scrollIntoView({ block: 'nearest' }); }
+    else if(act === 'copytool'){ if(navigator.clipboard) navigator.clipboard.writeText(H.text || '').then(function(){ if(window.ttToast) window.ttToast('Copied'); }); }
+    else if(act === 'printtool' && window.TTAutomations) window.TTAutomations.printOut(H.html || '');
+    else if(act === 'undoauto' && window.TTAutomations){ window.TTAutomations.undo(+id); render(); if(window.ttToast) window.ttToast('Undone'); }
     else if(act === 'link') window.open(id, '_blank', 'noopener');
     else if(act === 'farm'){ const m = document.querySelector('.ttf-menu-item'); if(m) m.click(); else goTab('control'); }
     else if(act === 'printer'){
@@ -346,6 +378,10 @@
     '.oh-chips{display:flex;flex-wrap:wrap;gap:6px}' +
     '.oh-chip{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;cursor:pointer;background:var(--input-bg);border:1px solid var(--line);color:var(--text)}' +
     '.oh-up{border-color:var(--green)}.oh-down{border-color:var(--red);color:var(--red);text-decoration:line-through}' +
+    '.oh-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}' +
+    '.oh-tile{text-align:left;background:var(--input-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text);font:inherit}' +
+    '.oh-tile b{display:block;font-size:14px}.oh-tile span{font-size:12px;color:var(--dim)}.oh-tile.on,.oh-tile:hover{border-color:var(--cyan)}' +
+    '.oh-toolout{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px 14px}' +
     '.oh-money{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:14px}';
   document.head.appendChild(css);
 

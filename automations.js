@@ -17,6 +17,7 @@
 
   const OPEN = ['booked', 'in_production'];
   const LOG_MAX = 150;
+  const DEFAULT_PINS = ['plan', 'night', 'reorder', 'pack', 'handover', 'scorecard'];
   const V = { tool: '' };
 
   // ---------- helpers ----------
@@ -56,6 +57,7 @@
     if(!a.on || typeof a.on !== 'object') a.on = {};
     if(!Array.isArray(a.log)) a.log = [];
     if(!a.snap || typeof a.snap !== 'object') a.snap = {};
+    if(!Array.isArray(a.pins)) a.pins = DEFAULT_PINS.slice();
     return a;
   }
   function isOn(id){ return !!A().on[id]; }
@@ -200,7 +202,7 @@
     queue().forEach(function(o){
       (o.products || []).forEach(function(p){
         const left = lineLeft(o, p), per = perPlate(p.name), plateH = (+p.hrs || 0) * per * buf();
-        if(left > 0 && plateH > 0) lines.push({ o: o, p: p, plates: Math.ceil(left / per), plateH: plateH, color: [p.material, p.color].filter(Boolean).join(' ') || '—' });
+        if(left > 0 && plateH > 0) lines.push({ o: o, p: p, plates: Math.ceil(left / per), plateH: plateH, color: [p.material, p.color].filter(Boolean).join(' ') });
       });
     });
     // Fill each printer up to a day of print hours, in queue order, keeping a colour on one printer where possible.
@@ -282,10 +284,10 @@
       if(!P.slots.length) return { html: '<p class="au-note">No printers are marked up. Set them in Settings or on Home.</p>', text: '' };
       let text = 'Print plan · ' + fmt(today()) + '\n';
       const html = P.slots.map(function(s){
-        text += '\n' + (s.p.name || 'Printer') + ' (' + hrs(s.used) + ')\n' + (s.jobs.length ? s.jobs.map(function(j){ return '  ' + (j.L.o.displayId || '') + ' ' + j.L.p.name + ' ×' + j.n + ' plate' + (j.n === 1 ? '' : 's') + ' · ' + j.L.color + (j.L.plateH >= 6 ? ' · start before you leave' : ''); }).join('\n') : '  free') + '\n';
+        text += '\n' + (s.p.name || 'Printer') + ' (' + hrs(s.used) + ')\n' + (s.jobs.length ? s.jobs.map(function(j){ return '  ' + (j.L.o.displayId || '') + ' ' + j.L.p.name + ' ×' + j.n + ' plate' + (j.n === 1 ? '' : 's') + (j.L.color ? ' · ' + j.L.color : '') + (j.L.plateH >= 6 ? ' · start before you leave' : ''); }).join('\n') : '  free') + '\n';
         return '<div class="au-block"><div class="au-h">' + esc(s.p.name || 'Printer') + ' <span>' + hrs(s.used) + ' of ' + hrs(P.day) + '</span></div>' +
-          (s.jobs.length ? s.jobs.map(function(j){ return '<div class="au-li">' + esc((j.L.o.displayId || '') + ' · ' + j.L.p.name) + ' ×' + j.n + ' plate' + (j.n === 1 ? '' : 's') + ' <span>' + esc(j.L.color) + ' · ' + hrs(j.n * j.L.plateH) + (j.L.plateH >= 6 ? ' · start before you leave' : '') + '</span></div>'; }).join('') : '<div class="au-li au-dim">Free all day</div>') + '</div>';
-      }).join('') + (P.leftover.length ? '<p class="au-note">Still waiting after today: ' + P.leftover.map(function(L){ return esc((L.o.displayId || '') + ' ' + L.p.name + ' ×' + L.plates); }).join(', ') + '</p>' : '') +
+          (s.jobs.length ? s.jobs.map(function(j){ return '<div class="au-li">' + esc((j.L.o.displayId || '') + ' · ' + j.L.p.name) + ' ×' + j.n + ' plate' + (j.n === 1 ? '' : 's') + ' <span>' + (j.L.color ? esc(j.L.color) + ' · ' : '') + hrs(j.n * j.L.plateH) + (j.L.plateH >= 6 ? ' · start before you leave' : '') + '</span></div>'; }).join('') : '<div class="au-li au-dim">Free all day</div>') + '</div>';
+      }).join('') + (P.leftover.length ? '<p class="au-note">Still waiting after today: ' + P.leftover.slice(0, 6).map(function(L){ return esc((L.o.displayId || '') + ' ' + L.p.name + ' ×' + L.plates); }).join(', ') + (P.leftover.length > 6 ? ' and ' + (P.leftover.length - 6) + ' more lines' : '') + '</p>' : '') +
         '<p class="au-note">Plates use units per plate from the Print farm setup on this device (1 if not set). Hours include the failure buffer.</p>';
       return { html: html, text: text };
     } },
@@ -401,13 +403,34 @@
     } }
   ];
 
+  // One-line live summary per tool, for the tiles on Home.
+  const SUMMARY = {
+    plan: function(){ const P = plan(), busy = P.slots.filter(function(s){ return s.jobs.length; }); return busy.length ? busy.length + ' of ' + P.slots.length + ' printers loaded · ' + hrs(P.slots.reduce(function(s, x){ return s + x.used; }, 0)) : 'Nothing to plan'; },
+    night: function(){ const P = plan(), idle = P.slots.filter(function(s){ return !s.jobs.some(function(j){ return j.L.plateH >= 6; }); }); return idle.length ? idle.length + ' printer' + (idle.length === 1 ? '' : 's') + ' need a long job' : 'All printers have long jobs'; },
+    reorder: function(){ const r = reorder(); return r.short.length ? kg(r.short.reduce(function(s, x){ return s + x.buy; }, 0)) + ' to buy' : r.rows.length ? 'Stock covers the queue' : 'Nothing needed'; },
+    pack: function(){ const n = readyToPack().length; return n ? n + ' order' + (n === 1 ? '' : 's') + ' to pack' : 'Nothing to pack'; },
+    dispatch: function(){ const c = {}; readyToPack().forEach(function(o){ const cl = client(o.clientId) || {}; c[cl.city || '?'] = 1; }); const n = Object.keys(c).length; return n ? n + ' batch' + (n === 1 ? '' : 'es') : 'Nothing to dispatch'; },
+    overflow: function(){ const ov = overflow(); return 'In-house ' + ov.load + '% booked'; },
+    pickups: function(){ const p = pickupsSoon(); return p == null ? 'Loads with Planning' : p.length ? p.length + ' pickup' + (p.length === 1 ? '' : 's') + ' soon' : 'No pickups'; },
+    handover: function(){ return 'Ready to send'; },
+    scorecard: function(){ const ctl = window.TTControl ? window.TTControl.problems() : { overdue: [], risk: [] }; return ctl.overdue.length + ' late · ' + ctl.risk.length + ' at risk'; },
+    weekly: function(){ return 'Last 7 days'; }
+  };
+  function pins(){ return A().pins.filter(function(id){ return TOOLS.some(function(t){ return t.id === id; }); }); }
+  function togglePin(id){ const a = A(), i = a.pins.indexOf(id); if(i === -1) a.pins.push(id); else a.pins.splice(i, 1); if(typeof scheduleSave === 'function') scheduleSave(); }
+  function runTool(id){ const t = TOOLS.find(function(x){ return x.id === id; }); if(!t) return null; try{ return Object.assign({ name: t.name }, t.run()); }catch(e){ return { name: t.name, html: '<p class="au-note">Couldn’t build this: ' + esc(e.message || e) + '</p>', text: '' }; } }
+
   // ---------- screen ----------
   function render(){
     const root = document.getElementById('automationsRoot');
     if(!root) return;
     const a = A();
     let h = '<div class="panel"><div class="panel-title">Daily tools</div><p class="au-note">One tap does the paperwork. Copy or share the result on WhatsApp.</p><div class="au-tools">' +
-      TOOLS.map(function(t){ return '<button class="au-tool' + (V.tool === t.id ? ' on' : '') + '" data-au="tool" data-id="' + t.id + '"><b>' + esc(t.name) + '</b><span>' + esc(t.desc) + '</span></button>'; }).join('') + '</div>';
+      TOOLS.map(function(t){
+        const pinned = pins().indexOf(t.id) !== -1;
+        return '<div class="au-toolwrap"><button class="au-tool' + (V.tool === t.id ? ' on' : '') + '" data-au="tool" data-id="' + t.id + '"><b>' + esc(t.name) + '</b><span>' + esc(t.desc) + '</span></button>' +
+          '<button class="au-pin' + (pinned ? ' on' : '') + '" data-au="pin" data-id="' + t.id + '" title="' + (pinned ? 'Unpin from Home' : 'Pin to Home') + '" aria-label="' + (pinned ? 'Unpin ' : 'Pin ') + esc(t.name) + (pinned ? ' from Home' : ' to Home') + '">' + (pinned ? '★' : '☆') + '</button></div>';
+      }).join('') + '</div><p class="au-note">★ pins a tool to Home.</p>';
     if(V.tool){
       const t = TOOLS.find(function(x){ return x.id === V.tool; });
       let out;
@@ -452,6 +475,7 @@
     else if(act === 'copy'){ navigator.clipboard && navigator.clipboard.writeText(V.text || '').then(function(){ window.ttToast && window.ttToast('Copied'); }); }
     else if(act === 'print') printPack();
     else if(act === 'undo') undo(+id);
+    else if(act === 'pin'){ togglePin(id); render(); if(window.TTOwnerHome) window.TTOwnerHome.render(); }
     else if(act === 'partner-job'){ goTab('partners'); if(typeof ponOpenJob === 'function') ponOpenJob(null); }
   });
   document.addEventListener('change', function(e){
@@ -470,6 +494,8 @@
     '.au-note{font-size:13px;color:var(--dim);margin:4px 0 10px}.au-dim{color:var(--dim)}.au-bad{color:var(--red);font-weight:600}' +
     '.au-tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}' +
     '.au-tool{text-align:left;background:var(--input-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text);font:inherit}' +
+    '.au-toolwrap{position:relative}.au-toolwrap .au-tool{width:100%;height:100%;padding-right:34px}' +
+    '.au-pin{position:absolute;top:6px;right:6px;background:none;border:none;font-size:16px;cursor:pointer;color:var(--dim);padding:2px 4px}.au-pin.on{color:var(--amber)}' +
     '.au-tool b{display:block;font-size:14px}.au-tool span{font-size:12px;color:var(--dim)}.au-tool.on,.au-tool:hover{border-color:var(--cyan)}' +
     '.au-out{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:12px 14px}' +
     '.au-out-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}' +
@@ -522,5 +548,17 @@
   setTimeout(tick, 6000);
   setInterval(function(){ if(!document.hidden) tick(); }, 120000);
 
-  window.TTAutomations = { needs: needs, render: render, isOn: isOn, openTool: function(id){ goTab('automations'); V.tool = id; render(); }, tick: tick };
+  window.TTAutomations = {
+    needs: needs, render: render, isOn: isOn, tick: tick,
+    openTool: function(id){ goTab('automations'); V.tool = id; render(); },
+    // For Home: pinned tools with live summaries, running a tool in place, rules on, recent log with Undo.
+    pinned: function(){ return pins().map(function(id){ const t = TOOLS.find(function(x){ return x.id === id; }); let s = ''; try{ s = SUMMARY[id] ? SUMMARY[id]() : ''; }catch(e){} return { id: id, name: t.name, summary: s }; }); },
+    runTool: runTool,
+    rulesOn: function(){ return RULES.filter(function(r){ return isOn(r.id); }).length; },
+    rulesTotal: RULES.length,
+    recent: function(n){ return A().log.slice(0, n || 3).map(function(e, i){ return { i: i, at: e.at, text: e.text, undo: !!e.undo }; }); },
+    undo: undo,
+    printOut: function(html){ const w = window.open('', '_blank'); if(!w) return; w.document.write('<!doctype html><meta charset="utf-8"><title>Thread Tribe</title><style>body{font:14px system-ui,sans-serif;padding:20px}.au-block{border:1px solid #999;border-radius:8px;padding:12px;margin:0 0 14px;page-break-inside:avoid}.au-h{font-weight:700;margin-bottom:6px}.au-h span,.au-li span{color:#555;font-weight:400;margin-left:8px}.au-li{padding:3px 0}</style>' + html); w.document.close(); w.focus(); w.print(); },
+    wa: wa
+  };
 })();
