@@ -1723,26 +1723,27 @@
       <span class="chevron">▼</span>
     </button>
     <div class="tab-dropdown" id="tabDropdown">
-      <div class="tab-group-label">Main</div>
+      <div class="tab-group-label">Home</div>
       <button class="tab-btn active" data-tab="home">Home</button>
+      <div class="tab-group-label">Operations control room</div>
       <button class="tab-btn" data-tab="control">Control Room</button>
-      <button class="tab-btn" data-tab="projects">Projects</button>
-      <button class="tab-btn" data-tab="sales">Sales</button>
-      <button class="tab-btn" data-tab="shop">Shop</button>
-      <div class="tab-group-label">Operations</div>
       <button class="tab-btn" data-tab="orders">Orders</button>
-      <button class="tab-btn" data-tab="clients">Clients</button>
-      <button class="tab-btn" data-tab="expenses">Expenses</button>
-      <button class="tab-btn" data-tab="invoices">Invoices</button>
-      <button class="tab-btn" data-tab="partners">Partner Network</button>
-      <button class="tab-btn" data-tab="buyers">Buyer App</button>
-      <div class="tab-group-label">Inventory &amp; Production</div>
-      <button class="tab-btn" data-tab="filament">Filament Inventory</button>
-      <button class="tab-btn" data-tab="products">Product Catalog</button>
       <button class="tab-btn" data-tab="scheduler">Production Scheduler</button>
-      <div class="tab-group-label">Analytics</div>
-      <button class="tab-btn" data-tab="bi">Business Intelligence</button>
+      <button class="tab-btn" data-tab="partners">Partner Network</button>
+      <button class="tab-btn" data-tab="projects">Projects</button>
+      <button class="tab-btn" data-tab="filament">Filament Inventory</button>
+      <div class="tab-group-label">Sales &amp; marketing</div>
+      <button class="tab-btn" data-tab="sales">Sales</button>
+      <button class="tab-btn" data-tab="clients">Clients</button>
+      <button class="tab-btn" data-tab="buyers">Buyer App</button>
+      <button class="tab-btn" data-tab="shop">Shop</button>
+      <button class="tab-btn" data-tab="products">Product Catalog</button>
+      <div class="tab-group-label">Finances</div>
+      <button class="tab-btn" data-tab="invoices">Invoices</button>
+      <button class="tab-btn" data-tab="expenses">Expenses</button>
       <button class="tab-btn" data-tab="expDash">Expense Dashboard</button>
+      <div class="tab-group-label">Business analysis</div>
+      <button class="tab-btn" data-tab="bi">Business Intelligence</button>
       <button class="tab-btn" data-tab="production">Production Dashboard</button>
       <button class="tab-btn" data-tab="pricingSim">Pricing Simulator</button>
       <div class="tab-group-label">System</div>
@@ -2851,10 +2852,10 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
 
   
 <nav class="mnav" id="mobileNav" aria-label="Main">
-  <button data-mtab="home" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path></svg>Home</button>
-  <button data-mtab="orders"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg>Orders</button>
+  <button data-mtab="control"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4"></path><rect x="4" y="8" width="16" height="9" rx="2"></rect><path d="M8 17v3h8v-3M8 12h2"></path></svg>Ops</button>
+  <button data-mtab="sales"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 7-7"></path><path d="M14 8h6v6"></path></svg>Sales</button>
   <button class="mnav-add" id="mnavAdd" aria-label="Quick add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
-  <button data-mtab="partners"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><circle cx="17" cy="9" r="2.4"></circle><path d="M16 14.2c2.8.4 5 2.8 5 5.8"></path></svg>Partners</button>
+  <button data-mtab="invoices"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18"></path><circle cx="16" cy="14.5" r="1.4"></circle></svg>Money</button>
   <button id="mnavMore"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"></rect><rect x="14" y="4" width="6" height="6" rx="1.5"></rect><rect x="4" y="14" width="6" height="6" rx="1.5"></rect><rect x="14" y="14" width="6" height="6" rx="1.5"></rect></svg>More</button>
 </nav>
 
@@ -15386,7 +15387,8 @@ function ponImportUpdate(text){
 // top of the existing tab system — it only ever clicks the real .tab-btn
 // buttons and calls the existing open/add functions.
 (function(){
-  const MAIN_TABS = ['home', 'orders', 'partners'];
+  // Bottom bar: one button per daily work area; everything else (Home included) is under More.
+  const MAIN_TABS = ['control', 'sales', 'invoices'];
   const nav = document.getElementById('mobileNav');
   const quickSheet = document.getElementById('quickAddSheet');
   const moreSheet = document.getElementById('moreSheet');
@@ -17497,7 +17499,7 @@ function ponUpdateBadges(){
   const html = n ? ' <span class="pon-badge">' + n + '</span>' : '';
   const tb = document.querySelector('.tab-btn[data-tab="partners"]');
   if(tb) tb.innerHTML = 'Partner Network' + html;
-  const mb = document.querySelector('#mobileNav [data-mtab="partners"]');
+  const mb = document.querySelector('#mobileNav [data-mtab="control"]');
   if(mb){ let b = mb.querySelector('.pon-badge'); if(n){ if(!b){ b = document.createElement('span'); b.className = 'pon-badge pon-badge-dot'; mb.appendChild(b); } b.textContent = n; } else if(b) b.remove(); }
 }
 
@@ -17890,8 +17892,10 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <style>
   #ttf-open{position:fixed;left:18px;bottom:18px;z-index:9998;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:10px 16px;font:600 13px 'JetBrains Mono',monospace;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18)}
   #ttf-open:hover{border-color:var(--cyan)}
-  /* Where Studio has a bottom tab bar, the panel lives in its More sheet instead. */
-  @media (max-width: 760px){ .ttf-has-mnav #ttf-open{display:none} }
+  .ttf-menu-item{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);background:transparent;border:none;padding:10px 16px;cursor:pointer;display:block;width:100%;text-align:left}
+  .ttf-menu-item:hover{color:var(--cyan);background:rgba(79,209,197,0.06)}
+  /* Where Studio has a tab menu, the panel opens from "Print farm" in it instead of a floating button. */
+  .ttf-in-menu #ttf-open{display:none}
   #ttf-back{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto}
   #ttf-back.on{display:flex}
   #ttf{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;width:min(1100px,100%);font:13px 'JetBrains Mono',monospace;box-shadow:0 10px 40px rgba(0,0,0,.35)}
@@ -17954,15 +17958,32 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   var HOLD_KEY = 'tt-bambuddy-hold-v1';
   var ACTIVE = { booked: 'Booked', in_production: 'In production' };
 
-  // Phone layout: add "Print farm" to Studio's More sheet (Studio closes the sheet itself on click).
-  if (document.getElementById('mobileNav')) {
-    document.documentElement.classList.add('ttf-has-mnav');
-    var grids = document.querySelectorAll('#moreSheetList .msheet-grid');
-    if (grids.length) {
+  // Put "Print farm" in Studio's own menus, in the Operations group: the desktop tab menu and
+  // the phone's More sheet. It opens the panel; it is not a Studio tab, so it skips the tab system.
+  function opsGroupEnd(labels, isLabel){
+    var ops = [].filter.call(labels, function(el){ return isLabel(el) && /^operations/i.test(el.textContent.trim()); })[0];
+    return ops || null;
+  }
+  var dropdown = document.getElementById('tabDropdown');
+  if (dropdown) {
+    var opsLabel = opsGroupEnd(dropdown.children, function(el){ return el.classList.contains('tab-group-label'); });
+    var after = opsLabel, el = opsLabel && opsLabel.nextElementSibling;
+    while (el && !el.classList.contains('tab-group-label')) { after = el; el = el.nextElementSibling; }
+    var menuItem = document.createElement('button');
+    menuItem.type = 'button'; menuItem.className = 'ttf-menu-item'; menuItem.textContent = 'Print farm';
+    menuItem.addEventListener('click', function(){ var bar = document.getElementById('tabBar'); if (bar) bar.classList.remove('open'); open(); });
+    if (after) after.insertAdjacentElement('afterend', menuItem); else dropdown.appendChild(menuItem);
+    document.documentElement.classList.add('ttf-in-menu');
+  }
+  var sheet = document.getElementById('moreSheetList');
+  if (sheet) {
+    var label = opsGroupEnd(sheet.querySelectorAll('.msheet-label'), function(){ return true; });
+    var grid = label ? label.nextElementSibling : sheet.querySelector('.msheet-grid:last-of-type');
+    if (grid) {
       var item = document.createElement('button');
-      item.className = 'msheet-item'; item.type = 'button'; item.textContent = '🖨 Print farm';
+      item.className = 'msheet-item'; item.type = 'button'; item.textContent = 'Print farm';
       item.addEventListener('click', function(){ open(); });
-      grids[grids.length - 1].appendChild(item);
+      grid.appendChild(item);
     }
   }
 
