@@ -227,6 +227,9 @@
     return out;
   }
 
+  // For the owner's Home: the same finish forecast and late / at-risk / unpaid lists.
+  window.TTControl = { forecast: forecast, problems: problems, queue: queue };
+
   // ---------- WhatsApp chat import ----------
   function chats(){
     if(!state.waChats || typeof state.waChats !== 'object') state.waChats = { groups: [], handled: {} };
