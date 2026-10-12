@@ -238,7 +238,10 @@
       dispatchBy: o.dispatchBy || '', shippedDate: o.shippedDate || '', courier: o.courier || '', trackingNo: o.trackingNo || '',
       productionDoneDate: o.productionDoneDate || '', deliveryDate: o.deliveryDate || '',
       lines: o.products.filter(function(p){ return (p.qty || 0) > 0; }).map(function(p){
-        return { name: p.name || '', color: p.color || '', material: p.material || '', qty: p.qty || 0, made: Math.min(p.already || 0, p.qty || 0),
+        // Made = Studio's own count, or the pieces the workshop bridge has seen finish on the
+        // printers for this line, whichever is higher (bridge counts one plate as per_plate pieces).
+        const farm = ps && ps.lines && ps.lines[p.id] ? (ps.lines[p.id].made || 0) : 0;
+        return { name: p.name || '', color: p.color || '', material: p.material || '', qty: p.qty || 0, made: Math.min(Math.max(p.already || 0, farm), p.qty || 0),
           unitPrice: p.actualPrice || 0, listPrice: p.listPrice || 0, catalogId: catalogIdFor(p) };
       }),
       subtotal: t.orderValue, discount: t.discount, gstRate: t.gstRate, gst: t.gstAmount, total: t.grandTotal,
