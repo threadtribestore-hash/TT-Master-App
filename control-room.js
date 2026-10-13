@@ -1,15 +1,12 @@
 // ===================================================================
 // ======================= CONTROL ROOM (Studio) =====================
 // ===================================================================
-// One screen for running the day: the production queue, delivery dates
-// (a two-week dispatch calendar plus overdue / at-risk / unpaid lists) and
-// customer chats — live messages from the Buyer app, and WhatsApp group
-// chats imported from WhatsApp's "Export chat" file.
+// One screen for running the day: the production queue and delivery dates
+// (a two-week dispatch calendar plus overdue / at-risk / unpaid lists).
 //
-// WhatsApp groups can't be read live: Meta's Groups API needs an Official
-// Business Account and only covers groups created through the API, and
-// WhatsApp Web scrapers risk a ban. So group chats come in as exports and
-// are kept (last 45 days) in state.waChats, synced like any other setting.
+// The Customer chats panel (Buyer-app messages, imported WhatsApp group chats
+// in state.waChats, and the week's client updates) was taken off the screen on
+// 14 Oct 2026. Its helpers below are unused for now; saved chat data is kept.
 (function(){
   if(window.TT_STOCK_MODE) return;
 
@@ -522,9 +519,7 @@
   function render(){
     const root = document.getElementById('controlRoot');
     if(!root) return;
-    const fc = forecast(), p = problems(), C = chats();
-    const waiting = C.groups.reduce(function(t, g){ return t + (g.team.length ? needsReply(g).length : 0); }, 0) +
-      ((window.TTBuyers && window.TTBuyers.requests()) || []).filter(function(q){ return q.status === 'open'; }).length;
+    const fc = forecast(), p = problems();
     const weekEnd = addDays(today(), 7);
     const dueWeek = state.orders.filter(function(o){ const d = target(o); return d && d >= today() && d <= weekEnd && o.status !== 'delivered' && !o.shippedDate && ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }).length;
     root.innerHTML =
@@ -536,15 +531,13 @@
             (!fc.hours ? 'Clear' : qc ? fmt(iso(qc.at)) : '—') + '</div><div class="s">' + (!fc.hours ? 'nothing queued' : qc ? Math.round(fc.hours) + ' h ÷ ' + qc.n + ' printers = ' + (Math.round(qc.each * 10) / 10) + ' h' : 'add printers in Settings') + '</div></div>'; })() +
         '<div class="cr-kpi"><div class="k">Due in 7 days</div><div class="v">' + dueWeek + '</div><div class="s">to dispatch</div></div>' +
         '<div class="cr-kpi ' + (p.overdue.length + p.risk.length ? 'bad' : '') + '"><div class="k">Late or at risk</div><div class="v">' + (p.overdue.length + p.risk.length) + '</div><div class="s">' + p.overdue.length + ' overdue</div></div>' +
-        '<div class="cr-kpi ' + (waiting ? 'warn' : '') + '"><div class="k">Chats waiting</div><div class="v">' + waiting + '</div><div class="s">need a reply</div></div>' +
       '</div>' +
       promiseHtml() +
       '<div class="cr-grid">' +
         '<div class="panel"><div class="panel-title">Production queue</div>' + queueHtml(fc) + '</div>' +
         '<div><div class="panel"><div class="panel-title">Dispatch calendar · 2 weeks</div>' + calendarHtml() + '</div>' +
         '<div class="panel"><div class="panel-title">Needs attention</div>' + problemsHtml(p) + '</div></div>' +
-      '</div>' +
-      '<div class="panel"><div class="panel-title">Customer chats</div>' + chatsHtml() + '</div>';
+      '</div>';
   }
   window.renderControlRoom = function(){ render(); if(window.TTPartners) window.TTPartners.load().then(render).catch(function(){}); if(window.TTBuyers) window.TTBuyers.refresh().then(render).catch(function(){}); };
   setInterval(function(){
