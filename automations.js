@@ -193,6 +193,11 @@
       });
     }
     if(window.TTMarketing) try{ out.push.apply(out, window.TTMarketing.needs()); }catch(e){}
+    if(window.TTSupport) try{
+      const op = window.TTSupport.open(), claims = op.filter(function(q){ return q.kind === 'claim'; }).length, waiting = op.filter(function(q){ return q.kind === 'message' && Date.now() - Date.parse(q.created_at || 0) > 86400000; }).length;
+      if(claims) out.push({ level: 1, rank: 1, score: claims, text: claims + ' damage claim' + (claims === 1 ? '' : 's') + ' from brand partners waiting', act: 'tab', id: 'support', btn: 'Support' });
+      if(waiting) out.push({ level: 1, rank: 2, score: waiting, text: waiting + ' brand-partner message' + (waiting === 1 ? '' : 's') + ' unanswered for over a day', act: 'tab', id: 'support', btn: 'Reply' });
+    }catch(e){}
     return out;
   }
 

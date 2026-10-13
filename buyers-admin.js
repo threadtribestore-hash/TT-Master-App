@@ -271,7 +271,9 @@
       catalogue: catalogue(tier.pct).filter(function(i){ return !i.onRequest; }),
       trending: trending(),
       collections: activeCollections(),
-      orders: ordersFor(c.id)
+      orders: ordersFor(c.id),
+      // Help & FAQ, only once it has been reviewed and saved in Support.
+      faq: Array.isArray(state.buyerFaq) ? state.buyerFaq : []
     };
     if(JSON.stringify(pack).length > 4000000) pack.catalogue.forEach(function(i){ i.photo = ''; });
     return pack;
