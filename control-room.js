@@ -379,7 +379,8 @@
     if(o.status === 'in_production'){ const pr = orderProgress(o); return hi + 'quick update on ' + ref + ': ' + pr.done + ' of ' + pr.total + ' pieces made so far' + (when ? ', on track to dispatch by ' + when : '') + '.\n— ' + biz; }
     return hi + ref + ' is confirmed and booked for production' + (itemsText(o) ? ': ' + itemsText(o) : '') + '.' + (when ? ' Expected dispatch: ' + when + '.' : '') + '\n— ' + biz;
   }
-  function ago(iso){ const n = dayDiff(today(), iso.slice(0, 10)); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : n + ' days ago'; }
+  // Timestamps are stored in UTC, so compare by the local calendar date (an evening send in India is the next UTC day).
+  function ago(ts){ const t = new Date(ts); const n = isNaN(t) ? 0 : dayDiff(today(), iso(t)); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : n + ' days ago'; }
   function weekHtml(){
     const W = weekClients(), groups = chats().groups;
     if(!W.length) return '<p class="cr-dim">No client orders to dispatch in the next 7 days.</p>';
@@ -407,6 +408,94 @@
     window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(waText(o, kind, who(o))), '_blank');
     o.waLog = (o.waLog || []).concat([{ t: new Date().toISOString(), kind: kind }]).slice(-10);
     scheduleSave(); render();
+  }
+
+  // ---------- order lines: every open order's products, farm state and per-product updates ----------
+  // Farm state comes from tt-bridge (production_stats.lines): made, plus jobs waiting / printing that
+  // it could tie to the line. "_farm" holds jobs known to be for the order but not for one line.
+  const LINE_STATES = [['all', 'All'], ['none', 'Not queued'], ['queued', 'Queued'], ['printing', 'Printing'], ['done', 'Made']];
+  function floorOrders(){
+    return state.orders.filter(function(o){
+      return ['booked', 'in_production', 'production_done'].indexOf(o.status) !== -1 && !o.shippedDate && (o.products || []).some(function(p){ return (p.qty || 0) > 0; });
+    }).sort(function(a, b){ return (target(a) || '9999').localeCompare(target(b) || '9999'); });
+  }
+  function lineInfo(o, p){
+    const ps = prodStats()[o.id], f = ps && ps.lines ? ps.lines[p.id] : null, of = ps && ps.lines ? ps.lines._farm : null;
+    const qty = p.qty || 0, made = Math.min(qty, Math.max(p.already || 0, f ? (f.made || 0) : 0)), left = qty - made;
+    const waiting = f ? (f.waiting || 0) : 0, printing = f ? (f.printing || 0) : 0;
+    let st, label;
+    if(o.status === 'production_done' || left <= 0){ st = 'done'; label = 'Made'; }
+    else if(printing){ st = 'printing'; label = 'Printing' + (waiting ? ' · ' + waiting + ' waiting' : ''); }
+    else if(waiting){ st = 'queued'; label = 'Queued · ' + waiting + ' plate' + (waiting === 1 ? '' : 's'); }
+    else if(of && (of.waiting || of.printing)){ st = 'queued'; label = 'Order on farm'; }
+    else if(!ps){ st = 'none'; label = 'No farm data'; }
+    else { st = 'none'; label = 'Not queued'; }
+    return { qty: qty, made: made, left: left, waiting: waiting, printing: printing, st: st, label: label, unknown: !ps };
+  }
+  function colourOf(p){
+    const hex = typeof resolveHex === 'function' ? resolveHex(p) : (p.colorHex || '#999');
+    return '<span class="cr-sw" style="background:' + esc(hex) + '"></span>' + esc(p.color || '—') + (p.material ? ' <span class="cr-dim-i">' + esc(p.material) + '</span>' : '');
+  }
+  function lineText(o, p, name){
+    const biz = (state.business && state.business.name) || 'Thread Tribe', hi = 'Hi ' + String(name || '').split(' ')[0] + ', ';
+    const i = lineInfo(o, p), ref = o.displayId || 'your order', d = target(o), when = d ? fmtLong(d) : '';
+    const item = p.name + (p.color ? ' (' + p.color + ')' : '');
+    let body;
+    if(i.left <= 0) body = 'all ' + i.qty + ' pcs of ' + item + ' are made' + (when ? ' and set for dispatch by ' + when : '') + '.';
+    else if(i.printing || i.waiting) body = item + ': ' + i.made + ' of ' + i.qty + ' pcs made, the remaining ' + i.left + ' are ' + (i.waiting ? 'in the print queue' : 'printing now') + (when ? '. On track for dispatch by ' + when : '') + '.';
+    else if(i.made) body = item + ': ' + i.made + ' of ' + i.qty + ' pcs made so far' + (when ? '. Expected dispatch ' + when : '') + '.';
+    else body = item + ' × ' + i.qty + ' is scheduled for production' + (when ? ', expected dispatch ' + when : '') + '.';
+    return hi + 'update on ' + ref + ': ' + body + '\n— ' + biz;
+  }
+  function sendLine(id, lineId){
+    const o = state.orders.find(function(x){ return x.id === id; }); if(!o) return;
+    const p = (o.products || []).find(function(x){ return x.id === lineId; }); if(!p) return;
+    const c = client(o.clientId), phone = waPhone((c && c.phone) || o.clientPhone);
+    if(!phone){ showNoticeModal('Add a phone number for ' + who(o) + ' in the Clients tab first.'); return; }
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(lineText(o, p, who(o))), '_blank');
+    o.waLog = (o.waLog || []).concat([{ t: new Date().toISOString(), kind: 'line', line: lineId }]).slice(-20);
+    scheduleSave(); render();
+  }
+  function lineSent(o, lineId){ const l = (o.waLog || []).filter(function(e){ return e.kind === 'line' && e.line === lineId; }); return l.length ? l[l.length - 1] : null; }
+  function linesHtml(){
+    const orders = floorOrders(), f = V.lf || 'all', q = (V.lq || '').trim().toLowerCase();
+    const counts = { all: 0, none: 0, queued: 0, printing: 0, done: 0 };
+    const rows = orders.map(function(o){
+      const ls = (o.products || []).filter(function(p){ return (p.qty || 0) > 0; }).map(function(p){ const i = lineInfo(o, p); counts.all++; counts[i.st]++; return { p: p, i: i }; });
+      return { o: o, ls: ls };
+    });
+    const anyData = Object.keys(prodStats()).length > 0;
+    // A search that names the order or client shows all its lines; one that names a product or colour shows those lines.
+    const shown = rows.map(function(r){
+      const orderHit = !q || [r.o.displayId, who(r.o), r.o.name].join(' ').toLowerCase().indexOf(q) !== -1;
+      return { o: r.o, ls: r.ls.filter(function(x){
+        return (f === 'all' || x.i.st === f) && (orderHit || [x.p.name, x.p.color, x.p.material].join(' ').toLowerCase().indexOf(q) !== -1);
+      }) };
+    }).filter(function(r){ return r.ls.length; });
+    let h = '<div class="panel cr-lines"><div class="cr-lines-head"><div class="panel-title" style="margin:0">Order lines on the floor</div>' +
+      '<input class="cr-lines-q" data-crlq placeholder="Search order, client, product, colour" value="' + esc(V.lq || '') + '"></div>' +
+      '<div class="cr-lines-f">' + LINE_STATES.map(function(s){ return '<button class="' + (f === s[0] ? 'on ' : '') + 'st-' + s[0] + '" data-crlf="' + s[0] + '">' + s[1] + ' <b>' + counts[s[0]] + '</b></button>'; }).join('') + '</div>' +
+      (anyData ? '' : '<p class="cr-dim">Farm status comes from the workshop bridge. Sign in to sync to see what is queued and printing.</p>');
+    if(!shown.length) return h + '<p class="cr-dim">' + (orders.length ? 'No lines match.' : 'No booked or in-production orders.') + '</p></div>';
+    h += shown.map(function(r){
+      const o = r.o, pr = orderProgress(o), d = target(o), late = d && d < today();
+      const ls = lastSent(o);
+      return '<div class="cr-lo"><div class="cr-lo-h">' + orderLink(o) + '<b>' + esc(who(o)) + '</b>' + pill(o.status, o) +
+          '<span class="' + (late ? 'cr-bad' : 'cr-dim-i') + '">' + (d ? (late ? 'late · ' : 'dispatch ') + fmt(d) : 'no date') + '</span>' +
+          '<span class="cr-dim-i">' + pr.done + '/' + pr.total + ' pcs</span>' +
+          '<span class="cr-lo-a">' + (ls ? '<span class="cr-dim-i">updated ' + ago(ls.t) + '</span>' : '') + '<button class="cr-btn" data-cr="wa" data-id="' + o.id + '" data-k="update">Update whole order</button></span></div>' +
+        '<div class="cr-lt"><div class="cr-lt-r cr-lt-th"><span>Product</span><span>Colour</span><span class="n">Qty</span><span class="n">Made</span><span class="n">Left</span><span>Farm</span><span></span></div>' +
+        r.ls.map(function(x){
+          const p = x.p, i = x.i, sent = lineSent(o, p.id), pct = i.qty ? Math.round(i.made / i.qty * 100) : 0;
+          return '<div class="cr-lt-r"><span class="cr-lt-p" data-l="Product"><b>' + esc(p.name || 'Untitled') + '</b><i class="cr-lt-bar"><i style="width:' + pct + '%"></i></i></span>' +
+            '<span data-l="Colour">' + colourOf(p) + '</span>' +
+            '<span class="n" data-l="Qty">' + i.qty + '</span><span class="n" data-l="Made">' + i.made + '</span><span class="n" data-l="Left">' + i.left + '</span>' +
+            '<span data-l="Farm"><span class="cr-fs ' + i.st + '">' + esc(i.label) + '</span></span>' +
+            '<span class="cr-lt-a"><button class="cr-btn" data-cr="line-wa" data-id="' + o.id + '" data-line="' + esc(p.id) + '" title="WhatsApp ' + esc(who(o)) + ' an update on ' + esc(p.name) + '">Send update</button>' +
+              (sent ? '<span class="cr-dim-i">sent ' + ago(sent.t) + '</span>' : '') + '</span></div>';
+        }).join('') + '</div></div>';
+    }).join('');
+    return h + '</div>';
   }
 
   // ---------- view ----------
@@ -532,6 +621,7 @@
         '<div class="cr-kpi"><div class="k">Due in 7 days</div><div class="v">' + dueWeek + '</div><div class="s">to dispatch</div></div>' +
         '<div class="cr-kpi ' + (p.overdue.length + p.risk.length ? 'bad' : '') + '"><div class="k">Late or at risk</div><div class="v">' + (p.overdue.length + p.risk.length) + '</div><div class="s">' + p.overdue.length + ' overdue</div></div>' +
       '</div>' +
+      linesHtml() +
       promiseHtml() +
       '<div class="cr-grid">' +
         '<div class="panel"><div class="panel-title">Production queue</div>' + queueHtml(fc) + '</div>' +
@@ -548,6 +638,7 @@
   document.addEventListener('click', function(e){
     const tab = document.getElementById('tabControl');
     if(!tab || !tab.contains(e.target)) return;
+    const lf = e.target.closest('[data-crlf]'); if(lf){ V.lf = lf.getAttribute('data-crlf'); render(); return; }
     const f = e.target.closest('[data-crf]'); if(f){ V.filter = f.getAttribute('data-crf'); render(); return; }
     const c = e.target.closest('[data-crchat]'); if(c){ V.chat = c.getAttribute('data-crchat'); V.filter = 'reply'; render(); return; }
     const b = e.target.closest('[data-cr]'); if(!b) return;
@@ -571,6 +662,7 @@
       window.TTBuyers.reply(id, 'done', txt).then(function(ok){ if(ok){ showToast('Reply sent'); render(); } });
     }
     else if(act === 'wa') sendWa(id, b.getAttribute('data-k'));
+    else if(act === 'line-wa') sendLine(id, b.getAttribute('data-line'));
     else if(act === 'handled'){ chats().handled[b.getAttribute('data-k')] = 1; scheduleSave(); render(); }
     else if(act === 'team'){ V.filter = 'setup'; render(); }
     else if(act === 'team-done'){ V.filter = 'reply'; render(); }
@@ -595,6 +687,15 @@
     return false;
   }
   document.addEventListener('input', onPromiseInput);
+  // Order-lines search: re-render, then put the cursor back where it was.
+  document.addEventListener('input', function(e){
+    if(!e.target.hasAttribute || !e.target.hasAttribute('data-crlq')) return;
+    V.lq = e.target.value;
+    const pos = e.target.selectionStart;
+    render();
+    const inp = document.querySelector('#tabControl [data-crlq]');
+    if(inp){ inp.focus(); try{ inp.setSelectionRange(pos, pos); }catch(err){} }
+  });
   document.addEventListener('change', function(e){
     const lk = e.target.closest && e.target.closest('[data-crlink]');
     if(lk){ const g = chats().groups.find(function(x){ return x.id === lk.value; }); if(g){ g.clientKey = lk.getAttribute('data-crlink'); scheduleSave(); render(); } return; }
@@ -615,6 +716,41 @@
   const css = document.createElement('style');
   css.textContent =
     '#tabControl .cr-dim{color:var(--dim);font-size:12px;margin:2px 0 8px}' +
+    '#tabControl .cr-dim-i{color:var(--dim);font-size:12px}' +
+    '#tabControl .cr-lines-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}' +
+    '#tabControl .cr-lines-q{flex:0 1 300px;min-width:0;border-radius:9px;min-height:36px;font-size:13px}' +
+    '#tabControl .cr-lines-f{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}' +
+    '#tabControl .cr-lines-f button{background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font:12.5px "Space Grotesk",sans-serif;color:var(--text);cursor:pointer}' +
+    '#tabControl .cr-lines-f button b{font-weight:600;color:var(--dim);margin-left:3px}' +
+    '#tabControl .cr-lines-f button.on{border-color:var(--cyan);background:rgba(79,209,197,.12)}' +
+    '#tabControl .cr-lo{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}' +
+    '#tabControl .cr-lo-h{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:var(--input-bg);font-size:13.5px}' +
+    '#tabControl .cr-lo-a{margin-left:auto;display:flex;gap:8px;align-items:center}' +
+    '#tabControl .cr-lt-r{display:grid;grid-template-columns:minmax(140px,2fr) minmax(110px,1.3fr) 48px 52px 48px minmax(130px,1.3fr) auto;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);font-size:13px}' +
+    '#tabControl .cr-lt-th{font:10.5px "JetBrains Mono",monospace;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);border-top:none;padding-top:8px;padding-bottom:6px}' +
+    '#tabControl .cr-lt-r .n{text-align:right;font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}' +
+    '#tabControl .cr-lt-p{display:flex;flex-direction:column;gap:5px;min-width:0}' +
+    '#tabControl .cr-lt-p b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '#tabControl .cr-lt-bar{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden;max-width:160px}' +
+    '#tabControl .cr-lt-bar i{display:block;height:100%;background:var(--green);border-radius:2px}' +
+    '#tabControl .cr-sw{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.15);vertical-align:-2px;margin-right:6px}' +
+    '#tabControl .cr-fs{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}' +
+    '#tabControl .cr-fs::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}' +
+    '#tabControl .cr-fs.none{color:var(--red);border-color:rgba(232,97,90,.45)}' +
+    '#tabControl .cr-fs.queued{color:var(--amber);border-color:rgba(240,168,60,.5)}' +
+    '#tabControl .cr-fs.printing{color:var(--cyan);border-color:rgba(79,209,197,.55)}' +
+    '#tabControl .cr-fs.done{color:var(--green);border-color:rgba(126,208,138,.55)}' +
+    '#tabControl .cr-lt-a{display:flex;flex-direction:column;align-items:flex-end;gap:3px}' +
+    '@media (max-width:760px){' +
+      '#tabControl .cr-lt-th{display:none}' +
+      '#tabControl .cr-lt-r{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px}' +
+      '#tabControl .cr-lt-p{grid-column:1/-1}' +
+      '#tabControl .cr-lt-r > span[data-l="Colour"],#tabControl .cr-lt-r > span[data-l="Farm"]{grid-column:span 3}' +
+      '#tabControl .cr-lt-r .n{text-align:left}' +
+      '#tabControl .cr-lt-r .n::before{content:attr(data-l) " ";color:var(--dim);font-size:11px}' +
+      '#tabControl .cr-lt-a{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between}' +
+      '#tabControl .cr-lo-a{margin-left:0;width:100%;justify-content:space-between}' +
+    '}' +
     '#tabControl .cr-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin-bottom:14px}' +
     '#tabControl .cr-kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}' +
     '#tabControl .cr-kpi .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}' +
