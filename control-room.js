@@ -477,7 +477,8 @@
       '<div class="cr-lines-f">' + LINE_STATES.map(function(s){ return '<button class="' + (f === s[0] ? 'on ' : '') + 'st-' + s[0] + '" data-crlf="' + s[0] + '">' + s[1] + ' <b>' + counts[s[0]] + '</b></button>'; }).join('') + '</div>' +
       (anyData ? '' : '<p class="cr-dim">Farm status comes from the workshop bridge. Sign in to sync to see what is queued and printing.</p>');
     if(!shown.length) return h + '<p class="cr-dim">' + (orders.length ? 'No lines match.' : 'No booked or in-production orders.') + '</p></div>';
-    h += shown.map(function(r){
+    // Search and filters stay put; the orders scroll inside, like the production queue.
+    h += '<div class="cr-lines-list">' + shown.map(function(r){
       const o = r.o, pr = orderProgress(o), d = target(o), late = d && d < today();
       const ls = lastSent(o);
       return '<div class="cr-lo"><div class="cr-lo-h">' + orderLink(o) + '<b>' + esc(who(o)) + '</b>' + pill(o.status, o) +
@@ -494,7 +495,7 @@
             '<span class="cr-lt-a"><button class="cr-btn" data-cr="line-wa" data-id="' + o.id + '" data-line="' + esc(p.id) + '" title="WhatsApp ' + esc(who(o)) + ' an update on ' + esc(p.name) + '">Send update</button>' +
               (sent ? '<span class="cr-dim-i">sent ' + ago(sent.t) + '</span>' : '') + '</span></div>';
         }).join('') + '</div></div>';
-    }).join('');
+    }).join('') + '</div>';
     return h + '</div>';
   }
 
@@ -724,6 +725,9 @@
     '#tabControl .cr-lines-f button{background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font:12.5px "Space Grotesk",sans-serif;color:var(--text);cursor:pointer}' +
     '#tabControl .cr-lines-f button b{font-weight:600;color:var(--dim);margin-left:3px}' +
     '#tabControl .cr-lines-f button.on{border-color:var(--cyan);background:rgba(79,209,197,.12)}' +
+    '#tabControl .cr-lines-list{max-height:560px;overflow-y:auto;padding-right:4px;overscroll-behavior:contain}' +
+    '#tabControl .cr-lines-list .cr-lo:last-child{margin-bottom:0}' +
+    '@media (max-width:760px){#tabControl .cr-lines-list{max-height:70vh}}' +
     '#tabControl .cr-lo{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}' +
     '#tabControl .cr-lo-h{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:var(--input-bg);font-size:13.5px}' +
     '#tabControl .cr-lo-a{margin-left:auto;display:flex;gap:8px;align-items:center}' +
