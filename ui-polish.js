@@ -15,7 +15,7 @@
   const SANS = '"Space Grotesk",sans-serif';
   const css = document.createElement('style');
   css.textContent = [
-    '.gantt-wrap{overflow-x:auto;max-width:100%}',
+    '.gantt-wrap{overflow-x:auto;max-width:100%;position:relative}',
     '.order-detail-modal-box{max-width:960px;border:none;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.35);overflow:hidden}',
     '.order-detail-modal-close{position:absolute;float:none;top:18px;right:18px;margin:0;border-radius:999px;padding:7px 14px;font-size:13px;z-index:3}',
 
@@ -296,4 +296,215 @@
       return r;
     };
   }
+})();
+
+// ===================================================================
+// A calmer Orders screen. A header with the add buttons and one "Import / export" menu
+// (the Excel buttons and the long column list used to sit on top of the page); the
+// delivery and payment banners as side-by-side alert cards; quieter stat cards; and one
+// filter toolbar: search, sort and view on a line, status chips with counts, and
+// priority, payment and source behind a Filters button. Elements are moved, not rebuilt,
+// so every existing filter, sort and button keeps working.
+(function(){
+  if(window.TT_STOCK_MODE) return;
+  const tab = document.getElementById('tabOrders');
+  const search = document.getElementById('orderSearchInput');
+  if(!tab || !search) return;
+
+  const SANS = '"Space Grotesk",sans-serif';
+  const css = document.createElement('style');
+  css.textContent = [
+    '.op-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:4px 0 16px}',
+    '.op-title{font-family:' + SANS + ';font-size:26px;font-weight:700;color:var(--text);line-height:1.1}',
+    '.op-sub{font-size:13px;color:var(--dim);margin-top:4px;font-family:' + SANS + '}',
+    '.op-sub b{color:var(--text);font-weight:600}',
+    '.op-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative}',
+    '.op-actions .add-order-btn{white-space:nowrap;margin:0;width:auto;border-radius:10px;height:40px;padding:0 16px;font-family:' + SANS + ';font-size:14px;letter-spacing:0;text-transform:none;border-style:solid}',
+    '.op-actions #addOrderBtn{background:var(--cyan);border-color:var(--cyan);color:#06201d;font-weight:600}',
+    '.op-actions #addOrderBtn:hover{filter:brightness(1.05)}',
+    '.op-menu-btn{height:40px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);padding:0 14px;font-family:' + SANS + ';font-size:13px;cursor:pointer}',
+    '.op-menu-btn:hover{border-color:var(--cyan);color:var(--cyan)}',
+    '.op-pop{position:absolute;right:0;top:calc(100% + 8px);z-index:50;width:min(460px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.18);padding:14px;display:none}',
+    '.op-pop.on{display:block}',
+    '.op-pop .backup-bar{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;border:none;background:none}',
+    '.op-pop .backup-btn{width:100%;text-align:left;border-radius:9px}',
+    '.op-pop details{margin-top:10px;font-size:12px;color:var(--dim)}',
+    '.op-pop summary{cursor:pointer;color:var(--text);font-family:' + SANS + '}',
+    '.op-pop .op-help{margin:8px 0 0!important;max-height:180px;overflow:auto}',
+
+    '.op-alerts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:14px}',
+    '.op-alerts:not(:has(.warn-banner:not(.hidden))){display:none}',
+    '#tabOrders .op-alerts .warn-banner{margin:0;border-radius:12px;padding:12px 14px;font-size:13px;font-family:' + SANS + ';align-items:center;line-height:1.45;border-width:1px 1px 1px 4px}',
+    '#tabOrders .op-alerts .warn-banner .reminder-msg{flex:1 1 220px;min-width:0}',
+    '#tabOrders .op-alerts .warn-banner a{white-space:nowrap;font-weight:600;text-decoration:none;border:1px solid currentColor;border-radius:8px;padding:5px 10px}',
+
+    '#tabOrders .pipeline-strip{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}',
+    '#tabOrders .pipeline-card{border-radius:14px;padding:14px 16px}',
+    '#tabOrders .pipeline-card::before{width:100%;height:3px;border-radius:0}',
+    '#tabOrders .pc-label{font-size:10.5px;letter-spacing:1px}',
+    '#tabOrders .pc-val{font-family:' + SANS + ';font-size:24px;margin-top:6px}',
+    '#tabOrders .pc-sub{font-family:' + SANS + ';font-size:12px;margin-top:4px}',
+
+    '.op-bar{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px}',
+    '.op-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}',
+    '.op-row + .op-row{margin-top:12px}',
+    '.op-search{flex:1 1 260px;position:relative}',
+    '.op-search::before{content:"\\2315";position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:16px;pointer-events:none}',
+    '.op-search input{width:100%;box-sizing:border-box;padding-left:36px!important;border-radius:10px;min-height:42px;font-family:' + SANS + ';font-size:14px}',
+    '.op-bar .sort-controls{display:flex;align-items:center;gap:6px}',
+    '.op-bar .sort-controls label{display:none}',
+    '.op-bar .sort-controls select{min-height:42px;border-radius:10px;font-family:' + SANS + ';font-size:13px}',
+    '.op-bar #ordersViewToggle{flex-wrap:nowrap;background:var(--input-bg);border-radius:10px;padding:3px;gap:2px}',
+    '.op-bar #ordersViewToggle .filter-chip{border:none;border-radius:8px;padding:8px 12px}',
+    '.op-bar #ordersViewToggle .filter-chip.active{background:var(--panel);box-shadow:0 1px 3px rgba(0,0,0,.12)}',
+    '.op-status{flex:1 1 0;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap!important}',
+    '.op-status::-webkit-scrollbar{display:none}',
+    '.op-status .filter-chip{flex:none;font-family:' + SANS + ';font-size:13px;letter-spacing:0;padding:7px 12px;display:inline-flex;gap:6px;align-items:center}',
+    '.op-n{font-size:11px;opacity:.65;font-variant-numeric:tabular-nums}',
+    '.op-filters-btn{flex:none;height:36px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);padding:0 14px;font-family:' + SANS + ';font-size:13px;cursor:pointer}',
+    '.op-filters-btn.has{border-color:var(--cyan);color:var(--cyan);background:rgba(79,209,197,.1)}',
+    '.op-count{flex:none;font-size:12px;color:var(--dim);font-family:"JetBrains Mono",monospace}',
+    '.op-more{display:none;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}',
+    '.op-more.on{display:block}',
+    '.op-more .filter-chip-groups{gap:18px 28px}',
+    '.op-more .filter-chip{font-family:' + SANS + ';font-size:13px;letter-spacing:0}',
+    '.op-clear{background:none;border:none;color:var(--dim);font-size:12px;cursor:pointer;text-decoration:underline;margin-left:auto;font-family:' + SANS + '}',
+    '@media (max-width:640px){' +
+      '.op-title{font-size:22px}.op-head{align-items:flex-start;margin-bottom:12px}' +
+      '.op-actions{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}' +
+      '.op-actions .op-menu-btn{grid-column:1/-1}' +
+      '.op-alerts{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;margin:0 -12px 12px;padding:0 12px;scrollbar-width:none}' +
+      '.op-alerts::-webkit-scrollbar{display:none}' +
+      '#tabOrders .op-alerts .warn-banner{flex:0 0 86%;scroll-snap-align:start;font-size:12.5px}' +
+      '#tabOrders .op-alerts .warn-banner .reminder-msg{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}' +
+      '#tabOrders .pipeline-strip{grid-template-columns:1fr 1fr;gap:10px}' +
+      '#tabOrders .pc-val{font-size:20px}' +
+      '.op-bar .sort-controls{flex:1}.op-bar .sort-controls select{width:100%}' +
+    '}'
+  ].join('');
+  document.head.appendChild(css);
+
+  const filterPanel = search.closest('.panel');
+  const sortBar = document.getElementById('ordersSortBy').closest('.panel-title');
+  const addRow = document.getElementById('addOrderBtn').parentElement;
+  const backupBar = tab.querySelector(':scope > .backup-bar');
+  const help = backupBar && backupBar.nextElementSibling;
+  const strip = document.getElementById('pipelineForecastStrip');
+
+  // ---------- header ----------
+  const head = document.createElement('div');
+  head.className = 'op-head';
+  head.innerHTML = '<div><div class="op-title">Orders</div><div class="op-sub" id="opSub"></div></div><div class="op-actions"></div>';
+  const actions = head.querySelector('.op-actions');
+  const quoteBtn = document.getElementById('addQuoteBtn'), orderBtn = document.getElementById('addOrderBtn');
+  if(quoteBtn){ quoteBtn.textContent = '+ New quote'; actions.appendChild(quoteBtn); }
+  orderBtn.textContent = '+ New order';
+  actions.appendChild(orderBtn);
+  if(backupBar){
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'op-menu-btn';
+    menuBtn.textContent = 'Import / export ▾';
+    const pop = document.createElement('div');
+    pop.className = 'op-pop';
+    pop.appendChild(backupBar);
+    if(help && !help.id && /Supported columns/.test(help.textContent)){
+      const det = document.createElement('details');
+      det.innerHTML = '<summary>Which Excel columns can I import?</summary>';
+      help.classList.add('op-help');
+      det.appendChild(help);
+      pop.appendChild(det);
+    }
+    menuBtn.addEventListener('click', function(e){ e.stopPropagation(); pop.classList.toggle('on'); });
+    document.addEventListener('click', function(e){ if(!pop.contains(e.target) && e.target !== menuBtn) pop.classList.remove('on'); });
+    actions.appendChild(menuBtn);
+    actions.appendChild(pop);
+  }
+  tab.insertBefore(head, tab.firstChild);
+  if(addRow && !addRow.children.length) addRow.style.display = 'none';
+
+  // ---------- alerts ----------
+  const alerts = document.createElement('div');
+  alerts.className = 'op-alerts';
+  head.after(alerts);
+  ['backupReminder', 'deliveryReminderBanner', 'paymentReminderBanner'].forEach(function(id){ const el = document.getElementById(id); if(el) alerts.appendChild(el); });
+  if(strip) alerts.after(strip);
+
+  // ---------- filter toolbar ----------
+  const bar = document.createElement('div');
+  bar.className = 'op-bar';
+  bar.innerHTML = '<div class="op-row op-r1"><div class="op-search"></div></div><div class="op-row op-r2"></div><div class="op-more"></div>';
+  search.placeholder = 'Search orders, clients or products…';
+  bar.querySelector('.op-search').appendChild(search);
+  const r1 = bar.querySelector('.op-r1');
+  [].slice.call(sortBar.querySelectorAll('.sort-controls, #ordersViewToggle, #exportOrdersTableBtn')).forEach(function(el){ r1.appendChild(el); });
+
+  const statusChips = document.getElementById('statusFilterChips');
+  statusChips.classList.add('op-status');
+  const r2 = bar.querySelector('.op-r2');
+  r2.appendChild(statusChips);
+  const filtersBtn = document.createElement('button');
+  filtersBtn.type = 'button';
+  filtersBtn.className = 'op-filters-btn';
+  r2.appendChild(filtersBtn);
+  const count = document.getElementById('filterCount');
+  if(count){ count.className = 'op-count'; r2.appendChild(count); }
+
+  const more = bar.querySelector('.op-more');
+  const groups = filterPanel.querySelector('.filter-chip-groups');
+  const statusGroup = statusChips && filterPanel.querySelector('.filter-chip-group:not(:has(.filter-chip))');
+  if(statusGroup) statusGroup.remove();
+  more.appendChild(groups);
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'op-clear';
+  clear.textContent = 'Clear these filters';
+  more.appendChild(clear);
+  filtersBtn.addEventListener('click', function(){ more.classList.toggle('on'); });
+  clear.addEventListener('click', function(){
+    ['priorityFilterChips', 'paymentFilterChips', 'sourceFilterChips'].forEach(function(id){
+      const all = document.querySelector('#' + id + ' [data-value="all"]');
+      if(all && !all.classList.contains('active')) all.click();
+    });
+    setTimeout(refresh, 0);
+  });
+
+  filterPanel.parentNode.insertBefore(bar, filterPanel);
+  filterPanel.remove();
+  sortBar.style.display = 'none';
+
+  // ---------- live bits: header summary, status counts, active filter count ----------
+  const LABELS = {};
+  [].slice.call(statusChips.querySelectorAll('.filter-chip')).forEach(function(c){ LABELS[c.getAttribute('data-value')] = c.textContent.trim(); });
+  function statusOf(o){ return typeof boardStatus === 'function' ? boardStatus(o) : o.status; }
+  function refresh(){
+    const orders = (typeof state !== 'undefined' && state.orders) || [];
+    const n = {};
+    orders.forEach(function(o){ const s = statusOf(o); n[s] = (n[s] || 0) + 1; });
+    [].slice.call(statusChips.querySelectorAll('.filter-chip')).forEach(function(c){
+      const v = c.getAttribute('data-value');
+      const k = v === 'all' ? orders.length : (n[v] || 0);
+      c.innerHTML = esc(LABELS[v]) + ' <span class="op-n">' + k + '</span>';
+    });
+    const active = ['booked', 'in_production', 'production_done'].reduce(function(s, k){ return s + (n[k] || 0); }, 0);
+    const unpaid = orders.filter(function(o){ return o.status === 'delivered' && o.paymentStatus !== 'paid' && o.paymentStatus !== 'refunded'; }).length;
+    document.getElementById('opSub').innerHTML = '<b>' + orders.length + '</b> orders · <b>' + active + '</b> in progress · <b>' + (n.quoted || 0) + '</b> open quotes' + (unpaid ? ' · <b>' + unpaid + '</b> delivered, awaiting payment' : '');
+    const on = ['priorityFilterChips', 'paymentFilterChips', 'sourceFilterChips'].filter(function(id){
+      const a = document.querySelector('#' + id + ' .filter-chip.active');
+      return a && a.getAttribute('data-value') !== 'all';
+    }).length;
+    filtersBtn.textContent = on ? 'Filters · ' + on : 'Filters';
+    filtersBtn.classList.toggle('has', !!on);
+  }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  bar.addEventListener('click', function(e){ if(e.target.closest('.filter-chip')) setTimeout(refresh, 0); });
+  if(typeof renderOrders === 'function'){
+    const orig = renderOrders;
+    renderOrders = function(){
+      const r = orig.apply(this, arguments);
+      try{ refresh(); }catch(e){ console.warn('[orders polish]', e); }
+      return r;
+    };
+  }
+  refresh();
 })();
