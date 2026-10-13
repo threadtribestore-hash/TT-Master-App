@@ -17996,6 +17996,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   var STATE_KEY = 'thread-tribe-print-farm-state-v1';
   var MAP_KEY = 'tt-bambuddy-map-v1';
   var HOLD_KEY = 'tt-bambuddy-hold-v1';
+  var PICK_KEY = 'tt-bambuddy-printer-pick-v1';  // order:line → printer id chosen by the operator
   var ACTIVE = { booked: 'Booked', in_production: 'In production' };
 
   // Put "Print farm" in Studio's own menus, in the Operations group: the desktop tab menu and
@@ -18064,6 +18065,14 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   // Errors only the Setup screen can fix: missing API key, or remote passcode problems.
   function needsSetup(){ return connErr && (connErr.status === 401 || connErr.status === 403); }
 
+  function modelKey(m){ return String(m || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  // Printers a line can go to: those of the file's model (or the product's chosen model), else all.
+  function printersFor(f, m){
+    var want = modelKey((m && m.targetModel) || (f && f.model));
+    return (printers || []).filter(function(p){ return p.active !== false && (!want || modelKey(p.model) === want); });
+  }
+  function pickFor(orderId, lineId){ return rd(PICK_KEY, {})[orderId + ':' + lineId] || ''; }
+  function printerName(id){ var p = (printers || []).filter(function(x){ return String(x.id) === String(id); })[0]; return p ? p.name : ''; }
   function linesLeft(p){ return Math.max((+p.qty || 0) - (+p.already || 0), 0); }
   function runsFor(p, m){ var u = Math.max(+((m && m.unitsPerPlate) || 1), 1); return Math.ceil(linesLeft(p) / u); }
   function activeOrders(){
@@ -18165,8 +18174,16 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
           '<div style="color:var(--dim);font-size:12px;margin-top:2px">Sent. Undo send to change the file.</div>';
         else if (library) fileCell = '<select data-f="fileId" aria-label="Bambuddy file for ' + esc(p.name) + '"><option value="">— choose file —</option>' +
           library.map(function(x){ return '<option value="' + x.id + '"' + (f && x.id === f.id ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') + '</select>' +
-          (f ? ' <a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--dim);font-size:12px">plate / per plate</a>' : '');
+          (f ? ' <a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--dim);font-size:12px">plate / per plate</a>' : '') +
+          (f ? (function(){
+            var opts = printersFor(f, m), pick = pickFor(o.id, p.id), model = (m && m.targetModel) || f.model || '';
+            return '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)">Printer ' +
+              '<select data-pick="' + esc(o.id + ':' + p.id) + '" aria-label="Printer for ' + esc(p.name) + '"><option value="">Any free ' + esc(model || 'printer') + '</option>' +
+              opts.map(function(x){ return '<option value="' + esc(x.id) + '"' + (String(x.id) === String(pick) ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') +
+              '</select></div>';
+          })() : '');
         else fileCell = f ? esc(f.name) : '—';
+        if (lineSt && pickFor(o.id, p.id)) fileCell += '<div style="color:var(--dim);font-size:12px">On ' + esc(printerName(pickFor(o.id, p.id)) || 'chosen printer') + '</div>';
         return '<tr data-name="' + esc(p.name) + '"><td>' + esc(p.name) + '</td><td class="num">' + done + ' / ' + qty + '</td><td class="num">' + left + '</td>' +
           '<td>' + fileCell + '</td>' +
           '<td class="num">' + (f ? (m.unitsPerPlate || 1) : '') + '</td><td class="num">' + (f ? runsFor(p, m) : '') + '</td>' +
@@ -18297,11 +18314,13 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     (o.products || []).forEach(function(p){
       var m = map[norm(p.name)];
       if (!m || !fileById(m.fileId) || st[p.id] || linesLeft(p) < 1) return;
-      lines.push({ lineId: p.id, name: p.name, units: linesLeft(p), unitsPerPlate: m.unitsPerPlate || 1, runs: runsFor(p, m), fileId: m.fileId, plateId: m.plateId == null ? null : m.plateId, targetModel: m.targetModel || null });
+      var pick = pickFor(o.id, p.id);
+      lines.push({ lineId: p.id, name: p.name, units: linesLeft(p), unitsPerPlate: m.unitsPerPlate || 1, runs: runsFor(p, m), fileId: m.fileId, plateId: m.plateId == null ? null : m.plateId, targetModel: m.targetModel || null,
+        printerId: pick ? +pick : null, printerName: pick ? printerName(pick) : '' });
     });
     if (!lines.length) return;
     var hold = rd(HOLD_KEY, false), total = lines.reduce(function(s, l){ return s + l.runs; }, 0);
-    var msg = 'Send ' + o.displayId + ' to the farm?\n\n' + lines.map(function(l){ return '• ' + l.name + ': ' + l.units + ' units → ' + l.runs + ' plate' + (l.runs === 1 ? '' : 's'); }).join('\n') +
+    var msg = 'Send ' + o.displayId + ' to the farm?\n\n' + lines.map(function(l){ return '• ' + l.name + ': ' + l.units + ' units → ' + l.runs + ' plate' + (l.runs === 1 ? '' : 's') + (l.printerName ? ' on ' + l.printerName : ' on any free printer'); }).join('\n') +
       '\n\nTotal ' + total + ' print jobs.' + (hold ? ' They will wait for Start in Bambuddy.' : ' Printing starts as printers come free.');
     if (!confirm(msg)) return;
     var btn = document.querySelector('[data-act="send"][data-order="' + orderId + '"]'); if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
@@ -18369,6 +18388,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   });
   body.addEventListener('change', function(e){
     if (e.target.id === 'ttf-hold') { wr(HOLD_KEY, e.target.checked); return; }
+    if (e.target.dataset.pick) { var picks = rd(PICK_KEY, {}); if (e.target.value) picks[e.target.dataset.pick] = e.target.value; else delete picks[e.target.dataset.pick]; wr(PICK_KEY, picks); return; }
     var row = e.target.closest('tr[data-name]'), f = e.target.dataset.f; if (!row || !f) return;
     var name = row.dataset.name, v = e.target.value;
     if (f === 'fileId') {
