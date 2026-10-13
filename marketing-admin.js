@@ -634,7 +634,9 @@
   });
 
   // For Home (Needs you) and the order pop-up's Campaign field.
-  window.TTMarketing = { needs: needs, campaigns: campaigns, pieces: pieces, team: function(){ return X.team; }, save: save, load: function(){ return X.loaded ? Promise.resolve() : load(); }, loaded: function(){ return X.loaded; } };
+  window.TTMarketing = { needs: needs, campaigns: campaigns, pieces: pieces, team: function(){ return X.team; }, save: save,
+    // For Product Lab: a launch campaign laid out from a template (posts start at Script).
+    createCampaign: async function(c, tplId){ if(!X.loaded) await load(); await save('campaign', c); return tplId ? applyTemplate(c, tplId) : 0; }, load: function(){ return X.loaded ? Promise.resolve() : load(); }, loaded: function(){ return X.loaded; } };
   setTimeout(function(){ load().catch(function(){}); }, 3000);
 
   // ---------- styles ----------

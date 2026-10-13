@@ -1740,6 +1740,7 @@
       <button class="tab-btn" data-tab="buyers">Buyer App</button>
       <button class="tab-btn" data-tab="shop">Shop</button>
       <button class="tab-btn" data-tab="products">Product Catalog</button>
+      <button class="tab-btn" data-tab="lab">Product Lab</button>
       <div class="tab-group-label">Finances</div>
       <button class="tab-btn" data-tab="invoices">Invoices</button>
       <button class="tab-btn" data-tab="expenses">Expenses</button>
@@ -1761,6 +1762,7 @@
   <div id="tabMarketing" style="display:none;"><div id="marketingRoot"></div></div>
   <div id="tabFinance" style="display:none;"><div id="financeRoot"></div></div>
   <div id="tabTasks" style="display:none;"><div id="tasksRoot"></div></div>
+  <div id="tabLab" style="display:none;"><div id="labRoot"></div></div>
   <div id="tabShop" style="display:none;"><div id="shopRoot"></div></div>
 
   <div id="tabHome">
@@ -3050,6 +3052,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     document.getElementById('tabMarketing').style.display = target === 'marketing' ? '' : 'none';
     document.getElementById('tabFinance').style.display = target === 'finance' ? '' : 'none';
     document.getElementById('tabTasks').style.display = target === 'tasks' ? '' : 'none';
+    document.getElementById('tabLab').style.display = target === 'lab' ? '' : 'none';
     document.getElementById('tabShop').style.display = target === 'shop' ? '' : 'none';
     document.getElementById('tabBI').style.display = target === 'bi' ? '' : 'none';
     document.getElementById('tabProduction').style.display = target === 'production' ? '' : 'none';
@@ -3073,6 +3076,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     if(target === 'marketing' && typeof renderMarketing === 'function') renderMarketing();
     if(target === 'finance' && typeof renderFinance === 'function') renderFinance();
     if(target === 'tasks' && typeof renderTasks === 'function') renderTasks();
+    if(target === 'lab' && typeof renderProductLab === 'function') renderProductLab();
     if(target === 'shop' && typeof renderShopAdmin === 'function') renderShopAdmin();
     // Orders / Quotes / Lifetime Revenue are computed from linked orders, so recompute
     // fresh whenever this tab is opened rather than trying to track every order edit.
@@ -15646,7 +15650,7 @@ const CLOUD_LINK_KEY = window.TT_STOCK_MODE ? 'tt-stock-cloud-link-v1' : 'tt-clo
 const CLOUD_LAST_EMAIL_KEY = 'tt-cloud-last-email';
 const CLOUD_COLLS = ['printers', 'orders', 'inventory', 'filamentRates', 'productCatalog', 'clients', 'expenses', 'dealerTiers'];
 const CLOUD_PON_COLLS = ['partners', 'jobs', 'filamentIssues', 'payouts'];
-const CLOUD_NESTED = { pon: CLOUD_PON_COLLS, fil: ['spools', 'purchases', 'locations', 'moves'], bank: ['txns', 'imports'] };
+const CLOUD_NESTED = { pon: CLOUD_PON_COLLS, fil: ['spools', 'purchases', 'locations', 'moves'], bank: ['txns', 'imports'], lab: ['ideas'] };
 const CLOUD_SEP = '\u0001';
 const CLOUD_DEVICE = (function(){
   try{
@@ -17956,9 +17960,10 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="app-shell.js?v=3"></script>
 <script src="ui-polish.js?v=6"></script>
 <script src="upsell.js?v=1"></script>
-<script src="marketing-admin.js?v=3"></script>
+<script src="marketing-admin.js?v=4"></script>
 <script src="finance-admin.js?v=1"></script>
 <script src="tasks-admin.js?v=1"></script>
+<script src="product-lab.js?v=1"></script>
 
 
 <datalist id="indianStatesList">
