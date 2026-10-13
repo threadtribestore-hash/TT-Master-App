@@ -314,6 +314,9 @@
   const SANS = '"Space Grotesk",sans-serif';
   const css = document.createElement('style');
   css.textContent = [
+    // Payment reminders live on Home \u2192 Needs you; velocity and the calculator gave way to Upsell opportunities.
+    '#tabOrders #paymentReminderBanner,#tabOrders #orderVelocityPanel,#tabOrders #calcToggle,#tabOrders #calcBody{display:none!important}',
+    '#tabOrders .panel:has(#paymentsSummaryTotal){display:none!important}',
     '.op-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:4px 0 16px}',
     '.op-title{font-family:' + SANS + ';font-size:26px;font-weight:700;color:var(--text);line-height:1.1}',
     '.op-sub{font-size:13px;color:var(--dim);margin-top:4px;font-family:' + SANS + '}',
@@ -487,8 +490,7 @@
       c.innerHTML = esc(LABELS[v]) + ' <span class="op-n">' + k + '</span>';
     });
     const active = ['booked', 'in_production', 'production_done'].reduce(function(s, k){ return s + (n[k] || 0); }, 0);
-    const unpaid = orders.filter(function(o){ return o.status === 'delivered' && o.paymentStatus !== 'paid' && o.paymentStatus !== 'refunded'; }).length;
-    document.getElementById('opSub').innerHTML = '<b>' + orders.length + '</b> orders · <b>' + active + '</b> in progress · <b>' + (n.quoted || 0) + '</b> open quotes' + (unpaid ? ' · <b>' + unpaid + '</b> delivered, awaiting payment' : '');
+    document.getElementById('opSub').innerHTML = '<b>' + orders.length + '</b> orders · <b>' + active + '</b> in progress · <b>' + (n.quoted || 0) + '</b> open quotes';
     const on = ['priorityFilterChips', 'paymentFilterChips', 'sourceFilterChips'].filter(function(id){
       const a = document.querySelector('#' + id + ' .filter-chip.active');
       return a && a.getAttribute('data-value') !== 'all';
