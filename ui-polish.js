@@ -237,6 +237,19 @@
     return wrap;
   }
 
+  // Which marketing campaign brought this order (Marketing tab); campaign scorecards count it.
+  function campaignField(order){
+    if(!order || !window.TTMarketing) return null;
+    const list = window.TTMarketing.campaigns();
+    if(!list.length && !order.campaignId) return null;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<label>Campaign</label><select class="om-campaign"><option value="">Not from a campaign</option>' +
+      list.map(function(c){ return '<option value="' + esc(c.id) + '"' + (order.campaignId === c.id ? ' selected' : '') + '>' + esc(c.name) + (c.code ? ' (' + esc(c.code) + ')' : '') + '</option>'; }).join('') +
+      (order.campaignId && !list.some(function(c){ return c.id === order.campaignId; }) ? '<option value="' + esc(order.campaignId) + '" selected>Campaign no longer listed</option>' : '') + '</select>';
+    wrap.querySelector('select').addEventListener('change', function(e){ order.campaignId = e.target.value; scheduleSave(); });
+    return wrap;
+  }
+
   function relabelProducts(body){
     const names = { 'Hrs/unit': 'Print hrs / unit', 'Fil(g)/unit': 'Filament g / unit', 'Already made': 'Made', 'List price/pc (₹)': 'List price / pc (₹)', 'Actual price/pc (₹)': 'Selling price / pc (₹)' };
     body.querySelectorAll('.products-scroll label').forEach(function(l){
@@ -274,7 +287,7 @@
       const clientEnd = cut.length ? Math.min.apply(null, cut) : kids.length;
       const clientKids = kids.slice(0, clientEnd).filter(function(el){ return el !== chips && el !== sourceRow && el !== notes; });
       clientSec = section('Client', clientKids);
-      detailsSec = section('Order details', [chips, sourceRow, notes]);
+      detailsSec = section('Order details', [chips, campaignField(order), sourceRow, notes]);
       if(priceIdx >= 0) priceSec = section('Pricing', [kids[priceIdx]]);
       if(payIdx >= 0) paySec = section('Payment', kids.slice(payIdx).filter(function(el){ return el !== kids[priceIdx]; }));
     }

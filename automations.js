@@ -192,6 +192,7 @@
         out.push({ level: 1, rank: 3, score: x.days, text: who(x.o) + ' owes ' + rupees(x.due) + ' · ' + x.days + ' days', act: 'remind', id: x.o.id, btn: 'Remind' });
       });
     }
+    if(window.TTMarketing) try{ out.push.apply(out, window.TTMarketing.needs()); }catch(e){}
     return out;
   }
 

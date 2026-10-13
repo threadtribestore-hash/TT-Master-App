@@ -1734,6 +1734,7 @@
       <button class="tab-btn" data-tab="filament">Filament Inventory</button>
       <div class="tab-group-label">Sales &amp; marketing</div>
       <button class="tab-btn" data-tab="sales">Sales</button>
+      <button class="tab-btn" data-tab="marketing">Marketing</button>
       <button class="tab-btn" data-tab="clients">Clients</button>
       <button class="tab-btn" data-tab="buyers">Buyer App</button>
       <button class="tab-btn" data-tab="shop">Shop</button>
@@ -1755,6 +1756,7 @@
   <div id="tabControl" style="display:none;"><div id="controlRoot"></div></div>
   <div id="tabProjects" style="display:none;"><div id="projectsRoot"></div></div>
   <div id="tabSales" style="display:none;"><div id="salesRoot"></div></div>
+  <div id="tabMarketing" style="display:none;"><div id="marketingRoot"></div></div>
   <div id="tabShop" style="display:none;"><div id="shopRoot"></div></div>
 
   <div id="tabHome">
@@ -3041,6 +3043,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     document.getElementById('tabControl').style.display = target === 'control' ? '' : 'none';
     document.getElementById('tabProjects').style.display = target === 'projects' ? '' : 'none';
     document.getElementById('tabSales').style.display = target === 'sales' ? '' : 'none';
+    document.getElementById('tabMarketing').style.display = target === 'marketing' ? '' : 'none';
     document.getElementById('tabShop').style.display = target === 'shop' ? '' : 'none';
     document.getElementById('tabBI').style.display = target === 'bi' ? '' : 'none';
     document.getElementById('tabProduction').style.display = target === 'production' ? '' : 'none';
@@ -3061,6 +3064,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     if(target === 'control' && typeof renderControlRoom === 'function') renderControlRoom();
     if(target === 'projects' && typeof renderProjects === 'function') renderProjects();
     if(target === 'sales' && typeof renderSales === 'function') renderSales();
+    if(target === 'marketing' && typeof renderMarketing === 'function') renderMarketing();
     if(target === 'shop' && typeof renderShopAdmin === 'function') renderShopAdmin();
     // Orders / Quotes / Lifetime Revenue are computed from linked orders, so recompute
     // fresh whenever this tab is opened rather than trying to track every order edit.
@@ -17940,10 +17944,11 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="sales-admin.js?v=8"></script>
 <script src="shop-admin.js?v=2"></script>
 <script src="owner-home.js?v=3"></script>
-<script src="automations.js?v=2"></script>
+<script src="automations.js?v=3"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=5"></script>
+<script src="ui-polish.js?v=6"></script>
 <script src="upsell.js?v=1"></script>
+<script src="marketing-admin.js?v=1"></script>
 
 
 <datalist id="indianStatesList">
