@@ -516,7 +516,7 @@
     if(!q.length) return '<p class="cr-dim">Nothing booked or in production.</p>';
     const qc = queueClear(fc.hours);
     return '<p class="cr-dim">' + (qc ? 'Queue clears ≈ <b>' + fmtWhen(qc.at) + '</b> (' + Math.round(fc.hours) + ' h ÷ ' + qc.n + ' printers). ' : '') + Math.round(fc.hours) + ' print-hours queued' + (fc.cap ? ' ≈ ' + (Math.round(fc.days * 10) / 10) + ' days on ' + Math.round(fc.cap) + ' printer-hours a day' : ' — set printers and hours per day in Settings to forecast') + '.</p>' +
-      q.map(function(o){
+      '<div class="cr-q-scroll"><div class="cr-q-list">' + q.map(function(o){
         const pr = orderProgress(o), t = orderTotals(o), s = ps[o.id], due = target(o), fin = fc.finish[o.id], late = due && fin && fin > due;
         return '<div class="cr-q"><div class="cr-q-h">' + orderLink(o) + '<span class="cr-who">' + esc(who(o)) + '</span>' + pill(o.status, o) +
           (o.priority && o.priority !== 'normal' ? '<span class="cr-pill prio-' + o.priority + '">' + esc(priorityLabel(o.priority)) + '</span>' : '') + '</div>' +
@@ -526,7 +526,7 @@
             (s && s.printer_count ? '<span>' + s.printer_count + ' printer' + (s.printer_count === 1 ? '' : 's') + (s.printing_now ? ' · ' + s.printing_now + ' printing' : '') + '</span>' : '') +
             '<span class="' + (late ? 'cr-bad' : '') + '">' + (due ? 'due ' + fmt(due) : 'no date') + (fin ? ' · finish ≈ ' + fmt(fin) : '') + '</span></div>' +
           '<div class="cr-q-a">' + (o.status === 'booked' ? '<button class="cr-btn" data-cr="start" data-id="' + o.id + '">Start</button>' : '<button class="cr-btn primary" data-cr="done" data-id="' + o.id + '">Mark made</button>') + '</div></div>';
-      }).join('');
+      }).join('') + '</div></div>';
   }
   function calendarHtml(){
     const t = today(), start = addDays(t, -((new Date(t + 'T00:00:00').getDay() + 6) % 7)), days = [];
@@ -621,12 +621,13 @@
         '<div class="cr-kpi"><div class="k">Due in 7 days</div><div class="v">' + dueWeek + '</div><div class="s">to dispatch</div></div>' +
         '<div class="cr-kpi ' + (p.overdue.length + p.risk.length ? 'bad' : '') + '"><div class="k">Late or at risk</div><div class="v">' + (p.overdue.length + p.risk.length) + '</div><div class="s">' + p.overdue.length + ' overdue</div></div>' +
       '</div>' +
+      '<div class="panel"><div class="panel-title">Dispatch calendar · 2 weeks</div>' + calendarHtml() + '</div>' +
       linesHtml() +
       promiseHtml() +
+      // The queue matches the height of Needs attention and scrolls inside, so the page has no gap.
       '<div class="cr-grid">' +
-        '<div class="panel"><div class="panel-title">Production queue</div>' + queueHtml(fc) + '</div>' +
-        '<div><div class="panel"><div class="panel-title">Dispatch calendar · 2 weeks</div>' + calendarHtml() + '</div>' +
-        '<div class="panel"><div class="panel-title">Needs attention</div>' + problemsHtml(p) + '</div></div>' +
+        '<div class="panel cr-qp"><div class="panel-title">Production queue</div>' + queueHtml(fc) + '</div>' +
+        '<div class="panel"><div class="panel-title">Needs attention</div>' + problemsHtml(p) + '</div>' +
       '</div>';
   }
   window.renderControlRoom = function(){ render(); if(window.TTPartners) window.TTPartners.load().then(render).catch(function(){}); if(window.TTBuyers) window.TTBuyers.refresh().then(render).catch(function(){}); };
@@ -757,7 +758,12 @@
     '#tabControl .cr-kpi .v{font-size:24px;font-weight:700;margin-top:2px}' +
     '#tabControl .cr-kpi .s{font-size:11px;color:var(--dim)}' +
     '#tabControl .cr-kpi.bad .v{color:var(--red)} #tabControl .cr-kpi.warn .v{color:var(--amber)}' +
-    '#tabControl .cr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px;align-items:start}' +
+    '#tabControl .cr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px;align-items:stretch}' +
+    '#tabControl .cr-grid > .panel{margin-bottom:0}' +
+    '#tabControl .cr-qp{display:flex;flex-direction:column}' +
+    '#tabControl .cr-q-scroll{flex:1;position:relative;min-height:190px}' +
+    '#tabControl .cr-q-list{position:absolute;inset:0;overflow-y:auto;padding-right:4px}' +
+    '@media (max-width:820px){#tabControl .cr-q-scroll{min-height:0}#tabControl .cr-q-list{position:static;max-height:460px}}' +
     '#tabControl .cr-q{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}' +
     '#tabControl .cr-q-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}' +
     '#tabControl .cr-who{font-weight:600;font-size:13px}' +
