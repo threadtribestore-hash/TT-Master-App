@@ -556,13 +556,23 @@
   }
   function logEnquiry(){
     const html = '<div class="mk-2">' + inp('date', 'Date', today(), 'date') + sel('via', 'Came in by', ['Instagram DM', 'WhatsApp (from Instagram)', 'Comment', 'Call'], 'Instagram DM') + '</div>' +
-      inp('name', 'Business or person', '') + sel('campaignId', 'Campaign (if they mentioned a code or post)', campaignList(), '') +
+      '<div class="mk-2">' + inp('name', 'Business or person', '') + inp('phone', 'Phone (optional)', '', 'tel') + '</div>' + sel('campaignId', 'Campaign (if they mentioned a code or post)', campaignList(), '') +
+      (window.TTSales && window.TTSales.createLead ? sel('channel', 'Hand to a salesperson as a lead', [['', 'No, just count it'], ['toys', 'Toys'], ['lighting', 'Lighting'], ['gifting', 'HoReCa & gifting']], '') : '') +
       '<label class="mk-check"><input type="checkbox" name="trade" checked> Trade enquiry (dealer, wholesaler, reseller, corporate)</label>' + area('note', 'Note', '') +
       '<p class="mk-dim">Don’t log ones a rep has already added as a lead with source Instagram; those are counted already.</p>';
     openModal('Log an Instagram enquiry', html, async function(f){
       if(!f('trade')){ showToast('Only trade enquiries count toward the north star'); }
-      await save('enquiry', { date: f('date'), via: f('via'), name: f('name'), campaignId: f('campaignId'), trade: f('trade'), note: f('note') });
-      showToast('Enquiry logged');
+      const ch = f('channel'), c = campaign(f('campaignId'));
+      let leadNote = '';
+      if(ch && window.TTSales && window.TTSales.createLead){
+        if(!f('name')){ showNoticeModal('Add the business or person to hand it to a salesperson.'); return false; }
+        const r = await window.TTSales.createLead(ch, { business: f('name'), phone: f('phone'), notes: [f('via'), c ? 'Campaign ' + c.name + (c.code ? ' (' + c.code + ')' : '') : '', f('note')].filter(Boolean).join(' \u00b7 '), campaignId: f('campaignId') || '', campaign: c ? c.code || c.name : '' });
+        // Leads with source Instagram already count toward the north star, so don't count it twice.
+        if(r.ok){ showToast('Lead created' + (r.owner ? ' for ' + r.owner : '') + '; it counts as an Instagram enquiry'); return; }
+        leadNote = ' (lead not created: ' + r.why + ')';
+      }
+      await save('enquiry', { date: f('date'), via: f('via'), name: f('name'), phone: f('phone'), campaignId: f('campaignId'), trade: f('trade'), note: f('note') });
+      showToast('Enquiry logged' + leadNote);
     });
   }
 
