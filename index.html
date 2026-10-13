@@ -2177,6 +2177,7 @@
           <button class="filter-chip" data-value="booked">Booked</button>
           <button class="filter-chip" data-value="in_production">In Production</button>
           <button class="filter-chip" data-value="production_done">Production Done</button>
+          <button class="filter-chip" data-value="shipped">Shipped</button>
           <button class="filter-chip" data-value="delivered">Delivered</button>
           <button class="filter-chip" data-value="lost">Lost</button>
           <button class="filter-chip" data-value="cancelled">Cancelled</button>
@@ -2950,12 +2951,16 @@ let collapsedOrderSections = { lost: true, cancelled: true };
 let expandedBoardOrders = {};
 // Same pipeline order used by the Table view's status sort, reused here so both
 // views agree on where each status sits.
-const ORDER_SECTION_SEQUENCE = ['quoted', 'booked', 'in_production', 'production_done', 'delivered', 'cancelled', 'lost'];
+const ORDER_SECTION_SEQUENCE = ['quoted', 'booked', 'in_production', 'production_done', 'shipped', 'delivered', 'cancelled', 'lost'];
+// "Shipped" is a board column, not a stored status: an order that is Production Done and
+// has a dispatch date (shippedDate) sits there, as the Buyer app and Control Room read it.
+function boardStatus(order){ return order.status === 'production_done' && order.shippedDate ? 'shipped' : order.status; }
 function orderSectionColorVar(status){
   if(status === 'quoted') return 'var(--purple)';
   if(status === 'booked') return 'var(--amber)';
   if(status === 'in_production') return 'var(--green)';
   if(status === 'production_done') return 'var(--cyan)';
+  if(status === 'shipped') return 'var(--pink)';
   if(status === 'delivered') return 'var(--purple)';
   if(status === 'cancelled') return 'var(--red)';
   return 'var(--dim)'; // lost
@@ -3809,6 +3814,7 @@ function statusLabel(status){
   if(status === 'booked') return 'Booked';
   if(status === 'in_production') return 'In Production';
   if(status === 'production_done') return 'Production Done';
+  if(status === 'shipped') return 'Shipped';
   return 'Delivered';
 }
 // "Complete" for every purpose that used to key off the old single 'done' status
@@ -4606,7 +4612,7 @@ document.getElementById('deliveryReminderViewBtn').addEventListener('click', fun
 let orderFilter = { search: '', status: 'all', priority: 'all', payment: 'all', source: 'all' };
 
 function orderMatchesFilter(order){
-  if(orderFilter.status !== 'all' && order.status !== orderFilter.status) return false;
+  if(orderFilter.status !== 'all' && boardStatus(order) !== orderFilter.status) return false;
   if(orderFilter.priority !== 'all' && (order.priority || 'normal') !== orderFilter.priority) return false;
   if(orderFilter.payment !== 'all' && (order.paymentStatus || 'unpaid') !== orderFilter.payment) return false;
   if(orderFilter.source !== 'all' && (order.orderSource || '') !== orderFilter.source) return false;
@@ -4738,7 +4744,7 @@ function renderOrders(){
   // (the up/down arrows) still reads top-to-bottom sensibly inside a section.
   const buckets = {};
   visible.forEach(function(x){
-    const st = x.order.status;
+    const st = boardStatus(x.order);
     if(!buckets[st]) buckets[st] = [];
     buckets[st].push(x);
   });
@@ -5089,6 +5095,10 @@ function renderOneOrderCard(order, index, targetEl){
 // in updateDueSoonHighlight, computed directly against the order rather than a live
 // node, since a collapsed board card has no duebadge-<id> element for that to update.
 function boardCardUrgency(order){
+  if(order.status === 'production_done' && order.shippedDate){
+    const d = Math.max(0, Math.floor((new Date() - new Date(order.shippedDate + 'T00:00:00')) / 86400000));
+    return { cls: 'needs-delivery', badgeCls: 'soon', text: '\uD83D\uDE9A Shipped' + (d ? ' \u00b7 ' + d + 'd' : ' today') + (order.courier ? ' \u00b7 ' + order.courier : '') };
+  }
   if(orderNeedsDelivery(order)){
     const days = daysSinceProductionDone(order);
     const isOverdue = days != null && days >= DELIVERY_OVERDUE_DAYS;
@@ -5221,7 +5231,7 @@ function renderOrdersBoard(visible){
 
   const buckets = {};
   visible.forEach(function(x){
-    const st = x.order.status;
+    const st = boardStatus(x.order);
     if(!buckets[st]) buckets[st] = [];
     buckets[st].push(x);
   });
@@ -5326,7 +5336,26 @@ function renderOrdersBoard(visible){
 // confirmations as cycleStatus/cancelOrder/markQuoteLost, generalized to jump to any column.
 function setOrderStatusDirect(orderId, newStatus){
   const order = state.orders.find(function(o){ return o.id === orderId; });
-  if(!order || order.status === newStatus) return;
+  if(!order) return;
+  // Shipped = Production Done plus a dispatch date. Dropping on Shipped sets the date
+  // (finishing the order first if needed); dropping a shipped order back on Production
+  // Done clears it.
+  if(newStatus === 'shipped'){
+    const today = new Date().toISOString().slice(0, 10);
+    if(order.status === 'production_done'){
+      if(!order.shippedDate){ order.shippedDate = today; renderOrders(); scheduleSave(); }
+      return;
+    }
+    if(order.status === 'delivered'){ order.status = 'production_done'; order.shippedDate = order.shippedDate || today; renderOrders(); scheduleSave(); return; }
+    order._shipAfterDone = true;
+    newStatus = 'production_done';
+  }
+  if(newStatus === 'production_done' && order.status === 'production_done'){
+    if(order.shippedDate && !order._shipAfterDone){ order.shippedDate = ''; renderOrders(); scheduleSave(); }
+    delete order._shipAfterDone;
+    return;
+  }
+  if(order.status === newStatus) return;
   const prevStatus = order.status;
 
   function apply(){
@@ -5358,6 +5387,10 @@ function setOrderStatusDirect(orderId, newStatus){
     }
     if(newStatus === 'delivered' && !order.deliveryDate){
       order.deliveryDate = new Date().toISOString().slice(0, 10);
+    }
+    if(order._shipAfterDone){
+      if(newStatus === 'production_done' && !order.shippedDate) order.shippedDate = new Date().toISOString().slice(0, 10);
+      delete order._shipAfterDone;
     }
 
     order.status = newStatus;
@@ -6449,7 +6482,11 @@ function updateDeliveryHighlight(orderId){
   const days = daysSinceProductionDone(order);
   const isOverdue = days != null && days >= DELIVERY_OVERDUE_DAYS;
 
-  if(isOverdue){
+  if(order.shippedDate){
+    card.classList.add('needs-delivery');
+    badge.classList.add('soon');
+    badge.textContent = '\uD83D\uDE9A Shipped ' + order.shippedDate + (order.courier ? ' \u00b7 ' + order.courier : '');
+  } else if(isOverdue){
     card.classList.add('needs-delivery-overdue');
     badge.classList.add('overdue');
     badge.textContent = '\uD83D\uDCE6 Ready \u00b7 ' + days + ' day' + (days === 1 ? '' : 's');
