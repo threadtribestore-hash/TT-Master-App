@@ -92,7 +92,7 @@
     '.order-detail-modal-box .product > :nth-child(9){grid-column:span 2}',
     '.order-detail-modal-box .product > .rm-btn{grid-column:12;grid-row:1;height:42px;width:100%;border-radius:10px}',
     '.order-detail-modal-box .product input[type=color]{width:100%;height:42px;padding:3px;border-radius:10px}',
-    '.order-detail-modal-box .product-price-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}',
+    '.order-detail-modal-box .product-price-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}',
     '.order-detail-modal-box .product label{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
 
     '.om-sec .order-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:12px}',

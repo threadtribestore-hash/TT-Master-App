@@ -6072,6 +6072,12 @@ document.getElementById('importOrdersFile').addEventListener('change', function(
   reader.readAsArrayBuffer(file);
 });
 
+// Per-line discount off list, to one decimal place (0 when there's no list price or the price is above list).
+function lineDiscountPct(product){
+  const list = product.listPrice || 0, actual = product.actualPrice || 0;
+  return list > 0 && actual < list ? Math.round((list - actual) / list * 1000) / 10 : 0;
+}
+
 function buildProductRow(orderId, product){
   const wrap = document.createElement('div');
 
@@ -6127,6 +6133,7 @@ function buildProductRow(orderId, product){
   priceRow.className = 'product-price-row';
   priceRow.innerHTML =
     '<div><label>List price/pc (\u20b9)</label><input type="number" class="p-list-price" min="0" step="1" title="Reference/uniform price \u2014 auto-fills from the Product Catalog (Wholesale for a dealer/B2B order, D2C otherwise) when you pick a product above. Edit freely for one-offs." value="' + (product.listPrice || 0) + '"></div>' +
+    '<div><label>Discount (%)</label><input type="number" class="p-discount-pct" min="0" max="100" step="0.5" title="Discount off the list price for this line. Typing it sets the actual price; typing an actual price updates it." value="' + lineDiscountPct(product) + '"></div>' +
     '<div><label>Actual price/pc (\u20b9)</label><input type="number" class="p-actual-price" min="0" step="1" title="What you actually quoted/charged this client per piece. Defaults to the list price \u2014 edit down to record a discount." value="' + (product.actualPrice || 0) + '"></div>';
   wrap.appendChild(priceRow);
 
@@ -6149,6 +6156,7 @@ function buildProductRow(orderId, product){
   const colorHexEl = row.querySelector('.p-colorhex');
   const listPriceEl = priceRow.querySelector('.p-list-price');
   const actualPriceEl = priceRow.querySelector('.p-actual-price');
+  const discountEl = priceRow.querySelector('.p-discount-pct');
   const rmBtn = row.querySelector('.rm-btn');
 
   function updateHint(){
@@ -6200,6 +6208,7 @@ function buildProductRow(orderId, product){
     product.colorHex = colorHexEl.value;
     product.listPrice = posNum(listPriceEl.value);
     product.actualPrice = posNum(actualPriceEl.value);
+    if(document.activeElement !== discountEl) discountEl.value = lineDiscountPct(product);
     updateHint();
     updatePriceHint();
     updateOrderStatsDOM(orderId);
@@ -6209,6 +6218,12 @@ function buildProductRow(orderId, product){
   }
   [nameEl, qtyEl, alreadyEl, failedEl, hrsEl, filEl, materialEl, colorEl, colorHexEl, listPriceEl, actualPriceEl].forEach(function(el){ el.addEventListener('input', onEdit); });
   rmBtn.addEventListener('click', function(){ removeProduct(orderId, product.id); });
+  // Discount % is a shortcut for the actual price: it isn't stored, so invoices and totals are unchanged.
+  discountEl.addEventListener('input', function(){
+    const pct = Math.max(0, Math.min(100, parseFloat(discountEl.value) || 0));
+    actualPriceEl.value = Math.round((product.listPrice || 0) * (1 - pct / 100));
+    onEdit();
+  });
 
   // ---------- Sub-items for invoice breakup ----------
   if(!product.subItems) product.subItems = [];
@@ -15575,6 +15590,17 @@ function ponImportUpdate(text){
     window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function(reg){
       document.addEventListener('visibilitychange', function(){ if(!document.hidden) reg.update().catch(function(){}); });
     }).catch(function(){}); });
+    // An open app keeps running the old build after an update lands, so offer a reload when a new worker takes over.
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if(!hadController || document.getElementById('ttUpdateBar')) return;
+      const bar = document.createElement('div');
+      bar.id = 'ttUpdateBar';
+      bar.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:10002;background:var(--text);color:var(--bg);border-radius:10px;padding:10px 14px;font-size:14px;display:flex;gap:14px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.3)';
+      bar.innerHTML = '<span>New version of Studio available</span><button type="button" style="background:none;border:none;color:var(--cyan);font:inherit;font-weight:600;cursor:pointer;padding:0">Reload</button>';
+      bar.querySelector('button').addEventListener('click', function(){ location.reload(); });
+      document.body.appendChild(bar);
+    });
   }
   // Ask the browser not to clear this app's saved data under storage pressure.
   if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(function(){}); }
@@ -17915,8 +17941,8 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="shop-admin.js?v=2"></script>
 <script src="owner-home.js?v=3"></script>
 <script src="automations.js?v=2"></script>
-<script src="app-shell.js?v=2"></script>
-<script src="ui-polish.js?v=2"></script>
+<script src="app-shell.js?v=3"></script>
+<script src="ui-polish.js?v=3"></script>
 
 
 <datalist id="indianStatesList">

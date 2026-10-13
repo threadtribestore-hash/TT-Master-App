@@ -27,7 +27,9 @@
   const css = document.createElement('style');
   css.textContent =
     'body{padding-top:0}' +
-    '#ttAppBar{position:sticky;top:0;z-index:900;background:var(--bg);margin:0 0 14px;padding:10px 0 8px;border-bottom:1px solid var(--line);box-shadow:0 0 0 100vmax var(--bg);clip-path:inset(0 -100vmax)}' +
+    // The full-width background lives on ::before, so its clip-path can't cut off the menu dropdown below the bar.
+    '#ttAppBar{position:sticky;top:0;z-index:900;background:var(--bg);margin:0 0 14px;padding:10px 0 8px;border-bottom:1px solid var(--line)}' +
+    '#ttAppBar::before{content:"";position:absolute;inset:0 0 -1px;z-index:-1;background:var(--bg);border-bottom:1px solid var(--line);box-shadow:0 0 0 100vmax var(--bg);clip-path:inset(0 -100vmax);pointer-events:none}' +
     '#ttAppBar header{margin:0 0 8px;align-items:center}' +
     '#ttAppBar header .eyebrow,#ttAppBar header .sub{display:none}' +
     '#ttAppBar header h1{font-size:20px;margin:0;cursor:pointer}' +
