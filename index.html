@@ -1631,6 +1631,11 @@
   .pon-toolbar{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
   .pon-btn-primary{ font-family:'JetBrains Mono', monospace; font-size:12px; letter-spacing:0.5px; padding:9px 16px; border-radius:6px; border:1px solid var(--cyan); background:rgba(79,209,197,0.12); color:var(--cyan); cursor:pointer; font-weight:600; }
   .pon-btn-primary:hover{ background:rgba(79,209,197,0.22); }
+  .pon-rate-quick{ display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
+  .pon-rate-btn{ border:1px solid var(--line); background:transparent; color:var(--text); border-radius:999px; padding:3px 9px; font-size:11.5px; cursor:pointer; }
+  .pon-rate-btn.on{ border-color:var(--amber); color:var(--amber); }
+  .pon-rate-btn:disabled{ opacity:.4; cursor:default; }
+  .pon-urgent{ font-size:11px; color:var(--amber); border:1px solid rgba(240,168,60,.5); border-radius:999px; padding:1px 6px; white-space:nowrap; }
   .pon-select{ width:100%; background:var(--input-bg); border:1px solid var(--line); border-radius:6px; color:var(--text); font-family:'JetBrains Mono', monospace; font-size:13px; padding:10px 10px; outline:none; cursor:pointer; }
   .pon-select:focus{ border-color:var(--cyan); }
   .pon-dim{ font-size:11px; color:var(--dim); font-family:'JetBrains Mono', monospace; }
@@ -14824,7 +14829,7 @@ function ponJobsHtml(){
     const overdue = ponIsOverdue(j);
     const payout = j.status === 'delivered' ? ponMoney(ponAccrued(j)) : (j.status === 'cancelled' ? '—' : '~' + ponMoney(ponEstPayout(j)));
     html += '<tr class="clickable" data-act="open-job" data-id="' + j.id + '">' +
-      '<td><b>' + escapeHtml(j.jobCode) + '</b>' + (l ? '<div class="pon-dim">' + escapeHtml(l.order.displayId || '') + '</div>' : '') + '</td>' +
+      '<td><b>' + escapeHtml(j.jobCode) + '</b>' + (j.urgent || j.rateCustom ? ' <span class="pon-urgent" title="Rate for this job">' + (j.urgent ? '\u26a1 ' : '') + '\u20b9' + fmt(ponRate(j)) + '/g</span>' : '') + (l ? '<div class="pon-dim">' + escapeHtml(l.order.displayId || '') + '</div>' : '') + '</td>' +
       '<td>' + escapeHtml(ponPartnerName(j.partnerId)) + '</td>' +
       '<td>' + escapeHtml(j.productName || '—') + (j.color ? '<div class="pon-dim">' + escapeHtml(j.color) + (j.material ? ' · ' + escapeHtml(j.material) : '') + '</div>' : '') + '</td>' +
       '<td class="num">' + (j.qty || 0) + '</td>' +
@@ -15013,7 +15018,7 @@ function ponJobModalHtml(){
 
   html += '<div class="pon-section-label">Assignment</div><div class="pon-form-grid">' +
     '<div><label>Partner</label><select class="pon-select" data-jf="partnerId">' + ponPartnerOptions(d.partnerId, true) + '</select></div>' +
-    f('Rate (₹ / gram)', 'ratePerGram', 'number', ' min="0" step="0.05"') +
+    ponRateFieldHtml(d) +
     '<div><label>Link to order</label><select class="pon-select" data-jf="orderId"><option value="">— Not linked —</option>' +
       [['Open orders', function(o){ return ['booked', 'in_production', 'quoted'].indexOf(o.status) !== -1; }], ['Older orders', function(o){ return ['booked', 'in_production', 'quoted'].indexOf(o.status) === -1; }]].map(function(g){
         const rows = orders.filter(g[1]);
@@ -15097,15 +15102,33 @@ function ponOpenJob(id, partnerId){
   ponOpenModal(ponJobModalHtml(), true);
 }
 
+// Rate for this job: the partner's usual \u20b9/g, or a higher one you set (e.g. for urgent work).
+// A rate you set stays when the job moves to another partner.
+function ponRateFieldHtml(d){
+  const p = ponPartner(d.partnerId), usual = (p && p.ratePerGram) || 0, rate = posNum(d.ratePerGram);
+  const extra = usual > 0 && rate > usual ? Math.round((rate / usual - 1) * 100) : 0;
+  const btn = function(mult, label){ const v = Math.round(usual * mult * 100) / 100; return '<button type="button" class="pon-rate-btn' + (Math.abs(v - rate) < 0.001 ? ' on' : '') + '" data-act="rate-set" data-mult="' + mult + '"' + (usual ? '' : ' disabled') + '>' + label + '</button>'; };
+  return '<div><label>Rate (\u20b9 / gram)' + (d.urgent ? ' <span style="color:var(--amber)">\u26a1 urgent</span>' : '') + '</label>' +
+      '<input type="number" data-jf="ratePerGram" value="' + escapeHtml(String(d.ratePerGram == null ? '' : d.ratePerGram)) + '" min="0" step="0.05">' +
+      '<div class="pon-rate-quick">' + btn(1, 'Usual \u20b9' + fmt(usual)) + btn(1.25, '+25%') + btn(1.5, '+50%') + btn(2, '2\u00d7') + '</div>' +
+      '<div class="pon-dim">' + (!usual ? 'This partner has no usual rate set.' : extra > 0 ? extra + '% above ' + escapeHtml(ponPartnerName(d.partnerId)) + '\u2019s usual \u20b9' + fmt(usual) + '/g, for this job only.' : rate < usual ? 'Below the partner\u2019s usual \u20b9' + fmt(usual) + '/g.' : 'Partner\u2019s usual rate.') + '</div></div>' +
+    '<div><label>Priority</label><select class="pon-select" data-jf="urgent"><option value=""' + (d.urgent ? '' : ' selected') + '>Normal</option><option value="1"' + (d.urgent ? ' selected' : '') + '>Urgent</option></select></div>';
+}
+
 function ponDraftField(field, raw){
   const d = ponDraft;
   if(!d) return false;
   const numeric = ['qty', 'gramsPerUnit', 'unitsShipped', 'failedPrints', 'gramsUsed', 'clientRejects', 'ratePerGram'];
-  if(numeric.indexOf(field) !== -1){ d[field] = posNum(raw); return false; }
+  if(numeric.indexOf(field) !== -1){
+    d[field] = posNum(raw);
+    if(field === 'ratePerGram'){ const p = ponPartner(d.partnerId); d.rateCustom = !p || Math.abs(d.ratePerGram - (p.ratePerGram || 0)) > 0.001; }
+    return false;
+  }
+  if(field === 'urgent'){ d.urgent = raw === '1'; return true; }
   if(field === 'partnerId'){
     d.partnerId = raw;
     const p = ponPartner(raw);
-    if(p) d.ratePerGram = p.ratePerGram;
+    if(p && !d.rateCustom) d.ratePerGram = p.ratePerGram;
     return true;
   }
   if(field === 'orderId'){
@@ -15325,7 +15348,7 @@ function ponStatementText(pid){
   const s = ponPartnerStats(pid);
   const lines = [];
   lines.push('Thread Tribe — statement for ' + ((p && p.name) || 'partner') + ' (' + formatDateDisplay(ponToday()) + ')');
-  lines.push('Rate: ₹' + fmt((p && p.ratePerGram) || 0) + '/g on accepted units');
+  lines.push('Rate: ₹' + fmt((p && p.ratePerGram) || 0) + '/g on accepted units, unless a job shows its own rate');
   lines.push('');
   const delivered = state.pon.jobs.filter(function(j){ return j.partnerId === pid && j.status === 'delivered'; })
     .sort(function(a, b){ return (b.deliveredDate || '').localeCompare(a.deliveredDate || ''); }).slice(0, 15);
@@ -15333,7 +15356,7 @@ function ponStatementText(pid){
     lines.push('Delivered jobs:');
     delivered.forEach(function(j){
       lines.push('• ' + j.jobCode + ' ' + j.productName + (j.color ? ' (' + j.color + ')' : '') + ': ' + ponPayableUnits(j) + ' pcs' +
-        (j.clientRejects ? ' (' + j.clientRejects + ' rejected)' : '') + ' × ' + fmt(j.gramsPerUnit) + 'g = ' + ponMoney(ponAccrued(j)));
+        (j.clientRejects ? ' (' + j.clientRejects + ' rejected)' : '') + ' × ' + fmt(j.gramsPerUnit) + 'g' + (p && Math.abs(ponRate(j) - (p.ratePerGram || 0)) > 0.001 ? ' @ ₹' + fmt(ponRate(j)) + '/g' + (j.urgent ? ' (urgent)' : '') : '') + ' = ' + ponMoney(ponAccrued(j)));
     });
     lines.push('');
   }
@@ -15360,7 +15383,7 @@ function ponBuildPack(pid){
     return j.status === 'delivered' && (j.deliveredDate || j.shippedDate || '') >= cutoffStr;
   }).map(function(j){
     return { id: j.id, jobCode: j.jobCode, productName: j.productName, color: j.color, material: j.material, qty: j.qty, gramsPerUnit: j.gramsPerUnit,
-      ratePerGram: ponRate(j), dueDate: j.dueDate, createdDate: j.createdDate, status: j.status, unitsShipped: j.unitsShipped, failedPrints: j.failedPrints,
+      ratePerGram: ponRate(j), urgent: !!j.urgent, dueDate: j.dueDate, createdDate: j.createdDate, status: j.status, unitsShipped: j.unitsShipped, failedPrints: j.failedPrints,
       gramsUsed: j.gramsUsed, trackingNo: j.trackingNo, shippedDate: j.shippedDate, deliveredDate: j.deliveredDate, partnerNotes: j.partnerNotes,
       clientRejects: j.clientRejects, qcResult: j.qcResult, qcNotes: j.qcNotes, payout: ponEstPayout(j), reportAt: j.partnerReportAt || '',
       shipTo: { name: j.shipName, phone: j.shipPhone, address: j.shipAddress } };
@@ -15507,6 +15530,10 @@ function ponImportUpdate(text){
     if(!el) return;
     const act = el.getAttribute('data-act');
     if(act === 'modal-close') ponCloseModal();
+    else if(act === 'rate-set' && ponDraft){
+      const p = ponPartner(ponDraft.partnerId), mult = +el.getAttribute('data-mult') || 1;
+      if(p){ ponDraft.ratePerGram = Math.round((p.ratePerGram || 0) * mult * 100) / 100; ponDraft.rateCustom = mult !== 1; if(mult > 1) ponDraft.urgent = true; ponOpenModal(ponJobModalHtml(), true); }
+    }
     else if(act === 'job-save') ponSaveDraft();
     else if(act === 'job-delete') ponDeleteJob();
     else if(act === 'job-status' && ponDraft){ ponDraft.status = el.getAttribute('data-val'); ponOpenModal(ponJobModalHtml(), true); }
@@ -17886,7 +17913,7 @@ function ponReassign(id){
   const oldName = ponPartnerName(j.partnerId);
   j.partnerId = np.id;
   j.status = 'assigned';
-  j.ratePerGram = np.ratePerGram || j.ratePerGram;
+  if(!j.rateCustom) j.ratePerGram = np.ratePerGram || j.ratePerGram; // a rate set for this job (urgent) travels with it
   j.partnerUpdatedAt = '';
   scheduleSave(); renderPartners();
   ponReplyRequest(id, 'done', 'OK — ' + (j.jobCode || 'the job') + ' moved to another partner. Thanks for letting us know.');
