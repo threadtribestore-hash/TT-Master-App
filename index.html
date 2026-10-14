@@ -128,7 +128,7 @@
   }
   .warn-banner a{ color: var(--red); text-decoration:underline; cursor:pointer; }
   .warn-banner.hidden{ display:none; }
-  .cost-frozen-note.hidden{ display:none; }
+  .cost-frozen-note.hidden{ display:none !important; }
 
   .tab-bar{ position:relative; margin-bottom:18px; }
   .tab-menu-toggle{
@@ -4234,11 +4234,14 @@ function orderTotals(order){
   // completed order's cost doesn't drift every time those rates change later.
   // Open orders (still Booked / In Production) always use live numbers, since those
   // should move as costs move. See refreshOrderCostSnapshot for how/when the freeze happens.
-  const prod = (isOrderComplete(order.status) && order.costSnapshot)
-    ? order.costSnapshot
-    : computeProductionCost(order);
+  // Hours, filament, days and pieces left describe the work still to print (for the queue);
+  // filament and machine cost are always for the whole order, so profit doesn't climb to 100%
+  // as pieces get made.
+  const frozen = isOrderComplete(order.status) && order.costSnapshot;
+  const prod = frozen ? order.costSnapshot : computeProductionCost(order);
+  const full = frozen ? order.costSnapshot : computeProductionCost(order, { useFullQty: true });
   const hours = prod.hours, filament = prod.filament, piecesLeft = prod.piecesLeft, totalQty = prod.totalQty;
-  const filamentCost = prod.filamentCost, machineCost = prod.machineCost, days = prod.days;
+  const filamentCost = full.filamentCost, machineCost = full.machineCost, days = prod.days;
   const packagingCost = order.packagingCost || 0;
   const deliveryCost = order.deliveryCost || 0;
   const totalCost = filamentCost + machineCost;
@@ -4349,6 +4352,13 @@ function updateOrderStatsDOM(orderId){
   marginBadge.textContent = !priced
     ? 'No selling price set'
     : ((order.paymentStatus === 'refunded' ? 'Refunded \u2014 ' : '') + fmt(Math.round(t.margin * 10) / 10) + '% margin');
+  // No weight or print hours on a product means no production cost, so the margin would read 100%.
+  const noCost = priced && t.totalCost <= 0 && (order.products || []).some(function(p){ return (p.qty || 0) > 0 && !(p.fil > 0) && !(p.hrs > 0); });
+  if(noCost){
+    marginBadge.className = 'profit-badge stat-margin-badge neutral';
+    marginBadge.textContent = 'No production cost: add weight and print hours';
+    marginBadge.title = 'A product line has no filament weight or print hours, so its cost counts as \u20b90 and profit looks like 100%.';
+  } else marginBadge.title = '';
 
   // Explicit callout for a refunded order: the production cost was already spent and
   // still counts against it, but the revenue side has been netted down by the refund —
