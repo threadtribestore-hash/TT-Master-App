@@ -4218,6 +4218,16 @@ function orderIncentive(order, value, cost){
   return Math.max(0, Math.round(base * pct) / 100);
 }
 
+// Every parcel an order went out in: the first courier/AWB on the order, then any extra shipments.
+function orderShipments(o){
+  const first = { courier: o.courier || '', trackingNo: o.trackingNo || '', date: o.shippedDate || '' };
+  return [first].concat(Array.isArray(o.extraShipments) ? o.extraShipments : []).filter(function(s){ return s && (s.trackingNo || s.courier); });
+}
+// "DTDC D102, DTDC D103" for messages.
+function shipmentsText(o){
+  return orderShipments(o).filter(function(s){ return s.trackingNo; }).map(function(s){ return (s.courier ? s.courier + ' ' : '') + s.trackingNo; }).join(', ');
+}
+
 // The GST choices on an order. Rates are the total; within the seller's state the invoice splits
 // them in half (18% = CGST 9% + SGST 9%). A rate typed with Custom is kept as an option.
 function gstRateOptions(order){
@@ -18118,9 +18128,9 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
-<script src="buyers-admin.js?v=23"></script>
+<script src="buyers-admin.js?v=24"></script>
 <script src="partner-planning.js?v=4"></script>
-<script src="control-room.js?v=11"></script>
+<script src="control-room.js?v=12"></script>
 <script src="projects.js?v=9"></script>
 <script src="sales-admin.js?v=11"></script>
 <script src="shop-admin.js?v=2"></script>
@@ -18133,7 +18143,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="finance-admin.js?v=1"></script>
 <script src="tasks-admin.js?v=1"></script>
 <script src="product-lab.js?v=1"></script>
-<script src="support-admin.js?v=2"></script>
+<script src="support-admin.js?v=3"></script>
 <script src="ops-planning.js?v=2"></script>
 
 

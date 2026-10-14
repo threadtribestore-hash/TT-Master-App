@@ -236,6 +236,8 @@
       // Studio has no "shipped" status; a made order with a dispatch date reads as shipped to the buyer.
       id: o.id, displayId: o.displayId || '', name: o.name || '', status: o.status === 'production_done' && o.shippedDate ? 'shipped' : o.status, orderedDate: orderDate(o), dueDate: o.dueDate || '',
       dispatchBy: o.dispatchBy || '', shippedDate: o.shippedDate || '', courier: o.courier || '', trackingNo: o.trackingNo || '',
+      // Second and later parcels of the same order.
+      moreShipments: (Array.isArray(o.extraShipments) ? o.extraShipments : []).filter(function(x){ return x && x.trackingNo; }).map(function(x){ return { courier: x.courier || '', trackingNo: x.trackingNo, date: x.date || '' }; }),
       productionDoneDate: o.productionDoneDate || '', deliveryDate: o.deliveryDate || '',
       lines: o.products.filter(function(p){ return (p.qty || 0) > 0; }).map(function(p){
         // Made = Studio's own count, or the pieces the workshop bridge has seen finish on the
@@ -579,8 +581,11 @@
           return '<tr><td><b>' + esc(o.displayId || '') + '</b> ' + esc(buyerIds[o.clientId]) + '<div class="ba-dim" style="margin:0">' + esc(o.name || '') + '</div></td>' +
             '<td>' + (sent ? '<span class="ba-pill ok">Dispatched ' + esc(o.shippedDate) + '</span>' + trackCell(o) : esc(statusLabel(o.status))) + '</td>' +
             '<td><input type="date" data-disp="dispatchBy" data-id="' + o.id + '" value="' + esc(o.dispatchBy || '') + '"></td>' +
-            '<td><input list="baCouriers" data-disp="courier" data-id="' + o.id + '" value="' + esc(o.courier || '') + '" placeholder="Courier" style="width:120px"></td>' +
-            '<td><input data-disp="trackingNo" data-id="' + o.id + '" value="' + esc(o.trackingNo || '') + '" placeholder="AWB no." style="width:130px"></td>' +
+            '<td><input list="baCouriers" data-disp="courier" data-id="' + o.id + '" value="' + esc(o.courier || '') + '" placeholder="Courier" style="width:120px">' +
+              (o.extraShipments || []).map(function(x, i){ return '<div class="ba-ship"><input list="baCouriers" data-disp-x="' + i + ':courier" data-id="' + o.id + '" value="' + esc(x.courier || '') + '" placeholder="Courier" style="width:120px"></div>'; }).join('') +
+              '<div><button class="ba-link" data-ba="ship-add" data-id="' + o.id + '" title="Another parcel for this order">+ Add shipment</button></div></td>' +
+            '<td><input data-disp="trackingNo" data-id="' + o.id + '" value="' + esc(o.trackingNo || '') + '" placeholder="AWB no." style="width:130px">' +
+              (o.extraShipments || []).map(function(x, i){ return '<div class="ba-ship"><input data-disp-x="' + i + ':trackingNo" data-id="' + o.id + '" value="' + esc(x.trackingNo || '') + '" placeholder="AWB no. ' + (i + 2) + '" style="width:130px"><button class="ba-link" data-ba="ship-del" data-id="' + o.id + '" data-i="' + i + '" title="Remove this shipment">\u2715</button></div>'; }).join('') + '</td>' +
             '<td>' + (sent ? '<button class="ba-btn" data-ba="undispatch" data-id="' + o.id + '">Undo</button><button class="ba-btn' + (TK.rows[o.id] && TK.rows[o.id].tag === 'Delivered' && TK.rows[o.id].awb === o.trackingNo ? ' primary" title="The courier says it was delivered' : '') + '" data-ba="delivered" data-id="' + o.id + '">Delivered</button>'
               : '<button class="ba-btn primary" data-ba="dispatch" data-id="' + o.id + '">Mark dispatched</button>') + '</td></tr>';
         }).join('') + '</table></div>' : '<p class="ba-dim">No open orders for Buyer app clients.</p>') +
@@ -696,6 +701,13 @@
       scheduleSave(); render(); showToast(o.displayId + ' marked dispatched' + (o.trackingNo ? '' : ' — add the tracking number too'));
     }
     else if(act === 'track') checkTracking(id);
+    else if(act === 'ship-add' || act === 'ship-del'){
+      const o = state.orders.find(function(x){ return x.id === id; }); if(!o) return;
+      if(!Array.isArray(o.extraShipments)) o.extraShipments = [];
+      if(act === 'ship-add') o.extraShipments.push({ courier: o.courier || '', trackingNo: '', date: o.shippedDate || new Date().toISOString().slice(0, 10) });
+      else o.extraShipments.splice(+b.getAttribute('data-i'), 1);
+      scheduleSave(); render();
+    }
     else if(act === 'undispatch'){ const o = orderById(id); if(o){ o.shippedDate = ''; scheduleSave(); render(); } }
     else if(act === 'delivered'){ const o = orderById(id); if(o){ setOrderStatusDirect(o.id, 'delivered'); setTimeout(render, 300); } }
     else if(act === 'photo'){ e.preventDefault(); const im = b.querySelector('img'); const w = window.open(''); if(w && im){ const big = w.document.createElement('img'); big.src = im.src; big.style.maxWidth = '100%'; w.document.body.appendChild(big); } }
@@ -811,6 +823,12 @@
       saveCollections(list); showToast('Collection saved');
       return;
     }
+    if(tab && tab.contains(e.target) && e.target.hasAttribute('data-disp-x')){
+      const o = state.orders.find(function(x){ return x.id === e.target.getAttribute('data-id'); });
+      const parts = e.target.getAttribute('data-disp-x').split(':'), sh = o && (o.extraShipments || [])[+parts[0]];
+      if(sh){ sh[parts[1]] = String(e.target.value || '').trim().slice(0, 80); scheduleSave(); showToast('Saved \u2014 the buyer sees it on the next sync'); }
+      return;
+    }
     if(tab && tab.contains(e.target) && e.target.hasAttribute('data-disp')){
       const o = orderById(e.target.getAttribute('data-id'));
       if(o){ o[e.target.getAttribute('data-disp')] = String(e.target.value || '').trim().slice(0, 80); scheduleSave(); showToast('Saved — the buyer sees it on the next sync'); }
@@ -852,7 +870,8 @@
     '#tabBuyers .ba-list{margin:4px 0 8px 18px;font-size:12px}' +
     '#tabBuyers .ba-actions{margin-top:8px}' +
     '#tabBuyers input[data-col]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:12px "JetBrains Mono",monospace}' +
-    '#tabBuyers input[type=date],#tabBuyers input[data-disp]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font:12px "JetBrains Mono",monospace}' +
+    '#tabBuyers .ba-ship{margin-top:6px;display:flex;gap:4px;align-items:center} #tabBuyers .ba-link{background:none;border:none;color:var(--cyan);cursor:pointer;font-size:12px;padding:4px 0}' +
+    '#tabBuyers input[type=date],#tabBuyers input[data-disp],#tabBuyers input[data-disp-x]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font:12px "JetBrains Mono",monospace}' +
     '#tabBuyers .ba-photos{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}' +
     '#tabBuyers .ba-photos img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}' +
     '#tabBuyers .ba-form{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 10px}' +

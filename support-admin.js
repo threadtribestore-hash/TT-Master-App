@@ -73,7 +73,7 @@
     if(tp === 'claim'){ const p = q.payload || {}, pcs = (p.lines || []).reduce(function(t, l){ return t + (+l.qty || 0); }, 0); body = 'sorry about the ' + pcs + ' piece' + (pcs === 1 ? '' : 's') + ' on ' + (p.displayId || ref) + '. We have your photos and will ' + (p.want === 'credit' ? 'credit them on your account' : 'send replacements with your next dispatch') + '. You will see it in the app once it is done.'; }
     else if(tp === 'delay' && o){
       const m = made(o);
-      if(o.shippedDate) body = ref + ' was dispatched on ' + fmt(o.shippedDate) + (o.courier ? ' with ' + o.courier : '') + (o.trackingNo ? ', tracking ' + o.trackingNo : '') + '. You can follow it under Purchases.';
+      if(o.shippedDate) body = ref + ' was dispatched on ' + fmt(o.shippedDate) + (typeof shipmentsText === 'function' && shipmentsText(o) ? ', tracking ' + shipmentsText(o) : (o.courier ? ' with ' + o.courier : '')) + '. You can follow it under Purchases.';
       else if(o.status === 'production_done') body = ref + ' is ready, all ' + m.total + ' pieces, and goes out ' + (target(o) ? 'by ' + fmt(target(o)) : 'shortly') + '.';
       else body = ref + ': ' + m.made + ' of ' + m.total + ' pieces are made' + (target(o) ? ', and it is planned to dispatch by ' + fmt(target(o)) : '') + '. We will update you when it leaves.';
     }

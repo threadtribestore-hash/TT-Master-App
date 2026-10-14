@@ -374,7 +374,7 @@
     const biz = (state.business && state.business.name) || 'Thread Tribe', hi = 'Hi ' + String(name || '').split(' ')[0] + ', ';
     const ref = o.displayId || 'your order', d = target(o), when = d ? fmtLong(d) : '';
     if(kind === 'pay') return hi + 'a gentle reminder that ' + money(owed(o)) + ' is due for ' + ref + '. Payment details are on your invoice. Thank you!\n— ' + biz;
-    if(o.shippedDate) return hi + ref + ' has been dispatched' + (o.courier ? ' via ' + o.courier : '') + (o.trackingNo ? '. Tracking / AWB: ' + o.trackingNo : '') + '.\n— ' + biz;
+    if(o.shippedDate){ const sh = typeof shipmentsText === 'function' ? shipmentsText(o) : (o.trackingNo || ''), n = typeof orderShipments === 'function' ? orderShipments(o).length : 1; return hi + ref + ' has been dispatched' + (n > 1 ? ' in ' + n + ' parcels' : (o.courier ? ' via ' + o.courier : '')) + (sh ? '. Tracking / AWB: ' + sh : '') + '.\n— ' + biz; }
     if(o.status === 'production_done') return hi + 'good news: ' + ref + ' is ready and will be dispatched ' + (when ? 'by ' + when : 'shortly') + '.' + (owed(o) ? ' Balance due: ' + money(owed(o)) + '.' : '') + '\n— ' + biz;
     if(o.status === 'in_production'){ const pr = orderProgress(o); return hi + 'quick update on ' + ref + ': ' + pr.done + ' of ' + pr.total + ' pieces made so far' + (when ? ', on track to dispatch by ' + when : '') + '.\n— ' + biz; }
     return hi + ref + ' is confirmed and booked for production' + (itemsText(o) ? ': ' + itemsText(o) : '') + '.' + (when ? ' Expected dispatch: ' + when + '.' : '') + '\n— ' + biz;
