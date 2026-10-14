@@ -2715,7 +2715,7 @@
         <div><label>GSTIN (optional)</label><input type="text" id="bizGST" placeholder="e.g. 22AAAAA0000A1Z5"></div>
       </div>
       <div class="row2" style="margin-top:14px;">
-        <div><label>GST rate (%) — leave 0 if not GST-registered</label><input type="number" id="bizGstRate" min="0" max="28" step="0.1" placeholder="e.g. 18" title="Applied to invoices as a single GST line on top of the order total. Leave at 0 to keep invoices exactly as they are today." value="0"></div>
+        <div><label>GST rate (%) — leave 0 if not GST-registered</label><input type="number" id="bizGstRate" min="0" max="28" step="0.1" placeholder="e.g. 18" title="The default GST for orders; each order can use another rate. Invoices split it into CGST + SGST within your state, or IGST for other states. Leave at 0 to keep invoices exactly as they are today." value="0"></div>
         <div><label>Place of Supply (State) — for GST invoices</label><input type="text" id="bizPlaceOfSupply" list="indianStatesList" placeholder="e.g. Uttar Pradesh" title="Your state — used to determine intra-state (CGST+SGST) vs inter-state (IGST) on invoices."></div>
         <div><label>HSN Code — default for all items</label><input type="text" id="bizHSN" placeholder="e.g. 94054090" title="Default HSN code shown on invoice line items. Can be overridden per product in the catalog."></div>
         <div></div>
@@ -3002,6 +3002,7 @@ function hideModal(){
 }
 // A destructive confirmation: Cancel does nothing, the action button (labelled okLabel) runs onConfirm.
 function showConfirmModal(message, onConfirm, okLabel){
+  modalMsg.style.whiteSpace = '';
   modalMsg.textContent = message;
   modalOkBtn.textContent = okLabel || 'Delete';
   modalOkBtn.style.display = '';
@@ -4192,6 +4193,36 @@ function refreshOrderCostSnapshot(order){
 }
 
 
+// GST for one order: its own rate if set (0 = no GST), else the rate in Settings.
+function orderGstRate(order){
+  const r = order ? order.gstRate : null;
+  if(r === '' || r == null) return (state.business && state.business.gstRate) || 0;
+  return Math.max(0, +r || 0);
+}
+// The buyer's state: typed on the order, else the linked client's.
+function orderBuyerState(order){
+  if(order.clientState) return order.clientState;
+  const c = order.clientId && typeof getClientById === 'function' ? getClientById(order.clientId) : null;
+  return (c && c.state) || '';
+}
+// Same state as the seller: CGST + SGST, half the rate each. Another state: IGST at the full rate.
+// gstSupply on the order ('intra' / 'inter') overrides the state comparison.
+function gstSplit(order, rate, amount){
+  const mode = order.gstSupply || 'auto';
+  const seller = ((state.business && state.business.placeOfSupply) || '').trim().toLowerCase(), buyer = orderBuyerState(order).trim().toLowerCase();
+  const inter = mode === 'inter' ? true : mode === 'intra' ? false : !!(seller && buyer && seller !== buyer);
+  if(inter) return { inter: true, igstRate: rate, igst: amount, cgstRate: 0, cgst: 0, sgstRate: 0, sgst: 0, known: mode !== 'auto' || !!(seller && buyer) };
+  const cgst = Math.round(amount * 50) / 100;
+  return { inter: false, igstRate: 0, igst: 0, cgstRate: rate / 2, cgst: cgst, sgstRate: rate / 2, sgst: Math.round((amount - cgst) * 100) / 100, known: mode !== 'auto' || !!(seller && buyer) };
+}
+// "CGST 9% Rs 900 + SGST 9% Rs 900" or "IGST 18% Rs 1,800", for the pop-up and messages.
+function gstText(t){
+  const n = function(v){ return '\u20b9' + (Math.round(v * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
+  const r = function(v){ return (Math.round(v * 100) / 100) + '%'; };
+  if(!t.gstAmount) return '';
+  return t.gst.inter ? 'IGST ' + r(t.gst.igstRate) + ' ' + n(t.gst.igst) : 'CGST ' + r(t.gst.cgstRate) + ' ' + n(t.gst.cgst) + ' + SGST ' + r(t.gst.sgstRate) + ' ' + n(t.gst.sgst);
+}
+
 function orderTotals(order){
   // Completed orders read their frozen snapshot instead of recomputing against
   // whatever filament/machine/buffer rates happen to be in Settings today — so a
@@ -4248,10 +4279,11 @@ function orderTotals(order){
   // display and what's actually owed — it's tax collected on the client's behalf, not
   // revenue, so it never enters profit/margin above. Rate defaults to 0 (not GST-registered),
   // in which case gstAmount is 0 and grandTotal simply equals orderValue.
-  const gstRate = (state.business && state.business.gstRate) || 0;
+  const gstRate = orderGstRate(order);
   const gstAmount = Math.round(orderValue * gstRate) / 100;
   const grandTotal = Math.round((orderValue + gstAmount) * 100) / 100;
-  return { hours: hours, filament: filament, days: days, cost: filamentCost, machineCost: machineCost, totalCost: totalCost, piecesLeft: piecesLeft, packagingCost: packagingCost, deliveryCost: deliveryCost, allInCost: allInCost, sellingPrice: orderValue, orderValue: orderValue, preRefundValue: preRefundValue, refundAmount: refundAmount, grossValue: grossValue, discount: discount, lineDiscount: lineDiscount, overallDiscountPct: overallDiscountPct, overallDiscountAmt: overallDiscountAmt, pricePerUnit: pricePerUnit, preRefundPricePerUnit: preRefundPricePerUnit, grossPricePerUnit: grossPricePerUnit, totalQty: totalQty, profit: profit, margin: margin, gstRate: gstRate, gstAmount: gstAmount, grandTotal: grandTotal };
+  const gst = gstSplit(order, gstRate, gstAmount);
+  return { hours: hours, filament: filament, days: days, cost: filamentCost, machineCost: machineCost, totalCost: totalCost, piecesLeft: piecesLeft, packagingCost: packagingCost, deliveryCost: deliveryCost, allInCost: allInCost, sellingPrice: orderValue, orderValue: orderValue, preRefundValue: preRefundValue, refundAmount: refundAmount, grossValue: grossValue, discount: discount, lineDiscount: lineDiscount, overallDiscountPct: overallDiscountPct, overallDiscountAmt: overallDiscountAmt, pricePerUnit: pricePerUnit, preRefundPricePerUnit: preRefundPricePerUnit, grossPricePerUnit: grossPricePerUnit, totalQty: totalQty, profit: profit, margin: margin, gstRate: gstRate, gstAmount: gstAmount, grandTotal: grandTotal, gst: gst };
 }
 
 // Piece-completion progress across all products in an order: "already made" out of total "qty" ordered.
@@ -4358,11 +4390,42 @@ function updateOrderStatsDOM(orderId){
         parts.push('\u2212 \u20b9' + fmt(Math.round(t.overallDiscountAmt * 100) / 100) + ' overall (' + fmt(t.overallDiscountPct) + '%)');
       }
       parts.push('= \u20b9' + fmt(Math.round(t.preRefundValue * 100) / 100) + ' for ' + fmt(t.totalQty) + ' pc' + (t.totalQty === 1 ? '' : 's'));
+      if(t.gstAmount > 0) parts.push('+ ' + gstText(t) + ' = \u20b9' + fmt(t.grandTotal) + ' with GST');
+      else parts.push('(no GST)');
       priceSummaryEl.textContent = parts.join('  ');
     }
   }
 
   updateDueFlag(orderId);
+}
+
+// The GST breakup under Pricing in the order pop-up.
+function updateGstLine(orderId){
+  const order = state.orders.find(function(o){ return o.id === orderId; }), el = document.getElementById('gst-line-' + orderId);
+  if(!order || !el) return;
+  const t = orderTotals(order), f = function(v){ return '\u20b9' + (Math.round(v * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
+  if(!t.gstAmount){ el.innerHTML = '<span style="color:var(--dim)">No GST on this order. Pick a rate above, or set one in Settings.</span>'; return; }
+  el.innerHTML = '<b>Taxable ' + f(t.orderValue) + '</b> \u00b7 ' + escapeHtml(gstText(t)) + ' \u00b7 <b>Total ' + f(t.grandTotal) + '</b>' +
+    (!t.gst.known ? '<div style="color:var(--amber);font-size:12px;margin-top:3px">Add your Place of Supply in Settings and the client\u2019s state to be sure it\u2019s CGST + SGST and not IGST, or pick the tax type.</div>' : '');
+}
+// A message with the GST breakup, for clients who ask for CGST and SGST separately.
+function shareGstBreakup(orderId){
+  const order = state.orders.find(function(o){ return o.id === orderId; }); if(!order) return;
+  const t = orderTotals(order), f = function(v){ return '\u20b9' + (Math.round(v * 100) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  const biz = state.business || {}, ref = order.displayId || order.name || 'your order';
+  const lines = ['GST breakup for ' + ref + (order.invoiceNumber ? ' (invoice ' + order.invoiceNumber + ')' : ''), 'Taxable value: ' + f(t.orderValue)];
+  if(!t.gstAmount) lines.push('GST: not charged on this order');
+  else if(t.gst.inter) lines.push('IGST @ ' + t.gst.igstRate + '%: ' + f(t.gst.igst));
+  else { lines.push('CGST @ ' + t.gst.cgstRate + '%: ' + f(t.gst.cgst)); lines.push('SGST @ ' + t.gst.sgstRate + '%: ' + f(t.gst.sgst)); }
+  lines.push('Total: ' + f(t.grandTotal));
+  if(biz.gst) lines.push('Our GSTIN: ' + biz.gst);
+  if(biz.hsn) lines.push('HSN: ' + biz.hsn);
+  lines.push('\u2014 ' + (biz.name || 'Thread Tribe'));
+  const text = lines.join('\n');
+  let p = String(order.clientPhone || '').replace(/\D/g, ''); if(p.length === 10) p = '91' + p;
+  showConfirmModal(text, function(){ window.open('https://wa.me/' + (p.length >= 11 ? p : '') + '?text=' + encodeURIComponent(text), '_blank'); }, 'Send on WhatsApp');
+  modalMsg.style.whiteSpace = 'pre-line';
+  try{ if(navigator.clipboard) navigator.clipboard.writeText(text); }catch(e){}
 }
 
 function refreshAllOrderStats(){ state.orders.forEach(function(o){ updateOrderStatsDOM(o.id); }); }
@@ -4992,6 +5055,10 @@ function buildOrderCardBody(order, index){
         '<div><label>Overall discount (%)</label><input type="number" class="p-overall-discount" min="0" max="100" step="0.5" value="' + (order.overallDiscountPct || 0) + '" title="Order-level discount applied on top of any per-line discounts. Useful for bundle deals or dealer tier pricing."></div>' +
         '<div><label>Packaging cost (\u20b9)</label><input type="number" class="p-packaging-cost" min="0" step="1" value="' + (order.packagingCost || 0) + '"></div>' +
         '<div><label>Delivery cost (\u20b9)</label><input type="number" class="p-delivery-cost" min="0" step="1" value="' + (order.deliveryCost || 0) + '"></div>' +
+        '<div><label>GST</label><select class="p-gst-rate">' + [['', 'As in Settings (' + ((state.business && state.business.gstRate) || 0) + '%)'], ['0', 'No GST'], ['5', '5%'], ['12', '12%'], ['18', '18%'], ['28', '28%']].map(function(o){ return '<option value="' + o[0] + '"' + (String(order.gstRate == null ? '' : order.gstRate) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+        '<div><label>Tax type</label><select class="p-gst-supply">' + [['auto', 'By client\u2019s state'], ['intra', 'Same state: CGST + SGST'], ['inter', 'Other state: IGST']].map(function(o){ return '<option value="' + o[0] + '"' + ((order.gstSupply || 'auto') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+        '<div><label>Client\u2019s state</label><input type="text" class="p-client-state" list="indianStatesList" placeholder="' + escapeHtml(orderBuyerState(Object.assign({}, order, { clientState: '' })) || 'e.g. Delhi') + '" value="' + escapeHtml(order.clientState || '') + '"></div>' +
+        '<div style="grid-column:1/-1;"><div class="gst-line" id="gst-line-' + order.id + '"></div><button type="button" class="add-btn gst-share" style="width:auto;padding:8px 14px;margin-top:6px;">Send GST breakup</button></div>' +
       '</div>' +
       '<div class="pricing-row payment-row">' +
         '<div><label>Payment status</label><div class="status-toggle pay-status pay-' + (order.paymentStatus || 'unpaid') + '" title="Click to cycle: Unpaid \u2192 Partial \u2192 Paid \u2192 Refunded" style="display:inline-block;">' + paymentStatusLabel(order.paymentStatus) + '</div></div>' +
@@ -5063,6 +5130,13 @@ function buildOrderCardBody(order, index){
     clientBlock.querySelector('.p-delivery-cost').addEventListener('input', function(e){
       order.deliveryCost = posNum(e.target.value); updateOrderStatsDOM(order.id); scheduleSave();
     });
+    // GST: rate for this order, CGST+SGST or IGST, and the client's state when it isn't on the client.
+    function refreshGst(){ updateOrderStatsDOM(order.id); updatePaymentHint(order.id); updateGstLine(order.id); scheduleSave(); }
+    clientBlock.querySelector('.p-gst-rate').addEventListener('change', function(e){ order.gstRate = e.target.value === '' ? null : +e.target.value; refreshGst(); });
+    clientBlock.querySelector('.p-gst-supply').addEventListener('change', function(e){ order.gstSupply = e.target.value; refreshGst(); });
+    clientBlock.querySelector('.p-client-state').addEventListener('input', function(e){ order.clientState = e.target.value.trim(); refreshGst(); });
+    clientBlock.querySelector('.gst-share').addEventListener('click', function(){ shareGstBreakup(order.id); });
+    setTimeout(function(){ updateGstLine(order.id); }, 0);
     clientBlock.querySelector('.pay-status').addEventListener('click', function(){
       cyclePaymentStatus(order.id);
     });
@@ -14166,7 +14240,10 @@ function generateInvoice(orderId){
       ((t.discount > 0 || t.gstAmount > 0) ? '<tr><td>Subtotal</td><td class="num">\u20b9' + t.grossValue.toFixed(2) + '</td></tr>' : '') +
       (t.lineDiscount > 0 ? '<tr><td>Line Discount (' + (t.grossValue > 0 ? fmt(Math.round((t.lineDiscount / t.grossValue) * 1000) / 10) : '0') + '%)</td><td class="num">\u2212\u20b9' + t.lineDiscount.toFixed(2) + '</td></tr>' : '') +
       (t.overallDiscountPct > 0 ? '<tr><td>Overall Discount (' + fmt(t.overallDiscountPct) + '%)</td><td class="num">\u2212\u20b9' + t.overallDiscountAmt.toFixed(2) + '</td></tr>' : '') +
-      (t.gstAmount > 0 ? (function(){ var biz = state.business || {}; var sellerState = (biz.placeOfSupply || '').trim().toLowerCase(); var buyerState = (order.clientState || '').trim().toLowerCase(); var isInterState = sellerState && buyerState && sellerState !== buyerState; if(isInterState){ return '<tr><td>IGST (' + fmt(t.gstRate) + '%)</td><td class="num">\u20b9' + t.gstAmount.toFixed(2) + '</td></tr>'; } else { var halfRate = Math.round(t.gstRate * 50) / 100; var halfAmt = Math.round(t.gstAmount * 50) / 100; return '<tr><td>CGST (' + fmt(halfRate) + '%)</td><td class="num">\u20b9' + halfAmt.toFixed(2) + '</td></tr>' + '<tr><td>SGST (' + fmt(halfRate) + '%)</td><td class="num">\u20b9' + halfAmt.toFixed(2) + '</td></tr>'; } })() : '') +
+      (t.gstAmount > 0 ? (t.gst.inter
+        ? '<tr><td>IGST (' + fmt(t.gst.igstRate) + '%)</td><td class="num">\u20b9' + t.gst.igst.toFixed(2) + '</td></tr>'
+        : '<tr><td>CGST (' + fmt(t.gst.cgstRate) + '%)</td><td class="num">\u20b9' + t.gst.cgst.toFixed(2) + '</td></tr>' +
+          '<tr><td>SGST (' + fmt(t.gst.sgstRate) + '%)</td><td class="num">\u20b9' + t.gst.sgst.toFixed(2) + '</td></tr>') : '') +
       '<tr class="grand"><td>Total</td><td class="num">\u20b9' + t.grandTotal.toFixed(2) + '</td></tr>' +
       (paymentRow || '') +
     '</table></div>' +
@@ -17957,7 +18034,7 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
-<script src="buyers-admin.js?v=22"></script>
+<script src="buyers-admin.js?v=23"></script>
 <script src="partner-planning.js?v=4"></script>
 <script src="control-room.js?v=11"></script>
 <script src="projects.js?v=9"></script>

@@ -245,6 +245,8 @@
           unitPrice: p.actualPrice || 0, listPrice: p.listPrice || 0, catalogId: catalogIdFor(p) };
       }),
       subtotal: t.orderValue, discount: t.discount, gstRate: t.gstRate, gst: t.gstAmount, total: t.grandTotal,
+      // CGST + SGST within the seller's state, IGST otherwise, so invoices show the split clients ask for.
+      gstSplit: t.gst ? { inter: t.gst.inter, cgstRate: t.gst.cgstRate, cgst: t.gst.cgst, sgstRate: t.gst.sgstRate, sgst: t.gst.sgst, igstRate: t.gst.igstRate, igst: t.gst.igst } : null,
       paid: o.paymentStatus === 'paid' ? t.grandTotal : (o.amountPaid || 0), due: noDue ? 0 : Math.max(0, Math.round((t.grandTotal - (o.amountPaid || 0)) * 100) / 100),
       paymentStatus: o.paymentStatus || 'unpaid', invoiceNumber: o.invoiceNumber || '',
       reservedHours: open ? Math.round(t.hours * 10) / 10 : 0,
