@@ -72,6 +72,13 @@
     '.om-chips{display:flex;flex-wrap:wrap;gap:6px}',
     '.om-chip{background:var(--input-bg);border:1px solid transparent;color:var(--text);border-radius:999px;padding:7px 14px;font-size:13px;font-family:' + SANS + ';cursor:pointer}',
     '.om-chip:hover{border-color:var(--line)}',
+    '.om-ship-dates{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}',
+    '.om-ship-dates label{display:block;font-size:12px;color:var(--dim)} .om-ship-dates input{display:block;width:100%;box-sizing:border-box;margin-top:6px}',
+    '.om-parcel{display:grid;grid-template-columns:62px minmax(0,1fr) minmax(0,1.3fr) 32px;gap:8px;align-items:center;margin-bottom:8px}',
+    '.om-pn{font-size:12px;color:var(--dim);font-family:' + SANS + '}',
+    '.om-x{background:none;border:1px solid var(--line);border-radius:8px;height:36px;color:var(--red);cursor:pointer}',
+    '.om-ship-a{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}',
+    '@media (max-width:640px){.om-parcel{grid-template-columns:1fr 32px}.om-pn{grid-column:1/-1}.om-parcel input:first-of-type{grid-column:1/-1}}',
     '.om-sales-row{display:flex;gap:8px;flex-wrap:wrap}.om-sales-row select,.om-sales-row input{flex:1 1 140px;min-width:0}',
     '.om-inc-line{font-size:12.5px;color:var(--dim);margin-top:6px;font-family:' + SANS + '} .om-inc-line b{color:var(--text)}',
     '.om-suggest{margin-top:6px}',
@@ -286,6 +293,64 @@
     return wrap;
   }
 
+  // Shipping: the same fields as the Buyer App tab's Dispatch table (expected dispatch, dispatched on,
+  // courier, AWB, extra parcels), so brand partners see them in the Buyer app on the next sync.
+  const COURIERS = ['Delhivery', 'Blue Dart', 'DTDC', 'Shiprocket', 'India Post', 'Ekart', 'Xpressbees', 'Ecom Express', 'Shadowfax', 'Professional Couriers', 'Porter', 'Own delivery'];
+  function shippingField(order){
+    if(!order) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'om-ship';
+    function today(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    function draw(){
+      const extra = Array.isArray(order.extraShipments) ? order.extraShipments : [];
+      const parcel = function(courier, awb, i){
+        return '<div class="om-parcel"><span class="om-pn">Parcel ' + (i + 1) + '</span>' +
+          '<input type="text" list="omCouriers" class="om-sf" data-k="' + (i ? (i - 1) + ':courier' : 'courier') + '" value="' + esc(courier || '') + '" placeholder="Courier">' +
+          '<input type="text" class="om-sf" data-k="' + (i ? (i - 1) + ':trackingNo' : 'trackingNo') + '" value="' + esc(awb || '') + '" placeholder="Tracking / AWB no.">' +
+          (i ? '<button type="button" class="om-x" data-del="' + (i - 1) + '" title="Remove this parcel">✕</button>' : '<span class="om-x-sp"></span>') + '</div>';
+      };
+      const linked = order.clientId && (state.clients || []).some(function(c){ return c.id === order.clientId && c.buyerApp; });
+      wrap.innerHTML = '<datalist id="omCouriers">' + COURIERS.map(function(c){ return '<option value="' + c + '">'; }).join('') + '</datalist>' +
+        '<div class="om-ship-dates"><label>Expected dispatch<input type="date" class="om-sf" data-k="dispatchBy" value="' + esc(order.dispatchBy || '') + '"></label>' +
+        '<label>Dispatched on<input type="date" class="om-sf" data-k="shippedDate" value="' + esc(order.shippedDate || '') + '"></label></div>' +
+        parcel(order.courier, order.trackingNo, 0) + extra.map(function(x, i){ return parcel(x.courier, x.trackingNo, i + 1); }).join('') +
+        '<div class="om-ship-a"><button type="button" class="om-chip" data-ship="add">+ Add parcel</button>' +
+          (!order.shippedDate ? '<button type="button" class="om-chip" data-ship="sent">Mark dispatched today</button>' : '') +
+          (order.trackingNo ? '<button type="button" class="om-chip" data-ship="wa">Send tracking on WhatsApp</button>' : '') + '</div>' +
+        '<div class="om-inc-line">' + (linked ? 'Shows in the client’s Buyer app (Purchases → this order) on the next sync, with live tracking for parcel 1 and a courier link for each parcel.' : 'This client isn’t on the Buyer app, so share tracking on WhatsApp.') + '</div>';
+    }
+    function saved(redraw){ scheduleSave(); if(typeof cloudPublishPacks === 'function') try{ cloudPublishPacks(); }catch(e){} if(redraw) draw(); }
+    wrap.addEventListener('change', function(e){
+      const el = e.target.closest('.om-sf'); if(!el) return;
+      const k = el.getAttribute('data-k'), v = String(el.value || '').trim().slice(0, 80);
+      if(k.indexOf(':') !== -1){ const parts = k.split(':'), sh = (order.extraShipments || [])[+parts[0]]; if(sh) sh[parts[1]] = v; }
+      else order[k] = v;
+      // A tracking number on parcel 1 with no dispatch date means it has left today.
+      if(k === 'trackingNo' && v && !order.shippedDate){ order.shippedDate = today(); }
+      saved(k === 'shippedDate' || k === 'trackingNo');
+      if(k === 'shippedDate' && typeof renderOrdersTable === 'function') try{ renderOrdersTable(); }catch(err){}
+    });
+    wrap.addEventListener('click', function(e){
+      const del = e.target.closest('[data-del]');
+      if(del){ order.extraShipments.splice(+del.getAttribute('data-del'), 1); saved(true); return; }
+      const b = e.target.closest('[data-ship]'); if(!b) return;
+      const a = b.getAttribute('data-ship');
+      if(a === 'add'){ if(!Array.isArray(order.extraShipments)) order.extraShipments = []; order.extraShipments.push({ courier: order.courier || '', trackingNo: '', date: order.shippedDate || today() }); saved(true); }
+      else if(a === 'sent'){ order.shippedDate = today(); saved(true); }
+      else if(a === 'wa'){
+        const biz = (state.business && state.business.name) || 'Thread Tribe', list = typeof orderShipments === 'function' ? orderShipments(order).filter(function(x){ return x.trackingNo; }) : [];
+        const cl = (state.clients || []).find(function(c){ return c.id === order.clientId; }), hiName = (cl && cl.contact) ? String(cl.contact).split(' ')[0] : (order.clientName || 'there');
+        const lines = ['Hi ' + hiName + ', ' + (order.displayId || 'your order') + ' has been dispatched' + (list.length > 1 ? ' in ' + list.length + ' parcels' : '') + (order.shippedDate ? ' on ' + order.shippedDate : '') + '.'];
+        list.forEach(function(x, i){ lines.push((list.length > 1 ? 'Parcel ' + (i + 1) + ': ' : 'Tracking: ') + (x.courier ? x.courier + ' ' : '') + x.trackingNo); });
+        lines.push('— ' + biz);
+        let ph = String(order.clientPhone || '').replace(/\D/g, ''); if(ph.length === 10) ph = '91' + ph;
+        window.open('https://wa.me/' + (ph.length >= 11 ? ph : '') + '?text=' + encodeURIComponent(lines.join('\n')), '_blank');
+      }
+    });
+    draw();
+    return wrap;
+  }
+
   function relabelProducts(body){
     const names = { 'Hrs/unit': 'Print hrs / unit', 'Fil(g)/unit': 'Filament g / unit', 'Already made': 'Made', 'List price/pc (₹)': 'List price / pc (₹)', 'Actual price/pc (₹)': 'Selling price / pc (₹)' };
     body.querySelectorAll('.products-scroll label').forEach(function(l){
@@ -328,11 +393,13 @@
       if(payIdx >= 0) paySec = section('Payment', kids.slice(payIdx).filter(function(el){ return el !== kids[priceIdx]; }));
     }
     const datesSec = section('Dates and capacity', [body.querySelector(':scope > .order-meta')]);
+    const shipEl = shippingField(order); if(shipEl) body.appendChild(shipEl);
+    const shipSec = shipEl ? section('Shipping', [shipEl]) : null;
     const prodSec = section('Products', [body.querySelector(':scope > .products-scroll'), body.querySelector(':scope > .add-btn')]);
     const statsSec = section('Production and profit', [body.querySelector(':scope > .order-stats'), body.querySelector(':scope > .order-progress'), body.querySelector(':scope > .profit-band')]);
 
     // Working order: who, what, how much, paid, when, results.
-    [clientSec, detailsSec, prodSec, priceSec, paySec, datesSec, statsSec].forEach(function(sec){ if(sec) body.appendChild(sec); });
+    [clientSec, detailsSec, prodSec, priceSec, paySec, shipSec, datesSec, statsSec].forEach(function(sec){ if(sec) body.appendChild(sec); });
     relabelProducts(body);
     if(head) polishHead(head, body);
   }
