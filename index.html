@@ -4198,6 +4198,21 @@ function refreshOrderCostSnapshot(order){
 }
 
 
+// Sales incentive on an order: a % of its value before GST (after discounts and refunds) or a fixed
+// amount, for the salesperson set on the order. The % defaults to that person's rate in Sales.
+function incentiveRate(email){
+  const S = state.salesIncentive || {};
+  const per = (S.perRep || {})[email];
+  return per != null && per !== '' ? +per : (+S.defaultPct || 0);
+}
+function orderIncentive(order, value){
+  if(!order || !order.salesRep) return 0;
+  const inc = order.incentive || {};
+  if(inc.type === 'fixed') return Math.max(0, +inc.value || 0);
+  const pct = inc.value != null && inc.value !== '' ? +inc.value : incentiveRate(order.salesRep);
+  return Math.max(0, Math.round((value || 0) * pct) / 100);
+}
+
 // The GST choices on an order. Rates are the total; within the seller's state the invoice splits
 // them in half (18% = CGST 9% + SGST 9%). A rate typed with Custom is kept as an option.
 function gstRateOptions(order){
@@ -4256,7 +4271,7 @@ function orderTotals(order){
   const packagingCost = order.packagingCost || 0;
   const deliveryCost = order.deliveryCost || 0;
   const totalCost = filamentCost + machineCost;
-  const allInCost = totalCost + packagingCost + deliveryCost;
+  const baseCost = totalCost + packagingCost + deliveryCost;
   // Pricing lives per product line, not per order: each line carries its own listPrice
   // (the uniform/catalog reference price) and actualPrice (what was actually quoted to
   // this client). grossValue is what the order would be worth at full list price;
@@ -4289,6 +4304,9 @@ function orderTotals(order){
   const pricePerUnit = totalQty > 0 ? orderValue / totalQty : 0;
   const preRefundPricePerUnit = totalQty > 0 ? preRefundValue / totalQty : 0;
   const grossPricePerUnit = totalQty > 0 ? grossValue / totalQty : 0;
+  // A salesperson's incentive on this order is a cost of the sale, so it comes out of profit.
+  const incentive = orderIncentive(order, orderValue);
+  const allInCost = baseCost + incentive;
   const profit = orderValue - allInCost;
   // Margin is judged against what the order was actually quoted at (preRefundValue),
   // not the post-refund revenue — so a fully refunded order shows a clear, meaningful
@@ -4302,7 +4320,7 @@ function orderTotals(order){
   const gstAmount = Math.round(orderValue * gstRate) / 100;
   const grandTotal = Math.round((orderValue + gstAmount) * 100) / 100;
   const gst = gstSplit(order, gstRate, gstAmount);
-  return { hours: hours, filament: filament, days: days, cost: filamentCost, machineCost: machineCost, totalCost: totalCost, piecesLeft: piecesLeft, packagingCost: packagingCost, deliveryCost: deliveryCost, allInCost: allInCost, sellingPrice: orderValue, orderValue: orderValue, preRefundValue: preRefundValue, refundAmount: refundAmount, grossValue: grossValue, discount: discount, lineDiscount: lineDiscount, overallDiscountPct: overallDiscountPct, overallDiscountAmt: overallDiscountAmt, pricePerUnit: pricePerUnit, preRefundPricePerUnit: preRefundPricePerUnit, grossPricePerUnit: grossPricePerUnit, totalQty: totalQty, profit: profit, margin: margin, gstRate: gstRate, gstAmount: gstAmount, grandTotal: grandTotal, gst: gst };
+  return { hours: hours, filament: filament, days: days, cost: filamentCost, machineCost: machineCost, totalCost: totalCost, piecesLeft: piecesLeft, packagingCost: packagingCost, deliveryCost: deliveryCost, allInCost: allInCost, sellingPrice: orderValue, orderValue: orderValue, preRefundValue: preRefundValue, refundAmount: refundAmount, grossValue: grossValue, discount: discount, lineDiscount: lineDiscount, overallDiscountPct: overallDiscountPct, overallDiscountAmt: overallDiscountAmt, pricePerUnit: pricePerUnit, preRefundPricePerUnit: preRefundPricePerUnit, grossPricePerUnit: grossPricePerUnit, totalQty: totalQty, profit: profit, margin: margin, gstRate: gstRate, gstAmount: gstAmount, grandTotal: grandTotal, gst: gst, incentive: incentive };
 }
 
 // Piece-completion progress across all products in an order: "already made" out of total "qty" ordered.
@@ -18093,12 +18111,12 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="partner-planning.js?v=4"></script>
 <script src="control-room.js?v=11"></script>
 <script src="projects.js?v=9"></script>
-<script src="sales-admin.js?v=9"></script>
+<script src="sales-admin.js?v=10"></script>
 <script src="shop-admin.js?v=2"></script>
 <script src="owner-home.js?v=3"></script>
 <script src="automations.js?v=4"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=6"></script>
+<script src="ui-polish.js?v=7"></script>
 <script src="upsell.js?v=1"></script>
 <script src="marketing-admin.js?v=5"></script>
 <script src="finance-admin.js?v=1"></script>

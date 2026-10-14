@@ -72,6 +72,9 @@
     '.om-chips{display:flex;flex-wrap:wrap;gap:6px}',
     '.om-chip{background:var(--input-bg);border:1px solid transparent;color:var(--text);border-radius:999px;padding:7px 14px;font-size:13px;font-family:' + SANS + ';cursor:pointer}',
     '.om-chip:hover{border-color:var(--line)}',
+    '.om-sales-row{display:flex;gap:8px;flex-wrap:wrap}.om-sales-row select,.om-sales-row input{flex:1 1 140px;min-width:0}',
+    '.om-inc-line{font-size:12.5px;color:var(--dim);margin-top:6px;font-family:' + SANS + '} .om-inc-line b{color:var(--text)}',
+    '.om-suggest{margin-top:6px}',
     '.om-chip.on{background:rgba(79,209,197,.14);border-color:var(--cyan);color:var(--text);font-weight:600}',
 
     // Pricing summary and payment status.
@@ -250,6 +253,39 @@
     return wrap;
   }
 
+  // Who sold this order and their incentive (% of the value before GST, or a fixed amount).
+  // It counts as a cost in profit; Sales -> Incentives tracks what is due and paid.
+  function salesField(order){
+    if(!order || !window.TTSales) return null;
+    const reps = (window.TTSales.reps() || []).filter(function(r){ return r.active || r.email === order.salesRep; });
+    if(!reps.length && !order.salesRep) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'om-sales';
+    // The salesperson who won this client as a lead, as a one-tap suggestion.
+    const won = !order.salesRep && order.clientId ? (window.TTSales.leads() || []).find(function(l){ return l.stage === 'won' && (l.data || {}).clientId === order.clientId && l.owner_email; }) : null;
+    const wonRep = won ? reps.find(function(r){ return r.email === won.owner_email; }) : null;
+    function draw(){
+      const inc = order.incentive || {}, type = inc.type === 'fixed' ? 'fixed' : 'pct';
+      const def = typeof incentiveRate === 'function' && order.salesRep ? incentiveRate(order.salesRep) : 0;
+      const amt = typeof orderTotals === 'function' ? orderTotals(order).incentive : 0;
+      const paidOut = inc.paidAt, clientPaid = order.paymentStatus === 'paid';
+      const status = !order.salesRep ? '' : paidOut ? 'Paid out ' + paidOut : clientPaid ? 'Due to pay now' : 'Due once the client pays';
+      wrap.innerHTML = '<label>Salesperson</label><div class="om-sales-row"><select class="om-rep"><option value="">No salesperson</option>' +
+          reps.map(function(r){ return '<option value="' + esc(r.email) + '"' + (order.salesRep === r.email ? ' selected' : '') + '>' + esc(r.name) + '</option>'; }).join('') + '</select>' +
+          (order.salesRep ? '<select class="om-inc-type"><option value="pct"' + (type === 'pct' ? ' selected' : '') + '>% of order</option><option value="fixed"' + (type === 'fixed' ? ' selected' : '') + '>Fixed ₹</option></select>' +
+            '<input class="om-inc-val" type="number" min="0" step="' + (type === 'pct' ? '0.5' : '50') + '" placeholder="' + (type === 'pct' ? def + ' (default)' : '₹') + '" value="' + esc(inc.value == null ? '' : inc.value) + '">' : '') + '</div>' +
+        (wonRep ? '<button type="button" class="om-chip om-suggest">' + esc(wonRep.name) + ' won this client: set as salesperson</button>' : '') +
+        (order.salesRep ? '<div class="om-inc-line">Incentive <b>₹' + Math.round(amt).toLocaleString('en-IN') + '</b>' + (type === 'pct' ? ' (' + (inc.value != null && inc.value !== '' ? inc.value : def) + '% of the order before GST)' : '') + ' · ' + status + '</div>' : '');
+      wrap.querySelector('.om-rep').addEventListener('change', function(e){ order.salesRep = e.target.value; if(!order.salesRep) delete order.incentive; changed(); });
+      const t = wrap.querySelector('.om-inc-type'); if(t) t.addEventListener('change', function(e){ order.incentive = Object.assign({}, order.incentive, { type: e.target.value, value: null }); changed(); });
+      const v = wrap.querySelector('.om-inc-val'); if(v) v.addEventListener('change', function(e){ order.incentive = Object.assign({}, order.incentive, { type: (order.incentive || {}).type || 'pct', value: e.target.value === '' ? null : Math.max(0, +e.target.value || 0) }); changed(); });
+      const sg = wrap.querySelector('.om-suggest'); if(sg) sg.addEventListener('click', function(){ order.salesRep = wonRep.email; changed(); });
+    }
+    function changed(){ scheduleSave(); if(typeof updateOrderStatsDOM === 'function') updateOrderStatsDOM(order.id); draw(); }
+    draw();
+    return wrap;
+  }
+
   function relabelProducts(body){
     const names = { 'Hrs/unit': 'Print hrs / unit', 'Fil(g)/unit': 'Filament g / unit', 'Already made': 'Made', 'List price/pc (₹)': 'List price / pc (₹)', 'Actual price/pc (₹)': 'Selling price / pc (₹)' };
     body.querySelectorAll('.products-scroll label').forEach(function(l){
@@ -287,7 +323,7 @@
       const clientEnd = cut.length ? Math.min.apply(null, cut) : kids.length;
       const clientKids = kids.slice(0, clientEnd).filter(function(el){ return el !== chips && el !== sourceRow && el !== notes; });
       clientSec = section('Client', clientKids);
-      detailsSec = section('Order details', [chips, campaignField(order), sourceRow, notes]);
+      detailsSec = section('Order details', [chips, campaignField(order), salesField(order), sourceRow, notes]);
       if(priceIdx >= 0) priceSec = section('Pricing', [kids[priceIdx]]);
       if(payIdx >= 0) paySec = section('Payment', kids.slice(payIdx).filter(function(el){ return el !== kids[priceIdx]; }));
     }

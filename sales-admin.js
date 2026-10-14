@@ -275,6 +275,29 @@
     const unowned = X.leads.filter(function(l){ return !l.owner_email && ['won', 'lost'].indexOf(l.stage) === -1; });
     if(unowned.length) h += '<div class="panel sa-alert"><div class="panel-title">' + unowned.length + ' lead' + (unowned.length === 1 ? '' : 's') + ' with no owner</div><p class="sa-dim">Route each to the active salesperson for its channel.</p><button class="sa-btn primary" data-sa="route">Route ' + unowned.length + ' lead' + (unowned.length === 1 ? '' : 's') + '</button></div>';
 
+    // incentives: per salesperson, from the orders set to them
+    const INC = state.salesIncentive || {}, mo = today().slice(0, 7);
+    const incRows = X.reps.map(function(r){
+      const os = state.orders.filter(function(o){ return o.salesRep === r.email && counts(o); }).map(function(o){ const t = orderTotals(o); return { o: o, value: t.orderValue, inc: t.incentive || 0 }; }).filter(function(x){ return x.inc > 0 || x.o.salesRep; });
+      const month = os.filter(function(x){ return (orderDate(x.o) || '').slice(0, 7) === mo; });
+      const due = os.filter(function(x){ return x.inc > 0 && !(x.o.incentive || {}).paidAt && x.o.paymentStatus === 'paid'; });
+      const waiting = os.filter(function(x){ return x.inc > 0 && !(x.o.incentive || {}).paidAt && x.o.paymentStatus !== 'paid'; });
+      const paid = os.filter(function(x){ return (x.o.incentive || {}).paidAt; });
+      const sum = function(l, k){ return l.reduce(function(t, x){ return t + x[k]; }, 0); };
+      return { r: r, os: os, monthSales: sum(month, 'value'), monthInc: sum(month, 'inc'), due: due, dueAmt: sum(due, 'inc'), waitAmt: sum(waiting, 'inc'), paidAmt: sum(paid, 'inc') };
+    });
+    h += '<div class="panel"><div class="panel-title">Incentives</div><p class="sa-dim">Set the salesperson on an order (order pop-up → Order details) and their incentive is worked out on the order value before GST, counted as a cost in profit, and due once the client has paid.</p>' +
+      '<div class="sa-add"><label class="sa-dim">Default incentive %</label><input type="number" min="0" step="0.5" style="width:90px" data-sa-inc="default" value="' + esc(INC.defaultPct || 0) + '"></div>' +
+      (X.reps.length ? '<table class="ba-table"><tr><th>Salesperson</th><th>Their %</th><th>Sales this month</th><th>Incentive this month</th><th>Due now</th><th>Waiting for client payment</th><th>Paid out</th><th></th></tr>' + incRows.map(function(x){
+        return '<tr><td><b>' + esc(x.r.name) + '</b></td><td><input type="number" min="0" step="0.5" style="width:72px" placeholder="' + esc(INC.defaultPct || 0) + '" data-sa-inc="' + esc(x.r.email) + '" value="' + esc(((INC.perRep || {})[x.r.email]) == null ? '' : INC.perRep[x.r.email]) + '"></td>' +
+          '<td>' + money(x.monthSales) + '</td><td>' + money(x.monthInc) + '</td><td><b>' + money(x.dueAmt) + '</b></td><td class="sa-dim">' + money(x.waitAmt) + '</td><td class="sa-dim">' + money(x.paidAmt) + '</td>' +
+          '<td>' + (x.dueAmt > 0 ? '<button class="sa-btn primary" data-sa="inc-pay" data-id="' + esc(x.r.email) + '">Mark ' + money(x.dueAmt) + ' paid</button>' : '') + '</td></tr>' +
+          (x.os.length ? '<tr><td colspan="8"><details><summary class="sa-dim">' + x.os.length + ' order' + (x.os.length === 1 ? '' : 's') + '</summary>' + x.os.slice().sort(function(a, b){ return (orderDate(b.o) || '').localeCompare(orderDate(a.o) || ''); }).slice(0, 30).map(function(y){
+            const inc = y.o.incentive || {};
+            return '<div class="sa-row"><span>' + esc((y.o.displayId ? y.o.displayId + ' · ' : '') + (y.o.clientName || y.o.name || '')) + ' <span class="sa-dim">' + money(y.value) + '</span></span><span>' + money(y.inc) + ' <span class="sa-dim">' + (inc.paidAt ? 'paid out ' + esc(inc.paidAt) : y.o.paymentStatus === 'paid' ? 'due now' : 'client not paid yet') + '</span></span></div>';
+          }).join('') + '</details></td></tr>' : '');
+      }).join('') + '</table>' : '<p class="sa-dim">Add salespeople in Team below.</p>') + '</div>';
+
     // team
     h += '<div class="panel"><div class="panel-title" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>Team</span><span><button class="sa-btn" data-sa="copy-link">Copy app link</button></span></div>' +
       '<p class="sa-dim">Each salesperson signs in to the Sales app with the email below (a code is emailed — no password). Everyone sees the whole pipeline.</p>' +
@@ -336,6 +359,14 @@
       if(await upsertRep({ email: r.email, name: r.name, channel: r.channel, active: !r.active })){ await load(); render(); }
     } else if(act === 'route'){
       const n = await routeLeads(); render(); showToast(n ? 'Routed ' + n + ' lead' + (n === 1 ? '' : 's') : 'No salesperson set for those channels');
+    } else if(act === 'inc-pay'){
+      const r = X.reps.find(function(x){ return x.email === id; }); if(!r) return;
+      const due = state.orders.filter(function(o){ return o.salesRep === id && counts(o) && o.paymentStatus === 'paid' && !(o.incentive || {}).paidAt && (orderTotals(o).incentive || 0) > 0; });
+      const total = due.reduce(function(t, o){ return t + orderTotals(o).incentive; }, 0);
+      showConfirmModal('Mark ' + money(total) + ' of incentive paid to ' + r.name + ' for ' + due.length + ' order' + (due.length === 1 ? '' : 's') + '?', function(){
+        due.forEach(function(o){ o.incentive = Object.assign({}, o.incentive, { paidAt: today() }); });
+        scheduleSave(); render(); showToast('Marked paid');
+      }, 'Mark paid');
     } else if(act === 'invite'){
       const r = X.reps.find(function(x){ return x.email === id; }); if(!r) return;
       const msg = 'Hi ' + r.name.split(' ')[0] + '! Here’s the Thread Tribe Sales app for ' + CH[r.channel] + ': ' + salesUrl() + '\n\nSign in with ' + r.email + ' — you’ll get a 6-digit code by email. On your phone, tap Share → Add to Home Screen so it opens like an app.\n\nLog every lead, call and visit there, and set a next follow-up so nothing goes cold.';
@@ -378,6 +409,13 @@
   document.addEventListener('change', async function(e){
     const tab = document.getElementById('tabSales'); if(!tab || !tab.contains(e.target)) return;
     const t = e.target;
+    if(t.hasAttribute('data-sa-inc')){
+      const k = t.getAttribute('data-sa-inc'), v = t.value === '' ? null : Math.max(0, +t.value || 0);
+      state.salesIncentive = Object.assign({ defaultPct: 0, perRep: {} }, state.salesIncentive || {});
+      if(k === 'default') state.salesIncentive.defaultPct = v || 0;
+      else { state.salesIncentive.perRep = Object.assign({}, state.salesIncentive.perRep); if(v == null) delete state.salesIncentive.perRep[k]; else state.salesIncentive.perRep[k] = v; }
+      scheduleSave(); render(); showToast('Incentive rate saved'); return;
+    }
     if(t.hasAttribute('data-sa-target')){
       const parts = t.getAttribute('data-sa-target').split(':');
       if(!state.salesTargets) state.salesTargets = {};
