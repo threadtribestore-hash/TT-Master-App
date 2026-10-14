@@ -2240,6 +2240,7 @@
       <span class="sort-controls">
         <label>Sort</label>
         <select id="ordersSortBy">
+          <option value="manual">My order (drag)</option>
           <option value="date_desc">Newest First</option>
           <option value="date_asc">Oldest First</option>
           <option value="value_desc">Value ↓</option>
@@ -4812,6 +4813,9 @@ function getVisibleOrders(){
           return orderTotals(oa).orderValue - orderTotals(ob).orderValue;
         case 'priority':
           return priorityWeight(ob.priority) - priorityWeight(oa.priority);
+        case 'manual':
+          // The order you dragged cards into on the board; cards never dragged keep their place after them.
+          return (oa.boardRank != null ? oa.boardRank : 1e6 + a.index) - (ob.boardRank != null ? ob.boardRank : 1e6 + b.index);
         case 'client_az':
           var na = (oa.clientName || oa.name || '').toLowerCase();
           var nb = (ob.clientName || ob.name || '').toLowerCase();
@@ -13058,9 +13062,12 @@ function renderHomeTimeline(){
 }
 
 // ========== ORDER SORTING ==========
-var ordersSortMode = 'date_desc';
+// The sort is remembered on this device, so a dragged order stays the way you left it.
+var ordersSortMode = (function(){ try{ return localStorage.getItem('tt-orders-sort-v1') || 'date_desc'; }catch(e){ return 'date_desc'; } })();
+document.getElementById('ordersSortBy').value = ordersSortMode;
 document.getElementById('ordersSortBy').addEventListener('change', function(){
   ordersSortMode = this.value;
+  try{ localStorage.setItem('tt-orders-sort-v1', ordersSortMode); }catch(e){}
   renderOrders();
 });
 
@@ -18120,7 +18127,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="owner-home.js?v=3"></script>
 <script src="automations.js?v=4"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=8"></script>
+<script src="ui-polish.js?v=9"></script>
 <script src="upsell.js?v=1"></script>
 <script src="marketing-admin.js?v=5"></script>
 <script src="finance-admin.js?v=1"></script>

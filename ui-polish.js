@@ -366,6 +366,10 @@
     // Payment reminders live on Home \u2192 Needs you; velocity and the calculator gave way to Upsell opportunities.
     '#tabOrders #paymentReminderBanner,#tabOrders #orderVelocityPanel,#tabOrders #calcToggle,#tabOrders #calcBody{display:none!important}',
     '#tabOrders .panel:has(#paymentsSummaryTotal){display:none!important}',
+    '.kb-grip{cursor:grab;touch-action:none;user-select:none;color:var(--dim);font-size:13px;letter-spacing:-3px;padding:2px 6px 2px 0;margin-right:2px;opacity:.55}',
+    '.kb-grip:hover{opacity:1;color:var(--cyan)}',
+    '.kb-dragging{box-shadow:0 14px 34px rgba(0,0,0,.25);opacity:.95;cursor:grabbing}',
+    '.kb-ph{border:2px dashed var(--cyan);border-radius:10px;margin-bottom:10px;background:rgba(79,209,197,.06)}',
     '.op-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:4px 0 16px}',
     '.op-title{font-family:' + SANS + ';font-size:26px;font-weight:700;color:var(--text);line-height:1.1}',
     '.op-sub{font-size:13px;color:var(--dim);margin-top:4px;font-family:' + SANS + '}',
@@ -549,11 +553,66 @@
   }
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   bar.addEventListener('click', function(e){ if(e.target.closest('.filter-chip')) setTimeout(refresh, 0); });
+
+  // ---------- drag cards up and down within a board column ----------
+  // A grip on each card; dragging reorders that column only (status never changes), saves the
+  // order on each card (boardRank) and switches the sort to "My order (drag)".
+  function addGrips(){
+    document.querySelectorAll('#ordersBoardWrap .kanban-card').forEach(function(card){
+      if(card.querySelector('.kb-grip')) return;
+      const top = card.querySelector('.kanban-card-top'); if(!top) return;
+      const g = document.createElement('span');
+      g.className = 'kb-grip'; g.title = 'Drag to move up or down'; g.textContent = '⋮⋮';
+      top.insertBefore(g, top.firstChild);
+    });
+  }
+  let drag = null;
+  document.addEventListener('pointerdown', function(e){
+    const g = e.target.closest('#ordersBoardWrap .kb-grip'); if(!g) return;
+    const card = g.closest('.kanban-card'), body = card.parentElement;
+    e.preventDefault(); e.stopPropagation();
+    const r = card.getBoundingClientRect();
+    const ph = document.createElement('div'); ph.className = 'kb-ph'; ph.style.height = r.height + 'px';
+    body.insertBefore(ph, card);
+    card.classList.add('kb-dragging');
+    Object.assign(card.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', zIndex: 2000, pointerEvents: 'none' });
+    drag = { card: card, body: body, ph: ph, dy: e.clientY - r.top };
+  }, true);
+  document.addEventListener('pointermove', function(e){
+    if(!drag) return;
+    drag.card.style.top = (e.clientY - drag.dy) + 'px';
+    const others = [].slice.call(drag.body.querySelectorAll('.kanban-card')).filter(function(c){ return c !== drag.card && c.style.display !== 'none'; });
+    const before = others.find(function(c){ const b = c.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; });
+    if(before) drag.body.insertBefore(drag.ph, before); else drag.body.appendChild(drag.ph);
+    // Scroll the column or page when dragging near an edge.
+    const br = drag.body.getBoundingClientRect();
+    if(e.clientY > br.bottom - 40) drag.body.scrollTop += 12; else if(e.clientY < br.top + 40) drag.body.scrollTop -= 12;
+    if(e.clientY > window.innerHeight - 40) window.scrollBy(0, 12); else if(e.clientY < 60) window.scrollBy(0, -12);
+  });
+  function drop(){
+    if(!drag) return;
+    const d = drag; drag = null;
+    d.body.insertBefore(d.card, d.ph); d.ph.remove();
+    d.card.classList.remove('kb-dragging'); ['position', 'left', 'top', 'width', 'zIndex', 'pointerEvents'].forEach(function(k){ d.card.style[k] = ''; });
+    const ids = [].slice.call(d.body.querySelectorAll('.kanban-card')).map(function(c){ return c.getAttribute('data-order-id'); });
+    ids.forEach(function(id, i){ const o = state.orders.find(function(x){ return x.id === id; }); if(o) o.boardRank = i * 10; });
+    if(typeof ordersSortMode !== 'undefined' && ordersSortMode !== 'manual'){
+      ordersSortMode = 'manual';
+      const sel = document.getElementById('ordersSortBy'); if(sel) sel.value = 'manual';
+      try{ localStorage.setItem('tt-orders-sort-v1', 'manual'); }catch(err){}
+      showToast('Sorted by your order. Change it in the sort menu any time.');
+    }
+    scheduleSave(); renderOrders();
+  }
+  // The grip only drags; it never opens the card.
+  document.addEventListener('click', function(e){ if(e.target.closest('#ordersBoardWrap .kb-grip')){ e.stopPropagation(); e.preventDefault(); } }, true);
+  document.addEventListener('pointerup', drop);
+  document.addEventListener('pointercancel', drop);
   if(typeof renderOrders === 'function'){
     const orig = renderOrders;
     renderOrders = function(){
       const r = orig.apply(this, arguments);
-      try{ refresh(); }catch(e){ console.warn('[orders polish]', e); }
+      try{ refresh(); addGrips(); }catch(e){ console.warn('[orders polish]', e); }
       return r;
     };
   }
