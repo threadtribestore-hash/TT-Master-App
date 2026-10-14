@@ -296,6 +296,16 @@
   // Shipping: the same fields as the Buyer App tab's Dispatch table (expected dispatch, dispatched on,
   // courier, AWB, extra parcels), so brand partners see them in the Buyer app on the next sync.
   const COURIERS = ['Delhivery', 'Blue Dart', 'DTDC', 'Shiprocket', 'India Post', 'Ekart', 'Xpressbees', 'Ecom Express', 'Shadowfax', 'Professional Couriers', 'Porter', 'Own delivery'];
+  // Linked Shipturtle order: its payment and courier status, and whether parcel 1's AWB reached Shipturtle.
+  function stLine(order){
+    if(!order.shipturtleId) return '';
+    const r = window.TTShipturtle && window.TTShipturtle.forOrder(order);
+    if(!r) return '<div class="om-inc-line">Linked to Shipturtle order ' + esc(order.shipturtleId) + '.</div>';
+    const pay = { paid: 'paid', partially_paid: 'part paid', pending: 'not paid', refunded: 'refunded' }[r.financial_status] || r.financial_status || '';
+    const awb = String(order.trackingNo || '').trim();
+    const sent = !awb ? '' : r.label_error && r.label_awb === awb ? ' · AWB not accepted by Shipturtle (see the Shipturtle tab)' : (r.awb === awb || r.label_awb === awb) ? ' · AWB is in Shipturtle' : ' · AWB goes to Shipturtle within 5 minutes';
+    return '<div class="om-inc-line">Shipturtle ' + esc(r.name || r.st_id) + (pay ? ' · ' + esc((r.is_cod ? 'COD, ' : '') + pay) : '') + (r.tracking_status ? ' · ' + esc(r.tracking_status) : '') + esc(sent) + '</div>';
+  }
   function shippingField(order){
     if(!order) return null;
     const wrap = document.createElement('div');
@@ -317,6 +327,7 @@
         '<div class="om-ship-a"><button type="button" class="om-chip" data-ship="add">+ Add parcel</button>' +
           (!order.shippedDate ? '<button type="button" class="om-chip" data-ship="sent">Mark dispatched today</button>' : '') +
           (order.trackingNo ? '<button type="button" class="om-chip" data-ship="wa">Send tracking on WhatsApp</button>' : '') + '</div>' +
+        stLine(order) +
         '<div class="om-inc-line">' + (linked ? 'Shows in the client’s Buyer app (Purchases → this order) on the next sync, with live tracking for parcel 1 and a courier link for each parcel.' : 'This client isn’t on the Buyer app, so share tracking on WhatsApp.') + '</div>';
     }
     function saved(redraw){ scheduleSave(); if(typeof cloudPublishPacks === 'function') try{ cloudPublishPacks(); }catch(e){} if(redraw) draw(); }

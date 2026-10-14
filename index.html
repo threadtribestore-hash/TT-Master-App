@@ -1734,6 +1734,7 @@
       <div class="tab-group-label">Operations control room</div>
       <button class="tab-btn" data-tab="control">Control Room</button>
       <button class="tab-btn" data-tab="orders">Orders</button>
+      <button class="tab-btn" data-tab="shipturtle">Shipturtle</button>
       <button class="tab-btn" data-tab="scheduler">Production Scheduler</button>
       <button class="tab-btn" data-tab="partners">Partner Network</button>
       <button class="tab-btn" data-tab="projects">Projects</button>
@@ -1772,6 +1773,7 @@
   <div id="tabLab" style="display:none;"><div id="labRoot"></div></div>
   <div id="tabSupport" style="display:none;"><div id="supportRoot"></div></div>
   <div id="tabOps" style="display:none;"><div id="opsRoot"></div></div>
+  <div id="tabShipturtle" style="display:none;"><div id="shipturtleRoot"></div></div>
   <div id="tabShop" style="display:none;"><div id="shopRoot"></div></div>
 
   <div id="tabHome">
@@ -3066,6 +3068,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     document.getElementById('tabLab').style.display = target === 'lab' ? '' : 'none';
     document.getElementById('tabSupport').style.display = target === 'support' ? '' : 'none';
     document.getElementById('tabOps').style.display = target === 'ops' ? '' : 'none';
+    document.getElementById('tabShipturtle').style.display = target === 'shipturtle' ? '' : 'none';
     document.getElementById('tabShop').style.display = target === 'shop' ? '' : 'none';
     document.getElementById('tabBI').style.display = target === 'bi' ? '' : 'none';
     document.getElementById('tabProduction').style.display = target === 'production' ? '' : 'none';
@@ -3092,6 +3095,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
     if(target === 'lab' && typeof renderProductLab === 'function') renderProductLab();
     if(target === 'support' && typeof renderSupport === 'function') renderSupport();
     if(target === 'ops' && typeof renderOps === 'function') renderOps();
+    if(target === 'shipturtle' && typeof renderShipturtle === 'function') renderShipturtle();
     if(target === 'shop' && typeof renderShopAdmin === 'function') renderShopAdmin();
     // Orders / Quotes / Lifetime Revenue are computed from linked orders, so recompute
     // fresh whenever this tab is opened rather than trying to track every order edit.
@@ -18135,9 +18139,9 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="sales-admin.js?v=11"></script>
 <script src="shop-admin.js?v=2"></script>
 <script src="owner-home.js?v=3"></script>
-<script src="automations.js?v=4"></script>
+<script src="automations.js?v=5"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=11"></script>
+<script src="ui-polish.js?v=12"></script>
 <script src="upsell.js?v=1"></script>
 <script src="marketing-admin.js?v=5"></script>
 <script src="finance-admin.js?v=1"></script>
@@ -18145,6 +18149,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="product-lab.js?v=1"></script>
 <script src="support-admin.js?v=3"></script>
 <script src="ops-planning.js?v=2"></script>
+<script src="shipturtle-admin.js?v=1"></script>
 
 
 <datalist id="indianStatesList">
