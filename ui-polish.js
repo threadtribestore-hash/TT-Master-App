@@ -566,6 +566,14 @@
       top.insertBefore(g, top.firstChild);
     });
   }
+  // The board can be drawn before this script loads (first open) or by other code, so watch it
+  // and add grips whenever cards appear, not only after renderOrders.
+  const boardWrap = document.getElementById('ordersBoardWrap');
+  if(boardWrap && window.MutationObserver){
+    let pending = false;
+    new MutationObserver(function(){ if(pending) return; pending = true; requestAnimationFrame(function(){ pending = false; addGrips(); }); }).observe(boardWrap, { childList: true, subtree: true });
+  }
+  addGrips();
   let drag = null;
   document.addEventListener('pointerdown', function(e){
     const g = e.target.closest('#ordersBoardWrap .kb-grip'); if(!g) return;
