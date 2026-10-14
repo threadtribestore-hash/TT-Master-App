@@ -4198,6 +4198,17 @@ function refreshOrderCostSnapshot(order){
 }
 
 
+// The GST choices on an order. Rates are the total; within the seller's state the invoice splits
+// them in half (18% = CGST 9% + SGST 9%). A rate typed with Custom is kept as an option.
+function gstRateOptions(order){
+  const cur = order.gstRate == null ? '' : String(order.gstRate);
+  const half = function(r){ return ' (CGST ' + (r / 2) + '% + SGST ' + (r / 2) + '%)'; };
+  const list = [['', 'As in Settings (' + ((state.business && state.business.gstRate) || 0) + '%)'], ['0', 'No GST'], ['5', '5%' + half(5)], ['18', '18%' + half(18)], ['12', '12%' + half(12)], ['28', '28%' + half(28)], ['40', '40%' + half(40)]];
+  if(cur !== '' && !list.some(function(o){ return o[0] === cur; })) list.push([cur, cur + '%' + half(+cur)]);
+  list.push(['custom', 'Custom rate\u2026']);
+  return list.map(function(o){ return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
+}
+
 // GST for one order: its own rate if set (0 = no GST), else the rate in Settings.
 function orderGstRate(order){
   const r = order ? order.gstRate : null;
@@ -5070,7 +5081,7 @@ function buildOrderCardBody(order, index){
         '<div><label>Overall discount (%)</label><input type="number" class="p-overall-discount" min="0" max="100" step="0.5" value="' + (order.overallDiscountPct || 0) + '" title="Order-level discount applied on top of any per-line discounts. Useful for bundle deals or dealer tier pricing."></div>' +
         '<div><label>Packaging cost (\u20b9)</label><input type="number" class="p-packaging-cost" min="0" step="1" value="' + (order.packagingCost || 0) + '"></div>' +
         '<div><label>Delivery cost (\u20b9)</label><input type="number" class="p-delivery-cost" min="0" step="1" value="' + (order.deliveryCost || 0) + '"></div>' +
-        '<div><label>GST</label><select class="p-gst-rate">' + [['', 'As in Settings (' + ((state.business && state.business.gstRate) || 0) + '%)'], ['0', 'No GST'], ['5', '5%'], ['12', '12%'], ['18', '18%'], ['28', '28%']].map(function(o){ return '<option value="' + o[0] + '"' + (String(order.gstRate == null ? '' : order.gstRate) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+        '<div><label>GST</label><select class="p-gst-rate">' + gstRateOptions(order) + '</select></div>' +
         '<div><label>Tax type</label><select class="p-gst-supply">' + [['auto', 'By client\u2019s state'], ['intra', 'Same state: CGST + SGST'], ['inter', 'Other state: IGST']].map(function(o){ return '<option value="' + o[0] + '"' + ((order.gstSupply || 'auto') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
         '<div><label>Client\u2019s state</label><input type="text" class="p-client-state" list="indianStatesList" placeholder="' + escapeHtml(orderBuyerState(Object.assign({}, order, { clientState: '' })) || 'e.g. Delhi') + '" value="' + escapeHtml(order.clientState || '') + '"></div>' +
         '<div style="grid-column:1/-1;"><div class="gst-line" id="gst-line-' + order.id + '"></div><button type="button" class="add-btn gst-share" style="width:auto;padding:8px 14px;margin-top:6px;">Send GST breakup</button></div>' +
@@ -5147,7 +5158,14 @@ function buildOrderCardBody(order, index){
     });
     // GST: rate for this order, CGST+SGST or IGST, and the client's state when it isn't on the client.
     function refreshGst(){ updateOrderStatsDOM(order.id); updatePaymentHint(order.id); updateGstLine(order.id); scheduleSave(); }
-    clientBlock.querySelector('.p-gst-rate').addEventListener('change', function(e){ order.gstRate = e.target.value === '' ? null : +e.target.value; refreshGst(); });
+    clientBlock.querySelector('.p-gst-rate').addEventListener('change', function(e){
+      if(e.target.value === 'custom'){
+        const v = prompt('Total GST rate for this order (%). Within your state it is split in half: 18 shows as CGST 9% + SGST 9%.', order.gstRate != null ? order.gstRate : '');
+        if(v != null && v.trim() !== '' && isFinite(+v) && +v >= 0 && +v <= 40) order.gstRate = Math.round(+v * 100) / 100;
+        e.target.innerHTML = gstRateOptions(order);
+      } else order.gstRate = e.target.value === '' ? null : +e.target.value;
+      refreshGst();
+    });
     clientBlock.querySelector('.p-gst-supply').addEventListener('change', function(e){ order.gstSupply = e.target.value; refreshGst(); });
     clientBlock.querySelector('.p-client-state').addEventListener('input', function(e){ order.clientState = e.target.value.trim(); refreshGst(); });
     clientBlock.querySelector('.gst-share').addEventListener('click', function(){ shareGstBreakup(order.id); });
