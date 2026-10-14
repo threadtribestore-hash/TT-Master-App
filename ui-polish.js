@@ -265,20 +265,20 @@
     const won = !order.salesRep && order.clientId ? (window.TTSales.leads() || []).find(function(l){ return l.stage === 'won' && (l.data || {}).clientId === order.clientId && l.owner_email; }) : null;
     const wonRep = won ? reps.find(function(r){ return r.email === won.owner_email; }) : null;
     function draw(){
-      const inc = order.incentive || {}, type = inc.type === 'fixed' ? 'fixed' : 'pct';
+      const inc = order.incentive || {}, type = typeof incentiveBasis === 'function' ? incentiveBasis(order) : (inc.type || 'profit');
       const def = typeof incentiveRate === 'function' && order.salesRep ? incentiveRate(order.salesRep) : 0;
       const amt = typeof orderTotals === 'function' ? orderTotals(order).incentive : 0;
       const paidOut = inc.paidAt, clientPaid = order.paymentStatus === 'paid';
       const status = !order.salesRep ? '' : paidOut ? 'Paid out ' + paidOut : clientPaid ? 'Due to pay now' : 'Due once the client pays';
       wrap.innerHTML = '<label>Salesperson</label><div class="om-sales-row"><select class="om-rep"><option value="">No salesperson</option>' +
           reps.map(function(r){ return '<option value="' + esc(r.email) + '"' + (order.salesRep === r.email ? ' selected' : '') + '>' + esc(r.name) + '</option>'; }).join('') + '</select>' +
-          (order.salesRep ? '<select class="om-inc-type"><option value="pct"' + (type === 'pct' ? ' selected' : '') + '>% of order</option><option value="fixed"' + (type === 'fixed' ? ' selected' : '') + '>Fixed ₹</option></select>' +
-            '<input class="om-inc-val" type="number" min="0" step="' + (type === 'pct' ? '0.5' : '50') + '" placeholder="' + (type === 'pct' ? def + ' (default)' : '₹') + '" value="' + esc(inc.value == null ? '' : inc.value) + '">' : '') + '</div>' +
+          (order.salesRep ? '<select class="om-inc-type"><option value="profit"' + (type === 'profit' ? ' selected' : '') + '>% of net profit</option><option value="pct"' + (type === 'pct' ? ' selected' : '') + '>% of order value</option><option value="fixed"' + (type === 'fixed' ? ' selected' : '') + '>Fixed ₹</option></select>' +
+            '<input class="om-inc-val" type="number" min="0" step="' + (type === 'fixed' ? '50' : '0.5') + '" placeholder="' + (type === 'fixed' ? '₹' : def + ' (default)') + '" value="' + esc(inc.value == null ? '' : inc.value) + '">' : '') + '</div>' +
         (wonRep ? '<button type="button" class="om-chip om-suggest">' + esc(wonRep.name) + ' won this client: set as salesperson</button>' : '') +
-        (order.salesRep ? '<div class="om-inc-line">Incentive <b>₹' + Math.round(amt).toLocaleString('en-IN') + '</b>' + (type === 'pct' ? ' (' + (inc.value != null && inc.value !== '' ? inc.value : def) + '% of the order before GST)' : '') + ' · ' + status + '</div>' : '');
+        (order.salesRep ? '<div class="om-inc-line">Incentive <b>₹' + Math.round(amt).toLocaleString('en-IN') + '</b>' + (type === 'fixed' ? '' : (function(){ const t = orderTotals(order), base = type === 'profit' ? Math.max(0, t.orderValue - (t.allInCost - t.incentive)) : t.orderValue; return ' (' + (inc.value != null && inc.value !== '' ? inc.value : def) + '% of ' + (type === 'profit' ? 'net profit' : 'order value') + ' ₹' + Math.round(base).toLocaleString('en-IN') + ')'; })()) + ' · ' + status + '</div>' : '');
       wrap.querySelector('.om-rep').addEventListener('change', function(e){ order.salesRep = e.target.value; if(!order.salesRep) delete order.incentive; changed(); });
       const t = wrap.querySelector('.om-inc-type'); if(t) t.addEventListener('change', function(e){ order.incentive = Object.assign({}, order.incentive, { type: e.target.value, value: null }); changed(); });
-      const v = wrap.querySelector('.om-inc-val'); if(v) v.addEventListener('change', function(e){ order.incentive = Object.assign({}, order.incentive, { type: (order.incentive || {}).type || 'pct', value: e.target.value === '' ? null : Math.max(0, +e.target.value || 0) }); changed(); });
+      const v = wrap.querySelector('.om-inc-val'); if(v) v.addEventListener('change', function(e){ order.incentive = Object.assign({}, order.incentive, { type: typeof incentiveBasis === 'function' ? incentiveBasis(order) : 'profit', value: e.target.value === '' ? null : Math.max(0, +e.target.value || 0) }); changed(); });
       const sg = wrap.querySelector('.om-suggest'); if(sg) sg.addEventListener('click', function(){ order.salesRep = wonRep.email; changed(); });
     }
     function changed(){ scheduleSave(); if(typeof updateOrderStatsDOM === 'function') updateOrderStatsDOM(order.id); draw(); }

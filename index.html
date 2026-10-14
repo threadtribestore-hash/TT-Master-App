@@ -4198,19 +4198,23 @@ function refreshOrderCostSnapshot(order){
 }
 
 
-// Sales incentive on an order: a % of its value before GST (after discounts and refunds) or a fixed
+// Sales incentive on an order: a % of its net profit (default) or of its value before GST, or a fixed
 // amount, for the salesperson set on the order. The % defaults to that person's rate in Sales.
 function incentiveRate(email){
   const S = state.salesIncentive || {};
   const per = (S.perRep || {})[email];
   return per != null && per !== '' ? +per : (+S.defaultPct || 0);
 }
-function orderIncentive(order, value){
+// What the % applies to: 'profit' = the order's net profit before the incentive (value before GST
+// minus filament, machine, packaging and delivery cost; nothing on a loss), 'pct' = order value.
+function incentiveBasis(order){ const t = (order.incentive || {}).type; return t === 'fixed' || t === 'pct' || t === 'profit' ? t : ((state.salesIncentive || {}).basis || 'profit'); }
+function orderIncentive(order, value, cost){
   if(!order || !order.salesRep) return 0;
-  const inc = order.incentive || {};
-  if(inc.type === 'fixed') return Math.max(0, +inc.value || 0);
+  const inc = order.incentive || {}, basis = incentiveBasis(order);
+  if(basis === 'fixed') return Math.max(0, +inc.value || 0);
   const pct = inc.value != null && inc.value !== '' ? +inc.value : incentiveRate(order.salesRep);
-  return Math.max(0, Math.round((value || 0) * pct) / 100);
+  const base = basis === 'profit' ? Math.max(0, (value || 0) - (cost || 0)) : (value || 0);
+  return Math.max(0, Math.round(base * pct) / 100);
 }
 
 // The GST choices on an order. Rates are the total; within the seller's state the invoice splits
@@ -4305,7 +4309,7 @@ function orderTotals(order){
   const preRefundPricePerUnit = totalQty > 0 ? preRefundValue / totalQty : 0;
   const grossPricePerUnit = totalQty > 0 ? grossValue / totalQty : 0;
   // A salesperson's incentive on this order is a cost of the sale, so it comes out of profit.
-  const incentive = orderIncentive(order, orderValue);
+  const incentive = orderIncentive(order, orderValue, baseCost);
   const allInCost = baseCost + incentive;
   const profit = orderValue - allInCost;
   // Margin is judged against what the order was actually quoted at (preRefundValue),
@@ -18111,12 +18115,12 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="partner-planning.js?v=4"></script>
 <script src="control-room.js?v=11"></script>
 <script src="projects.js?v=9"></script>
-<script src="sales-admin.js?v=10"></script>
+<script src="sales-admin.js?v=11"></script>
 <script src="shop-admin.js?v=2"></script>
 <script src="owner-home.js?v=3"></script>
 <script src="automations.js?v=4"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=7"></script>
+<script src="ui-polish.js?v=8"></script>
 <script src="upsell.js?v=1"></script>
 <script src="marketing-admin.js?v=5"></script>
 <script src="finance-admin.js?v=1"></script>

@@ -286,8 +286,8 @@
       const sum = function(l, k){ return l.reduce(function(t, x){ return t + x[k]; }, 0); };
       return { r: r, os: os, monthSales: sum(month, 'value'), monthInc: sum(month, 'inc'), due: due, dueAmt: sum(due, 'inc'), waitAmt: sum(waiting, 'inc'), paidAmt: sum(paid, 'inc') };
     });
-    h += '<div class="panel"><div class="panel-title">Incentives</div><p class="sa-dim">Set the salesperson on an order (order pop-up → Order details) and their incentive is worked out on the order value before GST, counted as a cost in profit, and due once the client has paid.</p>' +
-      '<div class="sa-add"><label class="sa-dim">Default incentive %</label><input type="number" min="0" step="0.5" style="width:90px" data-sa-inc="default" value="' + esc(INC.defaultPct || 0) + '"></div>' +
+    h += '<div class="panel"><div class="panel-title">Incentives</div><p class="sa-dim">Set the salesperson on an order (order pop-up → Order details) and their incentive is worked out on net profit by default: order value before GST minus filament, machine, packaging and delivery cost (nothing on a loss). It is counted as a cost in profit and due once the client has paid.</p>' +
+      '<div class="sa-add"><label class="sa-dim">Incentive is a % of</label><select data-sa-inc="basis"><option value="profit"' + ((INC.basis || 'profit') === 'profit' ? ' selected' : '') + '>Net profit</option><option value="pct"' + (INC.basis === 'pct' ? ' selected' : '') + '>Order value</option></select><label class="sa-dim">Default %</label><input type="number" min="0" step="0.5" style="width:90px" data-sa-inc="default" value="' + esc(INC.defaultPct || 0) + '"></div>' +
       (X.reps.length ? '<table class="ba-table"><tr><th>Salesperson</th><th>Their %</th><th>Sales this month</th><th>Incentive this month</th><th>Due now</th><th>Waiting for client payment</th><th>Paid out</th><th></th></tr>' + incRows.map(function(x){
         return '<tr><td><b>' + esc(x.r.name) + '</b></td><td><input type="number" min="0" step="0.5" style="width:72px" placeholder="' + esc(INC.defaultPct || 0) + '" data-sa-inc="' + esc(x.r.email) + '" value="' + esc(((INC.perRep || {})[x.r.email]) == null ? '' : INC.perRep[x.r.email]) + '"></td>' +
           '<td>' + money(x.monthSales) + '</td><td>' + money(x.monthInc) + '</td><td><b>' + money(x.dueAmt) + '</b></td><td class="sa-dim">' + money(x.waitAmt) + '</td><td class="sa-dim">' + money(x.paidAmt) + '</td>' +
@@ -412,7 +412,8 @@
     if(t.hasAttribute('data-sa-inc')){
       const k = t.getAttribute('data-sa-inc'), v = t.value === '' ? null : Math.max(0, +t.value || 0);
       state.salesIncentive = Object.assign({ defaultPct: 0, perRep: {} }, state.salesIncentive || {});
-      if(k === 'default') state.salesIncentive.defaultPct = v || 0;
+      if(k === 'basis') state.salesIncentive.basis = t.value;
+      else if(k === 'default') state.salesIncentive.defaultPct = v || 0;
       else { state.salesIncentive.perRep = Object.assign({}, state.salesIncentive.perRep); if(v == null) delete state.salesIncentive.perRep[k]; else state.salesIncentive.perRep[k] = v; }
       scheduleSave(); render(); showToast('Incentive rate saved'); return;
     }
