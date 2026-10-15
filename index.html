@@ -1780,66 +1780,8 @@
   <div id="tabShop" style="display:none;"><div id="shopRoot"></div></div>
 
   <div id="tabHome">
-    <!-- KPI Cards -->
-    <div class="home-grid" id="homeKpiGrid"><div class="home-kpi"><div class="kpi-label">Revenue This Month</div><div class="kpi-val">₹0<span class="kpi-delta flat">→ 0%</span></div><div class="kpi-sub">vs ₹0 last month</div><svg class="kpi-spark" width="60" height="24" viewBox="0 0 60 24"><polyline points="0,24 10,24 20,24 30,24 40,24 50,24 60,24" fill="none" stroke="var(--cyan)" stroke-width="1.5" stroke-linejoin="round"></polyline></svg></div><div class="home-kpi"><div class="kpi-label">Net Profit</div><div class="kpi-val" style="color:var(--green)">₹0<span class="kpi-delta flat">→ 0%</span></div><div class="kpi-sub">0% net margin · COGS ₹0</div></div><div class="home-kpi"><div class="kpi-label">Gross Margin</div><div class="kpi-val">0%<span class="kpi-delta flat">→ 0%</span></div><div class="kpi-sub">₹0 gross profit · 0 orders</div></div><div class="home-kpi"><div class="kpi-label">Pipeline Value</div><div class="kpi-val" style="color:var(--amber)">₹0</div><div class="kpi-sub">0 in production · 0 booked</div></div><div class="home-kpi"><div class="kpi-label">Payments Outstanding</div><div class="kpi-val" style="color:var(--red)">₹0</div><div class="kpi-sub">0 unpaid deliveries</div></div><div class="home-kpi"><div class="kpi-label">Avg Order Value</div><div class="kpi-val">₹0</div><div class="kpi-sub">vs ₹0 last month</div></div><div class="home-kpi"><div class="kpi-label">Operating Expenses</div><div class="kpi-val">₹0</div><div class="kpi-sub">CapEx ₹0 · Raw Mat ₹0</div></div><div class="home-kpi"><div class="kpi-label">Delivered This Month</div><div class="kpi-val" style="color:var(--green)">0</div><div class="kpi-sub">orders completed &amp; delivered</div></div></div>
-
-    <!-- Alerts Strip -->
-    <div class="home-alerts" id="homeAlerts">
-      <div class="alerts-title">⚡ Needs Attention</div>
-      <div id="homeAlertsList"><div style="color:var(--dim); font-size:13px; padding:8px 0;">All clear — nothing needs attention right now.</div></div>
-    </div>
-
-    <!-- Two-column: Orders needing action + Revenue chart -->
-    <div class="home-two-col">
-      <div class="home-section">
-        <div class="home-section-title">
-          <span>📋 Orders Needing Action</span>
-          <span class="view-all" onclick="document.querySelector('[data-tab=orders]').click()">View all →</span>
-        </div>
-        <div id="homeOrdersAction"><div style="color:var(--dim); font-size:13px;">No orders needing action.</div></div>
-      </div>
-      <div class="home-section">
-        <div class="home-section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <span>💰 Revenue Timeline</span>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <button class="rev-range-btn active" data-range="thisMonth">This Month</button>
-            <button class="rev-range-btn" data-range="lastMonth">Last Month</button>
-            <button class="rev-range-btn" data-range="3m">3 Months</button>
-            <button class="rev-range-btn" data-range="6m">6 Months</button>
-            <button class="rev-range-btn" data-range="ytd">YTD</button>
-            <button class="rev-range-btn" data-range="custom">Custom</button>
-          </div>
-        </div>
-        <div id="revCustomRange" style="display:none;margin-bottom:8px;display:none;gap:8px;align-items:center;flex-wrap:wrap">
-          <label style="font-size:0.75rem;color:var(--dim)">From</label>
-          <input type="date" id="revFromDate" style="background:var(--input-bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 8px;font-size:0.8rem">
-          <label style="font-size:0.75rem;color:var(--dim)">To</label>
-          <input type="date" id="revToDate" style="background:var(--input-bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 8px;font-size:0.8rem">
-          <button id="revApplyCustom" style="background:var(--cyan);color:#000;border:none;border-radius:6px;padding:4px 12px;font-size:0.8rem;cursor:pointer">Apply</button>
-        </div>
-        <div id="homeRevenueChart"><svg viewBox="0 0 500 180" style="width:100%;height:auto;font-family:'JetBrains Mono',monospace;"><line x1="45" y1="15" x2="485" y2="15" stroke="var(--line)" stroke-width="0.5" opacity="0.5"></line><text x="41" y="18" text-anchor="end" font-size="8" fill="var(--dim)">₹1</text><line x1="45" y1="47.5" x2="485" y2="47.5" stroke="var(--line)" stroke-width="0.5" opacity="0.5"></line><text x="41" y="50.5" text-anchor="end" font-size="8" fill="var(--dim)">₹1</text><line x1="45" y1="80" x2="485" y2="80" stroke="var(--line)" stroke-width="0.5" opacity="0.5"></line><text x="41" y="83" text-anchor="end" font-size="8" fill="var(--dim)">₹1</text><line x1="45" y1="112.5" x2="485" y2="112.5" stroke="var(--line)" stroke-width="0.5" opacity="0.5"></line><text x="41" y="115.5" text-anchor="end" font-size="8" fill="var(--dim)">₹0</text><line x1="45" y1="145" x2="485" y2="145" stroke="var(--line)" stroke-width="0.5" opacity="0.5"></line><text x="41" y="148" text-anchor="end" font-size="8" fill="var(--dim)">₹0</text><rect x="37" y="145" width="16" height="0" rx="1.5" fill="var(--cyan)" opacity="0.2"></rect><rect x="99.85714285714286" y="145" width="16" height="0" rx="1.5" fill="var(--cyan)" opacity="0.2"></rect><rect x="162.71428571428572" y="145" width="16" height="0" rx="1.5" fill="var(--cyan)" opacity="0.2"></rect><rect x="225.57142857142858" y="145" width="16" height="0" rx="1.5" fill="var(--cyan)" opacity="0.2"></rect><rect x="288.42857142857144" y="145" width="16" height="0" rx="1.5" fill="var(--cyan)" opacity="0.2"></rect><rect x="351.2857142857143" y="145" width="16" height="0" rx="1.5" fill="var(--cyan)" opacity="0.2"></rect><rect x="414.14285714285717" y="145" width="16" height="0" rx="1.5" fill="var(--cyan)" opacity="0.2"></rect><rect x="477" y="145" width="16" height="0" rx="1.5" fill="var(--cyan)" opacity="0.2"></rect><path d="M45,145 L45,145 L107.85714285714286,145 L170.71428571428572,145 L233.57142857142858,145 L296.42857142857144,145 L359.2857142857143,145 L422.14285714285717,145 L485,145 L485,145 Z" fill="var(--cyan)" opacity="0.06"></path><polyline points="45,145 107.85714285714286,145 170.71428571428572,145 233.57142857142858,145 296.42857142857144,145 359.2857142857143,145 422.14285714285717,145 485,145" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linejoin="round"></polyline><polyline points="45,145 107.85714285714286,145 170.71428571428572,145 233.57142857142858,145 296.42857142857144,145 359.2857142857143,145 422.14285714285717,145 485,145" fill="none" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"></polyline><text x="45" y="159" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 45 159)">1 Oct</text><text x="107.85714285714286" y="159" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 107.85714285714286 159)">2 Oct</text><text x="170.71428571428572" y="159" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 170.71428571428572 159)">3 Oct</text><text x="233.57142857142858" y="159" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 233.57142857142858 159)">4 Oct</text><text x="296.42857142857144" y="159" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 296.42857142857144 159)">5 Oct</text><text x="359.2857142857143" y="159" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 359.2857142857143 159)">6 Oct</text><text x="422.14285714285717" y="159" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 422.14285714285717 159)">7 Oct</text><text x="485" y="159" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 485 159)">8 Oct</text><circle cx="53" cy="176" r="3" fill="var(--cyan)"></circle><text x="59" y="179" font-size="7.5" fill="var(--text)">Revenue</text><line x1="105" y1="176" x2="117" y2="176" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"></line><text x="121" y="179" font-size="7.5" fill="var(--green)">Profit</text></svg></div>
-        <div id="homeRevenueSummary" style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap"><div class="client-stat" style="min-width:auto"><div class="kpi-label">Revenue</div><div style="font-size:1rem;font-weight:700;color:var(--cyan)">₹0</div></div><div class="client-stat" style="min-width:auto"><div class="kpi-label">Profit</div><div style="font-size:1rem;font-weight:700;color:var(--green)">₹0</div></div><div class="client-stat" style="min-width:auto"><div class="kpi-label">Margin</div><div style="font-size:1rem;font-weight:700;color:var(--amber)">0.0%</div></div><div class="client-stat" style="min-width:auto"><div class="kpi-label">Orders</div><div style="font-size:1rem;font-weight:700">0</div></div></div>
-      </div>
-    </div>
-
-    <!-- Two-column: Overdue Payments + Low Stock -->
-    <div class="home-two-col">
-      <div class="home-section">
-        <div class="home-section-title">
-          <span>🔔 Overdue Payments</span>
-          <span class="view-all" onclick="document.querySelector('[data-tab=orders]').click()">View all →</span>
-        </div>
-        <div id="homeOverduePayments"><div style="color:var(--dim); font-size:13px;">All payments collected.</div></div>
-      </div>
-      <div class="home-section">
-        <div class="home-section-title">
-          <span>📦 Low Stock Alerts</span>
-          <span class="view-all" onclick="document.querySelector('[data-tab=filament]').click()">View all →</span>
-        </div>
-        <div id="homeLowStock"><div style="color:var(--dim); font-size:13px;">No inventory tracked.</div></div>
-      </div>
-    </div>
-
+    <!-- The rest of Home is drawn by owner-home.js, daily-tasks.js and tasks-admin.js. Money
+         figures live in Business Intelligence, payments and low stock in Home → Needs you. -->
     <!-- Activity Timeline -->
     <div class="home-section">
       <div class="home-section-title">📝 Recent Activity</div>
@@ -2108,11 +2050,6 @@
       <div style="font-size:12px; color:var(--dim); margin-bottom:12px;">Successful vs. failed print attempts, all-time, from the "Already made" and "Failed" counts on each order's product lines — flags products and colors that fail often enough to be worth investigating.</div>
       <div id="printSuccessRate"><div class="empty-state" style="padding:14px 0;">No successful or failed prints logged yet — use "Already made" and the new "Failed" field on each order’s product lines to start tracking this.</div></div>
     </div>
-    <div class="panel">
-      <div class="panel-title"><span class="panel-title-main">Filament Stock Health <button class="help-icon" data-help="filamentStockHealth">?</button></span> <span class="filter-count" id="productionStockSubtitle"></span></div>
-      <div style="font-size:12px; color:var(--dim); margin-bottom:12px;">Colors with enough spools on hand for every order still on the books, vs. colors running short — regardless of the period filter above.</div>
-      <div id="productionStockHealth"><div class="empty-state" style="padding:14px 0;">No filament colors tracked yet — add spools in the Filament Inventory tab.</div></div>
-    </div>
   </div>
 
   <div id="tabExpenses" style="display: none;">
@@ -2123,10 +2060,6 @@
     <div class="panel">
       <div class="panel-title"><span class="panel-title-main">Expense Summary <button class="help-icon" data-help="expenseSummary">?</button></span></div>
       <div id="expenseSummary"><div class="empty-state" style="padding:14px 0;">No expenses yet — totals will show up here once you log some below.</div></div>
-    </div>
-    <div class="panel">
-      <div class="panel-title"><span class="panel-title-main">Expense Analytics</span></div>
-      <div id="expenseAnalytics"><div class="empty-state" style="padding:10px 0;">Need at least 2 expenses to show analytics.</div></div>
     </div>
     <div class="panel">
       <div class="panel-title">Expenses</div>
@@ -2437,11 +2370,6 @@
   </div>
 
   <div class="panel">
-    <div class="panel-title">Combined Queue — reserved lanes run in parallel, rest share the pool</div>
-    <div id="queueContent"><div class="empty-state">No active orders with hours yet. Add products to an order to see the combined queue.</div></div>
-  </div>
-
-  <div class="panel">
     <div class="panel-title"><span class="panel-title-main">Payments Outstanding <button class="help-icon" data-help="paymentsOutstanding">?</button></span> <span class="filter-count" id="paymentsSummaryTotal"></span></div>
     <div id="paymentsSummaryList"><div class="empty-state" style="padding:10px 0;">No outstanding payments — every priced order is marked paid.</div></div>
   </div>
@@ -2647,7 +2575,7 @@
   <div id="tabScheduler" style="display:none;">
     <div class="panel">
       <div class="panel-title"><span class="panel-title-main">Production Scheduler <button class="help-icon" data-help="scheduler">?</button></span></div>
-      <div style="font-size:12px; color:var(--dim); margin-bottom:16px;">Visual capacity planner — see how loaded your fleet is, when current orders will finish, and whether you can take on more work.</div>
+      <div style="font-size:12px; color:var(--dim); margin-bottom:16px;">Visual capacity planner — how loaded your fleet is and when current orders will finish. To quote a date for a new order, use Control Room → Promise a delivery date.</div>
 
       <div class="sched-summary" id="schedSummary"><div class="sched-stat"><div class="ss-label">ACTIVE ORDERS</div><div class="ss-val">0</div><div class="ss-sub">0 in production, 0 booked</div></div><div class="sched-stat"><div class="ss-label">HOURS QUEUED</div><div class="ss-val">0.0h</div><div class="ss-sub">0 pieces remaining</div></div><div class="sched-stat"><div class="ss-label">FLEET CAPACITY</div><div class="ss-val">160h/day</div><div class="ss-sub">8 of 8 printers running</div><div class="ss-fill" style="width:100%"></div></div><div class="sched-stat"><div class="ss-label">DAYS TO CLEAR</div><div class="ss-val">0 days</div><div class="ss-sub"><span style="color:var(--green)">Light load</span></div></div></div>
 
@@ -2669,17 +2597,6 @@
         <div id="schedPrinterLoad"><svg viewBox="0 0 500 260" style="width:100%; max-width:500px;"><text x="46" y="60" fill="var(--dim)" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">Printer 1</text><rect x="50" y="50" width="420" height="12" rx="3" fill="var(--panel2)"></rect><rect x="50" y="50" width="2" height="12" rx="3" fill="var(--cyan)" opacity="0.8"></rect><text x="56" y="60" fill="var(--text)" font-size="9" font-family="JetBrains Mono,monospace">0.0h (0.0d)</text><text x="46" y="80" fill="var(--dim)" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">Printer 2</text><rect x="50" y="70" width="420" height="12" rx="3" fill="var(--panel2)"></rect><rect x="50" y="70" width="2" height="12" rx="3" fill="var(--cyan)" opacity="0.8"></rect><text x="56" y="80" fill="var(--text)" font-size="9" font-family="JetBrains Mono,monospace">0.0h (0.0d)</text><text x="46" y="100" fill="var(--dim)" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">Printer 3</text><rect x="50" y="90" width="420" height="12" rx="3" fill="var(--panel2)"></rect><rect x="50" y="90" width="2" height="12" rx="3" fill="var(--cyan)" opacity="0.8"></rect><text x="56" y="100" fill="var(--text)" font-size="9" font-family="JetBrains Mono,monospace">0.0h (0.0d)</text><text x="46" y="120" fill="var(--dim)" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">Printer 4</text><rect x="50" y="110" width="420" height="12" rx="3" fill="var(--panel2)"></rect><rect x="50" y="110" width="2" height="12" rx="3" fill="var(--cyan)" opacity="0.8"></rect><text x="56" y="120" fill="var(--text)" font-size="9" font-family="JetBrains Mono,monospace">0.0h (0.0d)</text><text x="46" y="140" fill="var(--dim)" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">Printer 5</text><rect x="50" y="130" width="420" height="12" rx="3" fill="var(--panel2)"></rect><rect x="50" y="130" width="2" height="12" rx="3" fill="var(--cyan)" opacity="0.8"></rect><text x="56" y="140" fill="var(--text)" font-size="9" font-family="JetBrains Mono,monospace">0.0h (0.0d)</text><text x="46" y="160" fill="var(--dim)" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">Printer 6</text><rect x="50" y="150" width="420" height="12" rx="3" fill="var(--panel2)"></rect><rect x="50" y="150" width="2" height="12" rx="3" fill="var(--cyan)" opacity="0.8"></rect><text x="56" y="160" fill="var(--text)" font-size="9" font-family="JetBrains Mono,monospace">0.0h (0.0d)</text><text x="46" y="180" fill="var(--dim)" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">Printer 7</text><rect x="50" y="170" width="420" height="12" rx="3" fill="var(--panel2)"></rect><rect x="50" y="170" width="2" height="12" rx="3" fill="var(--cyan)" opacity="0.8"></rect><text x="56" y="180" fill="var(--text)" font-size="9" font-family="JetBrains Mono,monospace">0.0h (0.0d)</text><text x="46" y="200" fill="var(--dim)" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">Printer 8</text><rect x="50" y="190" width="420" height="12" rx="3" fill="var(--panel2)"></rect><rect x="50" y="190" width="2" height="12" rx="3" fill="var(--cyan)" opacity="0.8"></rect><text x="56" y="200" fill="var(--text)" font-size="9" font-family="JetBrains Mono,monospace">0.0h (0.0d)</text></svg><div style="font-size:11px; color:var(--dim); margin-top:6px;">Hours shown per printer assume even distribution across 8 running printers. 0.0 days of work each at 20h/day.</div></div>
       </div>
 
-      <div class="sched-whatif">
-        <div class="sched-whatif-title">🤔 What-If: Can I Take This Order?</div>
-        <div style="font-size:12px; color:var(--dim); margin-bottom:14px;">Enter a hypothetical order to see if your fleet can handle it alongside current work. For a live date from products and quantities, with a message for the customer, use <b>Control Room → Promise a delivery date</b>.</div>
-        <div class="sim-row three">
-          <div><label>Total print hours</label><input type="number" id="whatifHours" min="0" step="0.5" value="0"></div>
-          <div><label>Needed by (days from now)</label><input type="number" id="whatifDeadline" min="1" step="1" value="7"></div>
-          <div><label>Dedicated printers (0 = shared pool)</label><input type="number" id="whatifPrinters" min="0" step="1" value="0"></div>
-        </div>
-        <button class="add-btn" id="whatifCheckBtn" style="margin-top:8px;">CHECK FEASIBILITY</button>
-        <div class="whatif-result" id="whatifResult" style="display:none;"></div>
-      </div>
     </div>
   </div>
 
@@ -2759,7 +2676,7 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
     <div class="panel">
       <div class="panel-title">How The Numbers Are Calculated</div>
       <div style="font-size:12px; color:var(--dim); margin-bottom:16px;">A reference for every calculated figure in the app \u2014 what's included, what's excluded, and the exact formula. Click a (?) icon anywhere in the app to jump straight to that entry.</div>
-      <div id="helpPageContent"><div class="help-section-title">Business Intelligence</div><div class="help-entry" id="help-entry-businessOverview"><div class="help-entry-title">Business Overview</div><div class="help-entry-label">Included</div><p>Only orders with status Production Done or Delivered count toward Revenue and Production Cost — bucketed by Delivery Date (falling back to Production Done Date, then Ordered Date) landing inside the selected period.</p><div class="help-entry-label">Revenue</div><p>Sum of each completed order’s net value: (actual price × qty) across product lines, minus any refund, floored at ₹0.</p><div class="help-entry-label">Production Cost (COGS)</div><p>Frozen filament + machine cost from the moment the order was marked complete, plus packaging and delivery cost. Doesn’t drift if Settings rates change later.</p><div class="help-entry-label">Operating Exp. (OpEx)</div><p>Expenses tab entries dated in the period, excluding anything typed "Capex."</p><div class="help-entry-label">Net Profit / Margin</div><p>Net Profit = Revenue − COGS − OpEx. Margin % = Net Profit ÷ Revenue. Gross Margin % = (Revenue − COGS) ÷ Revenue.</p><div class="help-entry-label">Excluded</div><p>Quotes, Lost leads, Cancelled orders, and anything still Booked or In Production — their revenue/cost isn’t counted until marked complete. Capex is tracked separately and never reduces profit here.</p></div><div class="help-entry" id="help-entry-quotePipeline"><div class="help-entry-title">Quote Pipeline</div><div class="help-entry-label">Scope</div><p>Every quote ever logged, across all time — not affected by the period filter at the top of the tab.</p><div class="help-entry-label">Conversion Rate</div><p>Converted ÷ (Converted + Lost) × 100. Shows — until at least one quote has been won or marked lost.</p></div><div class="help-entry" id="help-entry-orderPipeline"><div class="help-entry-title">Order Pipeline</div><div class="help-entry-label">Scope</div><p>A live snapshot of every order’s current status right now — not filtered by the period picker. Quotes and Lost leads are excluded (they live in Quote Pipeline instead).</p><div class="help-entry-label">Overdue</div><p>Not yet complete, has a Due Date set, and that date has already passed.</p></div><div class="help-entry" id="help-entry-revenueMix"><div class="help-entry-title">Revenue Mix — D2C vs B2B</div><div class="help-entry-label">Scope</div><p>Same completed-order set and period as Business Overview.</p><div class="help-entry-label">B2B vs D2C</div><p>B2B = order is linked to a saved Client on the Orders tab. D2C = not linked. This is computed live off the link, not a stored flag — relinking an order reclassifies it immediately.</p></div><div class="help-entry" id="help-entry-clientTypeMargins"><div class="help-entry-title">Margin &amp; AOV by Client Type</div><div class="help-entry-label">Scope</div><p>Same completed orders as Business Overview, grouped by the linked client’s free-text "Type" field (Clients tab), case-insensitive.</p><div class="help-entry-label">Buckets</div><p>No linked client → "D2C / No Client." Linked client with no Type set → its own "B2B — Type Not Set" bucket, kept separate rather than merged.</p></div><div class="help-entry" id="help-entry-moneyGoing"><div class="help-entry-title">Where The Money’s Going</div><div class="help-entry-label">Scope</div><p>Top 6 expense categories by spend in the Dashboard tab’s selected period, using the Category field on each logged expense. Uncategorized entries are grouped as "Uncategorized."</p><div class="help-entry-label">Note</div><p>Unlike the headline profit figures, this includes Capex — it’s a spend breakdown, not a profit calculation.</p></div><div class="help-entry" id="help-entry-dealerBoard"><div class="help-entry-title">Dealer Performance Board</div><div class="help-entry-label">Scope</div><p>Same completed-order revenue as Business Overview, restricted to orders linked to a client, ranked by revenue within the selected period.</p><div class="help-entry-label">Tiers</div><p>If Dealer Rewards is enabled (Settings), each client’s tier is whichever configured threshold their period revenue has reached — the highest one that still qualifies. This is an informational ranking; the discount doesn’t auto-apply to invoices.</p></div><div class="help-entry" id="help-entry-clientTrend"><div class="help-entry-title">Client Order Trend</div><div class="help-entry-label">Scope</div><p>Completed (Production Done / Delivered) orders linked to whichever saved clients you pick, bucketed by the same date rule as Business Overview (Delivery Date, falling back to Production Done Date, then Ordered Date).</p><div class="help-entry-label">Metric</div><p>Order Count = number of completed orders in each period. Revenue = summed net order value (same figure used in Business Overview).</p><div class="help-entry-label">Range vs Period</div><p>This chart’s own Metric/Range/View controls are independent of the tab’s top-of-page period filter — pick clients, then compare them across time.</p></div><div class="help-entry" id="help-entry-cashFlowTiming"><div class="help-entry-title">Cash Flow Timing</div><div class="help-entry-label">Collection Rate</div><p>Amount paid ÷ total order value for delivered orders in the selected period.</p><div class="help-entry-label">Avg Days to Full Payment</div><p>Average days between delivery date and last payment log entry, for orders marked fully Paid.</p><div class="help-entry-label">Outstanding &gt; 30 Days</div><p>Delivered orders still unpaid or partially paid more than 30 days after delivery.</p></div><div class="help-entry" id="help-entry-revenueConcentration"><div class="help-entry-title">Revenue Concentration Risk</div><div class="help-entry-label">Top Client Share</div><p>Percentage of period revenue from the single largest client/source.</p><div class="help-entry-label">HHI</div><p>Herfindahl–Hirschman Index — sum of squared revenue shares. Above 2500 = highly concentrated (risky), 1500–2500 = moderate, below 1500 = diversified.</p></div><div class="help-entry" id="help-entry-cycleTime"><div class="help-entry-title">Order-to-Delivery Cycle Time</div><div class="help-entry-label">Formula</div><p>Delivery Date minus Ordered Date, in calendar days, for delivered orders in the period.</p><div class="help-entry-label">≤ 3 Day</div><p>Percentage of orders fulfilled in 3 days or fewer — a measure of fast-turnaround capability.</p></div><div class="help-entry" id="help-entry-reorderRate"><div class="help-entry-title">Reorder Rate &amp; Frequency</div><div class="help-entry-label">Reorder Rate</div><p>Clients with 2+ completed orders ÷ total B2B clients (all time).</p><div class="help-entry-label">Avg Gap</div><p>Average number of days between consecutive completed orders for each client.</p></div><div class="help-entry" id="help-entry-costPerPiece"><div class="help-entry-title">Cost Per Piece Trending</div><div class="help-entry-label">Formula</div><p>Total all-in cost (filament + machine + packaging + delivery) ÷ total pieces produced, per month.</p><div class="help-entry-label">Trend</div><p>A declining cost per piece over time indicates improving production efficiency or better bulk pricing.</p></div><div class="help-section-title">Business Intelligence / Orders</div><div class="help-entry" id="help-entry-paymentsOutstanding"><div class="help-entry-title">Payments Outstanding</div><div class="help-entry-label">Included</div><p>Only Delivered orders that still have an amount due — across all time, not period-filtered. Booked, In Production, and Production Done orders are excluded until delivered.</p><div class="help-entry-label">Excluded</div><p>Orders marked fully Paid or Refunded, plus anything not yet Delivered (Booked, In Production, Production Done, Quoted, Lost, Cancelled).</p><div class="help-entry-label">Groups</div><p>Unpaid = nothing received yet. Partial = some payment logged, balance remains.</p></div><div class="help-section-title">Business Intelligence / Expense Dashboard</div><div class="help-entry" id="help-entry-revenueVsExpenses"><div class="help-entry-title">Revenue vs Expenses</div><div class="help-entry-label">Formula</div><p>Same Revenue / COGS / OpEx rules as Business Overview, bucketed by month (or rolled up to quarter/year). Net = Revenue − (COGS + OpEx).</p><div class="help-entry-label">Range vs Period</div><p>This chart’s Range/View chips are independent of the tab’s top-of-page period filter — they control their own window.</p><div class="help-entry-label">Excluded</div><p>Capex, and any order not yet marked complete.</p></div><div class="help-section-title">Channel Economics</div><div class="help-entry" id="help-entry-profitPerHour"><div class="help-entry-title">Profit Per Hour by Channel</div><div class="help-entry-label">Formula</div><p>(Order Value − All-in Cost) ÷ Print Hours for completed orders, split by D2C vs B2B.</p><div class="help-entry-label">Use</div><p>Shows which channel earns more per hour of printer time — helpful for prioritizing when capacity is tight.</p></div><div class="help-entry" id="help-entry-revenuePerPrinter"><div class="help-entry-title">Revenue Per Printer Per Month</div><div class="help-entry-label">Formula</div><p>Total period revenue ÷ number of active printers (from Settings) ÷ months in period.</p><div class="help-entry-label">Note</div><p>Printer count is the current fleet size, not a historical average — best read alongside a stable fleet.</p></div><div class="help-entry" id="help-entry-avgUnitsOrder"><div class="help-entry-title">Avg Units Per Order by Channel</div><div class="help-entry-label">Formula</div><p>Total quantity (sum of product line qtys) ÷ number of completed orders, split by D2C vs B2B.</p></div><div class="help-entry" id="help-entry-clientLTV"><div class="help-entry-title">Client Lifetime Value (LTV)</div><div class="help-entry-label">Lifetime Value</div><p>Sum of net order value across all completed orders for each B2B client, all time.</p><div class="help-entry-label">Trajectory</div><p>Up = more than half of LTV came in the last 90 days. Steady = some recent activity. Down = no orders in the last 90 days.</p></div><div class="help-entry" id="help-entry-daysBetweenOrders"><div class="help-entry-title">Days Between Orders — Early Warning</div><div class="help-entry-label">Status</div><p>Compares how many days since their last order vs their historical average gap. Overdue = 2× their average, Late = 1.3×, On Track = within normal range.</p><div class="help-entry-label">Scope</div><p>Only clients with 2+ completed orders (need a pattern to measure against). All time.</p></div><div class="help-entry" id="help-entry-paymentBehavior"><div class="help-entry-title">Payment Behavior Score</div><div class="help-entry-label">Score</div><p>Paid orders earn 10 points, Partial earns 5, Unpaid earns 0. Normalized to 0–100.</p><div class="help-entry-label">Use</div><p>Identifies clients who consistently pay vs those who need follow-up or adjusted terms.</p></div><div class="help-section-title">Operational Efficiency</div><div class="help-entry" id="help-entry-expenseRatio"><div class="help-entry-title">Expense Ratio Trending</div><div class="help-entry-label">Formula</div><p>OpEx ÷ Revenue × 100 for each month. Only OpEx (not CapEx or raw materials) is included.</p><div class="help-entry-label">Health</div><p>Below 30% = healthy, 30–60% = watch, above 60% = high — you’re spending more than you should relative to revenue.</p></div><div class="help-entry" id="help-entry-breakevenOrders"><div class="help-entry-title">Breakeven Orders Per Month</div><div class="help-entry-label">Formula</div><p>Average monthly OpEx ÷ average profit per order. Result is the minimum orders needed each month to cover operating expenses.</p><div class="help-entry-label">Note</div><p>Uses period-filtered completed orders for profit, and all-time expense history for monthly OpEx average.</p></div><div class="help-entry" id="help-entry-projectedPipeline"><div class="help-entry-title">Projected Revenue from Open Pipeline</div><div class="help-entry-label">Pipeline Value</div><p>Sum of order values for all Booked, In Production, and Production Done orders.</p><div class="help-entry-label">Weighted Forecast</div><p>Booked at 50%, In Production at 80%, Production Done at 95% — a risk-adjusted projection of likely revenue.</p></div><div class="help-entry" id="help-entry-filamentBurn"><div class="help-entry-title">Filament Burn Rate vs Purchase Frequency</div><div class="help-entry-label">Stock on Hand</div><p>Total spools from the Filament Inventory tab × spool size from Settings.</p><div class="help-entry-label">Avg Monthly Burn</div><p>Average grams used per month across all completed orders (all time).</p><div class="help-entry-label">Days of Stock Left</div><p>Current stock ÷ daily burn rate. Healthy = 60+ days, Low = 30–60, Critical = under 30.</p></div><div class="help-section-title">Pricing Simulator</div><div class="help-entry" id="help-entry-pricingSim"><div class="help-entry-title">Pricing Simulator</div><div class="help-entry-label">COGS / Unit</div><p>Filament cost (weight × buffer × ₹/kg rate) + Machine cost (hours × buffer × machine rate). Uses material/color-specific rates from Filament Inventory when available.</p><div class="help-entry-label">All-In Cost</div><p>COGS + packaging per unit + delivery cost spread across quantity.</p><div class="help-entry-label">Margin Bar</div><p>Visual split of revenue into cost vs profit portions.</p><div class="help-entry-label">Pricing Scenarios</div><p>Shows the selling price needed to hit each margin target (breakeven, 20%, 30%, 40%, 50%). Green border = your current margin falls in that range.</p><div class="help-entry-label">Margin vs Quantity</div><p>Bar chart showing how total profit changes with order size. Delivery cost is fixed, so larger orders spread it thinner and improve margin.</p><div class="help-entry-label">Saved Simulations</div><p>Click Save to store a scenario for later comparison. Stored in your browser alongside all other app data.</p></div><div class="help-section-title">Production Scheduler</div><div class="help-entry" id="help-entry-scheduler"><div class="help-entry-title">Production Scheduler</div><div class="help-entry-label">Active Orders</div><p>Orders with status Booked or In Production that still have print hours remaining.</p><div class="help-entry-label">Hours Queued</div><p>Total print hours across all active orders, including the failure/waste buffer from Settings.</p><div class="help-entry-label">Capacity Utilization</div><p>Bar chart showing print-hours loaded per day over the next 14 days. Red bar = capacity line (all running printers × hours/day). Orders are scheduled serially in priority order.</p><div class="help-entry-label">Order Timeline</div><p>Gantt chart showing when each order starts and finishes. Red bar = order won’t finish before its due date. Amber vertical line = due date marker.</p><div class="help-entry-label">Printer Load</div><p>Hours distributed evenly across running printers. Shows how many days of work each printer has.</p><div class="help-entry-label">What-If</div><p>Enter hypothetical print hours and a deadline. The scheduler checks whether your fleet can absorb it alongside existing work, and suggests how many dedicated printers you’d need if the shared pool can’t make it.</p></div><div class="help-section-title">Expense Dashboard</div><div class="help-entry" id="help-entry-monthlySpend"><div class="help-entry-title">Monthly Spend, Cumulative Burn &amp; Growth Rate</div><div class="help-entry-label">Monthly Spend</div><p>Sum of every logged expense (Capex + OpEx) dated in that month.</p><div class="help-entry-label">Cumulative</div><p>Running total across all months shown in the current Range.</p><div class="help-entry-label">MoM Growth</div><p>(This month − Last month) ÷ Last month × 100. Left blank (—) when the prior month had ₹0 spend, since growth off a zero base isn’t a meaningful percentage.</p></div><div class="help-entry" id="help-entry-capexSplit"><div class="help-entry-title">CapEx vs OpEx Split</div><div class="help-entry-label">Formula</div><p>Same expenses as Monthly Spend, split by the Type field on each entry — Capex vs everything else (Opex) — for the selected period only.</p></div><div class="help-entry" id="help-entry-categoryByMonth"><div class="help-entry-title">Category Spend by Month</div><div class="help-entry-label">Scope</div><p>Same as "Where The Money’s Going," broken out by month instead of one period total, and showing every category (not just the top 6).</p></div><div class="help-entry" id="help-entry-topVendors"><div class="help-entry-title">Top Vendors &amp; Suppliers</div><div class="help-entry-label">Grouping</div><p>By the Vendor field logged directly on each expense — not guessed from the item description. Entries with no vendor set fall into "Unspecified."</p></div><div class="help-section-title">Production Dashboard</div><div class="help-entry" id="help-entry-productionOverview"><div class="help-entry-title">Print Production Overview</div><div class="help-entry-label">Scope</div><p>Filament Used, Print Hours, and Material Cost come from every order with any produced hours/grams in the selected period — bucketed the same way as Revenue — regardless of the order’s current status. A still-Booked or In-Production order counts here as soon as some pieces are marked "Already made."</p></div><div class="help-entry" id="help-entry-fleetUtilization"><div class="help-entry-title">Fleet Utilization</div><div class="help-entry-label">Utilization %</div><p>Hours actually produced in the period ÷ theoretical fleet capacity (running printers × Hours/printer/day from Settings × days in the period). A month/year still in progress is capped at today, not its full length.</p><div class="help-entry-label">Busy / Idle / Down</div><p>A live snapshot of today’s printer state — not affected by the period filter. Busy = printers currently needed for the active queue (dedicated reserved lanes, plus the shared pool whenever anything’s waiting on it). Down = printers marked Down in Settings.</p></div><div class="help-entry" id="help-entry-bufferImpact"><div class="help-entry-title">Buffer &amp; Failure-Margin Impact</div><div class="help-entry-label">Formula</div><p>Extra Hours/Filament/Cost = buffered requirement − raw (unbuffered) requirement, for pieces actually made (or the whole order if complete) in the period, using the Failure Buffer % set in Settings.</p><div class="help-entry-label">Note</div><p>The line below the figures shows what Fleet Utilization would read without the buffer inflating "hours produced."</p></div><div class="help-entry" id="help-entry-printSuccessRate"><div class="help-entry-title">Print Success Rate</div><div class="help-entry-label">Source</div><p>The "Already made" and "Failed" fields logged on each order’s product lines — not period-filtered, all-time.</p><div class="help-entry-label">Grouped views</div><p>By Product / By Color only list entries with at least 2 attempts and at least 1 failure — a single clean success or one-off failure isn’t treated as a pattern yet.</p><div class="help-entry-label">Chronic badge</div><p>Shown when a product/color’s failure rate is at or above the app’s chronic threshold.</p></div><div class="help-entry" id="help-entry-filamentStockHealth"><div class="help-entry-title">Filament Stock Health</div><div class="help-entry-label">Needed vs Have</div><p>Same have-vs-need math as the Filament Inventory tab’s Requirements table — grams booked-but-not-yet-made, by color, compared to grams on hand.</p><div class="help-entry-label">Below Par</div><p>A separate, independent check: fires whenever spools on hand for a color drop under that color’s own Reorder Point (set per-item on the Filament Inventory tab) — even if nothing is currently booked in that color, so a color can be flagged low before an order finds it empty.</p></div><div class="help-section-title">Expenses Tab</div><div class="help-entry" id="help-entry-expenseSummary"><div class="help-entry-title">Expense Summary</div><div class="help-entry-label">Scope</div><p>Total Spend, Capex, Opex, This Month, and the category bars are all-time totals across every logged expense — not affected by any period filter (those only apply on the Dashboard / Expense Dashboard tabs).</p></div></div>
+      <div id="helpPageContent"><div class="help-section-title">Business Intelligence</div><div class="help-entry" id="help-entry-businessOverview"><div class="help-entry-title">Business Overview</div><div class="help-entry-label">Included</div><p>Only orders with status Production Done or Delivered count toward Revenue and Production Cost — bucketed by Delivery Date (falling back to Production Done Date, then Ordered Date) landing inside the selected period.</p><div class="help-entry-label">Revenue</div><p>Sum of each completed order’s net value: (actual price × qty) across product lines, minus any refund, floored at ₹0.</p><div class="help-entry-label">Production Cost (COGS)</div><p>Frozen filament + machine cost from the moment the order was marked complete, plus packaging and delivery cost. Doesn’t drift if Settings rates change later.</p><div class="help-entry-label">Operating Exp. (OpEx)</div><p>Expenses tab entries dated in the period, excluding anything typed "Capex."</p><div class="help-entry-label">Net Profit / Margin</div><p>Net Profit = Revenue − COGS − OpEx. Margin % = Net Profit ÷ Revenue. Gross Margin % = (Revenue − COGS) ÷ Revenue.</p><div class="help-entry-label">Excluded</div><p>Quotes, Lost leads, Cancelled orders, and anything still Booked or In Production — their revenue/cost isn’t counted until marked complete. Capex is tracked separately and never reduces profit here.</p></div><div class="help-entry" id="help-entry-quotePipeline"><div class="help-entry-title">Quote Pipeline</div><div class="help-entry-label">Scope</div><p>Every quote ever logged, across all time — not affected by the period filter at the top of the tab.</p><div class="help-entry-label">Conversion Rate</div><p>Converted ÷ (Converted + Lost) × 100. Shows — until at least one quote has been won or marked lost.</p></div><div class="help-entry" id="help-entry-orderPipeline"><div class="help-entry-title">Order Pipeline</div><div class="help-entry-label">Scope</div><p>A live snapshot of every order’s current status right now — not filtered by the period picker. Quotes and Lost leads are excluded (they live in Quote Pipeline instead).</p><div class="help-entry-label">Overdue</div><p>Not yet complete, has a Due Date set, and that date has already passed.</p></div><div class="help-entry" id="help-entry-revenueMix"><div class="help-entry-title">Revenue Mix — D2C vs B2B</div><div class="help-entry-label">Scope</div><p>Same completed-order set and period as Business Overview.</p><div class="help-entry-label">B2B vs D2C</div><p>B2B = order is linked to a saved Client on the Orders tab. D2C = not linked. This is computed live off the link, not a stored flag — relinking an order reclassifies it immediately.</p></div><div class="help-entry" id="help-entry-clientTypeMargins"><div class="help-entry-title">Margin &amp; AOV by Client Type</div><div class="help-entry-label">Scope</div><p>Same completed orders as Business Overview, grouped by the linked client’s free-text "Type" field (Clients tab), case-insensitive.</p><div class="help-entry-label">Buckets</div><p>No linked client → "D2C / No Client." Linked client with no Type set → its own "B2B — Type Not Set" bucket, kept separate rather than merged.</p></div><div class="help-entry" id="help-entry-moneyGoing"><div class="help-entry-title">Where The Money’s Going</div><div class="help-entry-label">Scope</div><p>Top 6 expense categories by spend in the Dashboard tab’s selected period, using the Category field on each logged expense. Uncategorized entries are grouped as "Uncategorized."</p><div class="help-entry-label">Note</div><p>Unlike the headline profit figures, this includes Capex — it’s a spend breakdown, not a profit calculation.</p></div><div class="help-entry" id="help-entry-dealerBoard"><div class="help-entry-title">Dealer Performance Board</div><div class="help-entry-label">Scope</div><p>Same completed-order revenue as Business Overview, restricted to orders linked to a client, ranked by revenue within the selected period.</p><div class="help-entry-label">Tiers</div><p>If Dealer Rewards is enabled (Settings), each client’s tier is whichever configured threshold their period revenue has reached — the highest one that still qualifies. This is an informational ranking; the discount doesn’t auto-apply to invoices.</p></div><div class="help-entry" id="help-entry-clientTrend"><div class="help-entry-title">Client Order Trend</div><div class="help-entry-label">Scope</div><p>Completed (Production Done / Delivered) orders linked to whichever saved clients you pick, bucketed by the same date rule as Business Overview (Delivery Date, falling back to Production Done Date, then Ordered Date).</p><div class="help-entry-label">Metric</div><p>Order Count = number of completed orders in each period. Revenue = summed net order value (same figure used in Business Overview).</p><div class="help-entry-label">Range vs Period</div><p>This chart’s own Metric/Range/View controls are independent of the tab’s top-of-page period filter — pick clients, then compare them across time.</p></div><div class="help-entry" id="help-entry-cashFlowTiming"><div class="help-entry-title">Cash Flow Timing</div><div class="help-entry-label">Collection Rate</div><p>Amount paid ÷ total order value for delivered orders in the selected period.</p><div class="help-entry-label">Avg Days to Full Payment</div><p>Average days between delivery date and last payment log entry, for orders marked fully Paid.</p><div class="help-entry-label">Outstanding &gt; 30 Days</div><p>Delivered orders still unpaid or partially paid more than 30 days after delivery.</p></div><div class="help-entry" id="help-entry-revenueConcentration"><div class="help-entry-title">Revenue Concentration Risk</div><div class="help-entry-label">Top Client Share</div><p>Percentage of period revenue from the single largest client/source.</p><div class="help-entry-label">HHI</div><p>Herfindahl–Hirschman Index — sum of squared revenue shares. Above 2500 = highly concentrated (risky), 1500–2500 = moderate, below 1500 = diversified.</p></div><div class="help-entry" id="help-entry-cycleTime"><div class="help-entry-title">Order-to-Delivery Cycle Time</div><div class="help-entry-label">Formula</div><p>Delivery Date minus Ordered Date, in calendar days, for delivered orders in the period.</p><div class="help-entry-label">≤ 3 Day</div><p>Percentage of orders fulfilled in 3 days or fewer — a measure of fast-turnaround capability.</p></div><div class="help-entry" id="help-entry-reorderRate"><div class="help-entry-title">Reorder Rate &amp; Frequency</div><div class="help-entry-label">Reorder Rate</div><p>Clients with 2+ completed orders ÷ total B2B clients (all time).</p><div class="help-entry-label">Avg Gap</div><p>Average number of days between consecutive completed orders for each client.</p></div><div class="help-entry" id="help-entry-costPerPiece"><div class="help-entry-title">Cost Per Piece Trending</div><div class="help-entry-label">Formula</div><p>Total all-in cost (filament + machine + packaging + delivery) ÷ total pieces produced, per month.</p><div class="help-entry-label">Trend</div><p>A declining cost per piece over time indicates improving production efficiency or better bulk pricing.</p></div><div class="help-section-title">Business Intelligence / Orders</div><div class="help-entry" id="help-entry-paymentsOutstanding"><div class="help-entry-title">Payments Outstanding</div><div class="help-entry-label">Included</div><p>Only Delivered orders that still have an amount due — across all time, not period-filtered. Booked, In Production, and Production Done orders are excluded until delivered.</p><div class="help-entry-label">Excluded</div><p>Orders marked fully Paid or Refunded, plus anything not yet Delivered (Booked, In Production, Production Done, Quoted, Lost, Cancelled).</p><div class="help-entry-label">Groups</div><p>Unpaid = nothing received yet. Partial = some payment logged, balance remains.</p></div><div class="help-section-title">Business Intelligence / Expense Dashboard</div><div class="help-entry" id="help-entry-revenueVsExpenses"><div class="help-entry-title">Revenue vs Expenses</div><div class="help-entry-label">Formula</div><p>Same Revenue / COGS / OpEx rules as Business Overview, bucketed by month (or rolled up to quarter/year). Net = Revenue − (COGS + OpEx).</p><div class="help-entry-label">Range vs Period</div><p>This chart’s Range/View chips are independent of the tab’s top-of-page period filter — they control their own window.</p><div class="help-entry-label">Excluded</div><p>Capex, and any order not yet marked complete.</p></div><div class="help-section-title">Channel Economics</div><div class="help-entry" id="help-entry-profitPerHour"><div class="help-entry-title">Profit Per Hour by Channel</div><div class="help-entry-label">Formula</div><p>(Order Value − All-in Cost) ÷ Print Hours for completed orders, split by D2C vs B2B.</p><div class="help-entry-label">Use</div><p>Shows which channel earns more per hour of printer time — helpful for prioritizing when capacity is tight.</p></div><div class="help-entry" id="help-entry-revenuePerPrinter"><div class="help-entry-title">Revenue Per Printer Per Month</div><div class="help-entry-label">Formula</div><p>Total period revenue ÷ number of active printers (from Settings) ÷ months in period.</p><div class="help-entry-label">Note</div><p>Printer count is the current fleet size, not a historical average — best read alongside a stable fleet.</p></div><div class="help-entry" id="help-entry-avgUnitsOrder"><div class="help-entry-title">Avg Units Per Order by Channel</div><div class="help-entry-label">Formula</div><p>Total quantity (sum of product line qtys) ÷ number of completed orders, split by D2C vs B2B.</p></div><div class="help-entry" id="help-entry-clientLTV"><div class="help-entry-title">Client Lifetime Value (LTV)</div><div class="help-entry-label">Lifetime Value</div><p>Sum of net order value across all completed orders for each B2B client, all time.</p><div class="help-entry-label">Trajectory</div><p>Up = more than half of LTV came in the last 90 days. Steady = some recent activity. Down = no orders in the last 90 days.</p></div><div class="help-entry" id="help-entry-daysBetweenOrders"><div class="help-entry-title">Days Between Orders — Early Warning</div><div class="help-entry-label">Status</div><p>Compares how many days since their last order vs their historical average gap. Overdue = 2× their average, Late = 1.3×, On Track = within normal range.</p><div class="help-entry-label">Scope</div><p>Only clients with 2+ completed orders (need a pattern to measure against). All time.</p></div><div class="help-entry" id="help-entry-paymentBehavior"><div class="help-entry-title">Payment Behavior Score</div><div class="help-entry-label">Score</div><p>Paid orders earn 10 points, Partial earns 5, Unpaid earns 0. Normalized to 0–100.</p><div class="help-entry-label">Use</div><p>Identifies clients who consistently pay vs those who need follow-up or adjusted terms.</p></div><div class="help-section-title">Operational Efficiency</div><div class="help-entry" id="help-entry-expenseRatio"><div class="help-entry-title">Expense Ratio Trending</div><div class="help-entry-label">Formula</div><p>OpEx ÷ Revenue × 100 for each month. Only OpEx (not CapEx or raw materials) is included.</p><div class="help-entry-label">Health</div><p>Below 30% = healthy, 30–60% = watch, above 60% = high — you’re spending more than you should relative to revenue.</p></div><div class="help-entry" id="help-entry-breakevenOrders"><div class="help-entry-title">Breakeven Orders Per Month</div><div class="help-entry-label">Formula</div><p>Average monthly OpEx ÷ average profit per order. Result is the minimum orders needed each month to cover operating expenses.</p><div class="help-entry-label">Note</div><p>Uses period-filtered completed orders for profit, and all-time expense history for monthly OpEx average.</p></div><div class="help-entry" id="help-entry-projectedPipeline"><div class="help-entry-title">Projected Revenue from Open Pipeline</div><div class="help-entry-label">Pipeline Value</div><p>Sum of order values for all Booked, In Production, and Production Done orders.</p><div class="help-entry-label">Weighted Forecast</div><p>Booked at 50%, In Production at 80%, Production Done at 95% — a risk-adjusted projection of likely revenue.</p></div><div class="help-entry" id="help-entry-filamentBurn"><div class="help-entry-title">Filament Burn Rate vs Purchase Frequency</div><div class="help-entry-label">Stock on Hand</div><p>Total spools from the Filament Inventory tab × spool size from Settings.</p><div class="help-entry-label">Avg Monthly Burn</div><p>Average grams used per month across all completed orders (all time).</p><div class="help-entry-label">Days of Stock Left</div><p>Current stock ÷ daily burn rate. Healthy = 60+ days, Low = 30–60, Critical = under 30.</p></div><div class="help-section-title">Pricing Simulator</div><div class="help-entry" id="help-entry-pricingSim"><div class="help-entry-title">Pricing Simulator</div><div class="help-entry-label">COGS / Unit</div><p>Filament cost (weight × buffer × ₹/kg rate) + Machine cost (hours × buffer × machine rate). Uses material/color-specific rates from Filament Inventory when available.</p><div class="help-entry-label">All-In Cost</div><p>COGS + packaging per unit + delivery cost spread across quantity.</p><div class="help-entry-label">Margin Bar</div><p>Visual split of revenue into cost vs profit portions.</p><div class="help-entry-label">Pricing Scenarios</div><p>Shows the selling price needed to hit each margin target (breakeven, 20%, 30%, 40%, 50%). Green border = your current margin falls in that range.</p><div class="help-entry-label">Margin vs Quantity</div><p>Bar chart showing how total profit changes with order size. Delivery cost is fixed, so larger orders spread it thinner and improve margin.</p><div class="help-entry-label">Saved Simulations</div><p>Click Save to store a scenario for later comparison. Stored in your browser alongside all other app data.</p></div><div class="help-section-title">Production Scheduler</div><div class="help-entry" id="help-entry-scheduler"><div class="help-entry-title">Production Scheduler</div><div class="help-entry-label">Active Orders</div><p>Orders with status Booked or In Production that still have print hours remaining.</p><div class="help-entry-label">Hours Queued</div><p>Total print hours across all active orders, including the failure/waste buffer from Settings.</p><div class="help-entry-label">Capacity Utilization</div><p>Bar chart showing print-hours loaded per day over the next 14 days. Red bar = capacity line (all running printers × hours/day). Orders are scheduled serially in priority order.</p><div class="help-entry-label">Order Timeline</div><p>Gantt chart showing when each order starts and finishes. Red bar = order won’t finish before its due date. Amber vertical line = due date marker.</p><div class="help-entry-label">Printer Load</div><p>Hours distributed evenly across running printers. Shows how many days of work each printer has.</p></div><div class="help-section-title">Expense Dashboard</div><div class="help-entry" id="help-entry-monthlySpend"><div class="help-entry-title">Monthly Spend, Cumulative Burn &amp; Growth Rate</div><div class="help-entry-label">Monthly Spend</div><p>Sum of every logged expense (Capex + OpEx) dated in that month.</p><div class="help-entry-label">Cumulative</div><p>Running total across all months shown in the current Range.</p><div class="help-entry-label">MoM Growth</div><p>(This month − Last month) ÷ Last month × 100. Left blank (—) when the prior month had ₹0 spend, since growth off a zero base isn’t a meaningful percentage.</p></div><div class="help-entry" id="help-entry-capexSplit"><div class="help-entry-title">CapEx vs OpEx Split</div><div class="help-entry-label">Formula</div><p>Same expenses as Monthly Spend, split by the Type field on each entry — Capex vs everything else (Opex) — for the selected period only.</p></div><div class="help-entry" id="help-entry-categoryByMonth"><div class="help-entry-title">Category Spend by Month</div><div class="help-entry-label">Scope</div><p>Same as "Where The Money’s Going," broken out by month instead of one period total, and showing every category (not just the top 6).</p></div><div class="help-entry" id="help-entry-topVendors"><div class="help-entry-title">Top Vendors &amp; Suppliers</div><div class="help-entry-label">Grouping</div><p>By the Vendor field logged directly on each expense — not guessed from the item description. Entries with no vendor set fall into "Unspecified."</p></div><div class="help-section-title">Production Dashboard</div><div class="help-entry" id="help-entry-productionOverview"><div class="help-entry-title">Print Production Overview</div><div class="help-entry-label">Scope</div><p>Filament Used, Print Hours, and Material Cost come from every order with any produced hours/grams in the selected period — bucketed the same way as Revenue — regardless of the order’s current status. A still-Booked or In-Production order counts here as soon as some pieces are marked "Already made."</p></div><div class="help-entry" id="help-entry-fleetUtilization"><div class="help-entry-title">Fleet Utilization</div><div class="help-entry-label">Utilization %</div><p>Hours actually produced in the period ÷ theoretical fleet capacity (running printers × Hours/printer/day from Settings × days in the period). A month/year still in progress is capped at today, not its full length.</p><div class="help-entry-label">Busy / Idle / Down</div><p>A live snapshot of today’s printer state — not affected by the period filter. Busy = printers currently needed for the active queue (dedicated reserved lanes, plus the shared pool whenever anything’s waiting on it). Down = printers marked Down in Settings.</p></div><div class="help-entry" id="help-entry-bufferImpact"><div class="help-entry-title">Buffer &amp; Failure-Margin Impact</div><div class="help-entry-label">Formula</div><p>Extra Hours/Filament/Cost = buffered requirement − raw (unbuffered) requirement, for pieces actually made (or the whole order if complete) in the period, using the Failure Buffer % set in Settings.</p><div class="help-entry-label">Note</div><p>The line below the figures shows what Fleet Utilization would read without the buffer inflating "hours produced."</p></div><div class="help-entry" id="help-entry-printSuccessRate"><div class="help-entry-title">Print Success Rate</div><div class="help-entry-label">Source</div><p>The "Already made" and "Failed" fields logged on each order’s product lines — not period-filtered, all-time.</p><div class="help-entry-label">Grouped views</div><p>By Product / By Color only list entries with at least 2 attempts and at least 1 failure — a single clean success or one-off failure isn’t treated as a pattern yet.</p><div class="help-entry-label">Chronic badge</div><p>Shown when a product/color’s failure rate is at or above the app’s chronic threshold.</p></div>
     </div>
   </div>
 
@@ -6500,7 +6417,8 @@ function recalcQueue(){
   const totalCap = updateCapLine();
   const totalPrinters = state.fleet.printers || 0;
   const hoursPerDay = state.fleet.hoursPerDay || 0;
-  const content = document.getElementById('queueContent');
+  // The queue view moved to Control Room → Production queue; this still runs for the due flags.
+  const content = document.getElementById('queueContent') || document.createElement('div');
 
   const activeWithHours = state.orders
     .map(function(o, i){ return { o: o, i: i }; })
@@ -7857,7 +7775,6 @@ function expenseMonthLabel(dateStr){
 function renderExpenses(){
   if(!state.expenses) state.expenses = [];
   renderExpenseSummary();
-  renderExpenseAnalytics();
 
   const list = document.getElementById('expensesList');
   list.innerHTML = '';
@@ -7914,21 +7831,18 @@ function renderExpenses(){
       exp.date = dateEl.value;
       monthCell.textContent = expenseMonthLabel(exp.date);
       renderExpenseSummary();
-      renderExpenseAnalytics();
       scheduleSave();
     });
     itemEl.addEventListener('input', function(){ exp.item = itemEl.value; scheduleSave(); });
     categoryEl.addEventListener('input', function(){
       exp.category = categoryEl.value;
       renderExpenseSummary();
-      renderExpenseAnalytics();
       refreshExpenseCategoryOptions();
       scheduleSave();
     });
     costEl.addEventListener('input', function(){
       exp.cost = posNum(costEl.value);
       renderExpenseSummary();
-      renderExpenseAnalytics();
       scheduleSave();
     });
     vendorEl.addEventListener('input', function(){ exp.vendor = vendorEl.value; scheduleSave(); });
@@ -8019,311 +7933,6 @@ function renderExpenseSummary(){
 }
 
 
-function renderExpenseAnalytics(){
-  var el = document.getElementById('expenseAnalytics');
-  if(!el) return;
-  var expenses = state.expenses || [];
-  if(expenses.length < 2){
-    el.innerHTML = '<div class="empty-state" style="padding:10px 0;">Need at least 2 expenses to show analytics.</div>';
-    return;
-  }
-
-  // ---- Gather monthly data ----
-  var monthMap = {};
-  expenses.forEach(function(e){
-    var mk = (e.date || '').slice(0, 7);
-    if(!mk) return;
-    if(!monthMap[mk]) monthMap[mk] = { capex: 0, opex: 0, rawMat: 0, total: 0, byCat: {}, items: [] };
-    var cost = e.cost || 0;
-    monthMap[mk].total += cost;
-    if(e.type === 'capex') monthMap[mk].capex += cost;
-    else if(e.type === 'raw_materials') monthMap[mk].rawMat += cost;
-    else monthMap[mk].opex += cost;
-    var cat = (e.category || '').trim() || 'Uncategorized';
-    monthMap[mk].byCat[cat] = (monthMap[mk].byCat[cat] || 0) + cost;
-    monthMap[mk].items.push(e);
-  });
-  var months = Object.keys(monthMap).sort();
-  var monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  // ---- A: Monthly Trend SVG ----
-  var chartW = Math.max(months.length * 60, 300), chartH = 180, pad = 40, barGap = 8;
-  var maxTotal = 0;
-  months.forEach(function(m){ if(monthMap[m].total > maxTotal) maxTotal = monthMap[m].total; });
-  if(maxTotal === 0) maxTotal = 1;
-  var barW = Math.max(12, Math.min(36, (chartW - pad * 2) / months.length - barGap));
-  var plotH = chartH - pad - 20;
-
-  var svg = '<svg width="' + chartW + '" height="' + chartH + '" style="font-family:JetBrains Mono, monospace; font-size:9px;">';
-  // Y-axis gridlines
-  for(var gi = 0; gi <= 4; gi++){
-    var gy = pad + plotH - (gi / 4) * plotH;
-    var gVal = (maxTotal * gi / 4);
-    svg += '<line x1="' + pad + '" y1="' + gy + '" x2="' + (chartW - 10) + '" y2="' + gy + '" stroke="var(--line)" stroke-dasharray="3,3" />';
-    svg += '<text x="' + (pad - 4) + '" y="' + (gy + 3) + '" fill="var(--dim)" text-anchor="end" font-size="8">' + (gVal >= 1000 ? Math.round(gVal/1000) + 'k' : Math.round(gVal)) + '</text>';
-  }
-
-  // Rolling average data
-  var rollingAvg = [];
-  months.forEach(function(m, i){
-    var sum = 0, count = 0;
-    for(var j = Math.max(0, i - 2); j <= i; j++){
-      sum += monthMap[months[j]].total;
-      count++;
-    }
-    rollingAvg.push(sum / count);
-  });
-
-  // Stacked bars
-  months.forEach(function(m, i){
-    var x = pad + i * (barW + barGap) + barGap / 2;
-    var d = monthMap[m];
-    var capexH = (d.capex / maxTotal) * plotH;
-    var opexH = (d.opex / maxTotal) * plotH;
-    var rawH = (d.rawMat / maxTotal) * plotH;
-    var baseY = pad + plotH;
-
-    // Raw materials (bottom) - amber
-    svg += '<rect x="' + x + '" y="' + (baseY - rawH) + '" width="' + barW + '" height="' + Math.max(rawH, 0) + '" fill="var(--amber)" rx="2" opacity="0.8"><title>' + m + ' Raw Mat: \u20b9' + Math.round(d.rawMat) + '</title></rect>';
-    // Opex (middle) - cyan
-    svg += '<rect x="' + x + '" y="' + (baseY - rawH - opexH) + '" width="' + barW + '" height="' + Math.max(opexH, 0) + '" fill="var(--cyan)" rx="2" opacity="0.7"><title>' + m + ' Opex: \u20b9' + Math.round(d.opex) + '</title></rect>';
-    // Capex (top) - purple
-    svg += '<rect x="' + x + '" y="' + (baseY - rawH - opexH - capexH) + '" width="' + barW + '" height="' + Math.max(capexH, 0) + '" fill="var(--purple)" rx="2" opacity="0.8"><title>' + m + ' Capex: \u20b9' + Math.round(d.capex) + '</title></rect>';
-
-    // Month label
-    var parts = m.split('-');
-    var label = monthLabels[parseInt(parts[1], 10) - 1] || m;
-    svg += '<text x="' + (x + barW / 2) + '" y="' + (chartH - 4) + '" fill="var(--dim)" text-anchor="middle" font-size="9">' + label + '</text>';
-  });
-
-  // Rolling average line
-  var points = [];
-  months.forEach(function(m, i){
-    var x = pad + i * (barW + barGap) + barGap / 2 + barW / 2;
-    var y = pad + plotH - (rollingAvg[i] / maxTotal) * plotH;
-    points.push(x + ',' + y);
-  });
-  if(points.length > 1){
-    svg += '<polyline points="' + points.join(' ') + '" fill="none" stroke="var(--text)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.5" />';
-    points.forEach(function(pt){
-      svg += '<circle cx="' + pt.split(',')[0] + '" cy="' + pt.split(',')[1] + '" r="2.5" fill="var(--text)" opacity="0.5" />';
-    });
-  }
-
-  // Legend
-  svg += '<rect x="' + pad + '" y="4" width="8" height="8" fill="var(--purple)" rx="2" opacity="0.8"/><text x="' + (pad + 11) + '" y="11" fill="var(--dim)" font-size="8">Capex</text>';
-  svg += '<rect x="' + (pad + 50) + '" y="4" width="8" height="8" fill="var(--cyan)" rx="2" opacity="0.7"/><text x="' + (pad + 61) + '" y="11" fill="var(--dim)" font-size="8">Opex</text>';
-  svg += '<rect x="' + (pad + 100) + '" y="4" width="8" height="8" fill="var(--amber)" rx="2" opacity="0.8"/><text x="' + (pad + 111) + '" y="11" fill="var(--dim)" font-size="8">Raw Mat</text>';
-  svg += '<line x1="' + (pad + 160) + '" y1="8" x2="' + (pad + 178) + '" y2="8" stroke="var(--text)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.5"/><text x="' + (pad + 182) + '" y="11" fill="var(--dim)" font-size="8">3mo avg</text>';
-  svg += '</svg>';
-
-  // ---- B: Burn Rate + Revenue Ratio ----
-  var opexMonths = months.filter(function(m){ return (monthMap[m].opex + monthMap[m].rawMat) > 0; });
-  var totalOpex = 0;
-  opexMonths.forEach(function(m){ totalOpex += monthMap[m].opex + monthMap[m].rawMat; });
-  var avgMonthlyOpex = opexMonths.length ? totalOpex / opexMonths.length : 0;
-
-  var curMonth = localMonthKey(new Date());
-  var thisMonthOpex = monthMap[curMonth] ? (monthMap[curMonth].opex + monthMap[curMonth].rawMat) : 0;
-  var lastMonthD = new Date(); lastMonthD.setMonth(lastMonthD.getMonth() - 1);
-  var lastMonth = localMonthKey(lastMonthD);
-  var lastMonthOpex = monthMap[lastMonth] ? (monthMap[lastMonth].opex + monthMap[lastMonth].rawMat) : 0;
-
-  // Revenue from orders
-  var totalRevenue = 0, revenueMonths = {};
-  (state.orders || []).forEach(function(o){
-    if(!isOrderComplete(o.status)) return;
-    var mk = (o.orderedDate || '').slice(0, 7);
-    if(!mk) return;
-    var val = orderTotals(o).orderValue || 0;
-    totalRevenue += val;
-    revenueMonths[mk] = (revenueMonths[mk] || 0) + val;
-  });
-
-  var thisMonthRev = revenueMonths[curMonth] || 0;
-  var expToRevRatio = thisMonthRev > 0 ? ((thisMonthOpex / thisMonthRev) * 100).toFixed(1) : '--';
-  var momDelta = lastMonthOpex > 0 ? ((thisMonthOpex - lastMonthOpex) / lastMonthOpex * 100).toFixed(1) : '--';
-  var momClass = momDelta !== '--' ? (parseFloat(momDelta) > 0 ? 'exp-delta-up' : (parseFloat(momDelta) < 0 ? 'exp-delta-down' : 'exp-delta-neutral')) : 'exp-delta-neutral';
-  var momArrow = momDelta !== '--' ? (parseFloat(momDelta) > 0 ? '\u2191' : (parseFloat(momDelta) < 0 ? '\u2193' : '\u2192')) : '';
-
-  var burnHtml = '<div class="exp-burn-row"><span class="exp-burn-label">Avg Monthly Opex (burn rate)</span><span class="exp-burn-val">\u20b9' + Math.round(avgMonthlyOpex).toLocaleString() + '</span></div>';
-  burnHtml += '<div class="exp-burn-row"><span class="exp-burn-label">This Month vs Last</span><span class="exp-burn-val ' + momClass + '">' + momArrow + ' ' + momDelta + '%</span></div>';
-  burnHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Expense-to-Revenue (this mo)</span><span class="exp-burn-val">' + expToRevRatio + (expToRevRatio !== '--' ? '%' : '') + '</span></div>';
-  burnHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Lifetime Revenue</span><span class="exp-burn-val" style="color:var(--green);">\u20b9' + Math.round(totalRevenue).toLocaleString() + '</span></div>';
-
-  // ---- C: Category MoM Deltas (enhance existing summary) ----
-  var catThisMonth = monthMap[curMonth] ? monthMap[curMonth].byCat : {};
-  var catLastMonth = monthMap[lastMonth] ? monthMap[lastMonth].byCat : {};
-  var allCats = {};
-  Object.keys(catThisMonth).forEach(function(c){ allCats[c] = true; });
-  Object.keys(catLastMonth).forEach(function(c){ allCats[c] = true; });
-  var catDeltaHtml = '';
-  var catKeys = Object.keys(allCats).sort(function(a, b){
-    return (catThisMonth[b] || 0) - (catThisMonth[a] || 0);
-  });
-  catKeys.forEach(function(cat){
-    var cur = catThisMonth[cat] || 0;
-    var prev = catLastMonth[cat] || 0;
-    var delta = prev > 0 ? ((cur - prev) / prev * 100).toFixed(0) : (cur > 0 ? '+new' : '0');
-    var dClass = delta === '+new' ? 'exp-delta-up' : (parseFloat(delta) > 0 ? 'exp-delta-up' : (parseFloat(delta) < 0 ? 'exp-delta-down' : 'exp-delta-neutral'));
-    var arrow = delta === '+new' ? '\u2605' : (parseFloat(delta) > 0 ? '\u2191' : (parseFloat(delta) < 0 ? '\u2193' : '\u2192'));
-    catDeltaHtml += '<div class="exp-burn-row"><span class="exp-burn-label">' + escapeHtml(cat) + '</span>';
-    catDeltaHtml += '<span><span class="exp-burn-val" style="font-size:12px;">\u20b9' + Math.round(cur).toLocaleString() + '</span>';
-    catDeltaHtml += '<span class="exp-cat-delta ' + dClass + '">' + arrow + ' ' + delta + (delta !== '+new' && delta !== '0' ? '%' : '') + '</span></span></div>';
-  });
-
-  // ---- D: Recurring vs One-Time ----
-  // Auto-detect: items with same name appearing 2+ months = recurring
-  var itemMonths = {};
-  expenses.forEach(function(e){
-    var key = (e.item || '').trim().toLowerCase();
-    var mk = (e.date || '').slice(0, 7);
-    if(!key || !mk) return;
-    if(!itemMonths[key]) itemMonths[key] = { months: {}, totalCost: 0, count: 0, avgCost: 0 };
-    itemMonths[key].months[mk] = true;
-    itemMonths[key].totalCost += (e.cost || 0);
-    itemMonths[key].count++;
-  });
-  Object.keys(itemMonths).forEach(function(k){
-    itemMonths[k].avgCost = itemMonths[k].count > 0 ? itemMonths[k].totalCost / itemMonths[k].count : 0;
-    itemMonths[k].monthCount = Object.keys(itemMonths[k].months).length;
-  });
-
-  var fixedItems = [], variableItems = [];
-  Object.keys(itemMonths).forEach(function(k){
-    var d = itemMonths[k];
-    if(d.monthCount >= 2){
-      fixedItems.push({ name: k, avg: d.avgCost, months: d.monthCount });
-    }
-  });
-  fixedItems.sort(function(a, b){ return b.avg - a.avg; });
-
-  var fixedMonthly = 0;
-  fixedItems.forEach(function(f){ fixedMonthly += f.avg; });
-  var totalMonthlyAvg = months.length > 0 ? expenses.reduce(function(s, e){ return s + (e.cost || 0); }, 0) / months.length : 0;
-  var variableMonthly = totalMonthlyAvg - fixedMonthly;
-  if(variableMonthly < 0) variableMonthly = 0;
-
-  var recurHtml = '<div class="exp-burn-row"><span class="exp-burn-label">Recurring baseline <span class="exp-recurring-tag fixed">Fixed</span></span><span class="exp-burn-val" style="color:var(--cyan);">\u20b9' + Math.round(fixedMonthly).toLocaleString() + '/mo</span></div>';
-  recurHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Variable / one-time <span class="exp-recurring-tag variable">Variable</span></span><span class="exp-burn-val" style="color:var(--amber);">\u20b9' + Math.round(variableMonthly).toLocaleString() + '/mo</span></div>';
-  fixedItems.slice(0, 5).forEach(function(f){
-    recurHtml += '<div class="exp-burn-row"><span class="exp-burn-label" style="text-transform:capitalize;padding-left:12px;">' + escapeHtml(f.name) + ' <span style="color:var(--dim);font-size:9px;">(' + f.months + ' mo)</span></span><span class="exp-burn-val" style="font-size:11px;">\u20b9' + Math.round(f.avg).toLocaleString() + '</span></div>';
-  });
-
-  // ---- E: Filament Stocking Projection ----
-  // Historical monthly filament consumption from completed orders
-  var filByMonth = {};
-  (state.orders || []).forEach(function(o){
-    if(o.status === 'quoted' || o.status === 'lost' || o.status === 'cancelled') return;
-    var mk = (o.orderedDate || '').slice(0, 7);
-    if(!mk) return;
-    (o.products || []).forEach(function(p){
-      var g = (p.qty || 0) * (p.fil || 0);
-      if(g <= 0) return;
-      if(!filByMonth[mk]) filByMonth[mk] = 0;
-      filByMonth[mk] += g;
-    });
-  });
-  var filMonths = Object.keys(filByMonth).sort();
-  var totalFilGrams = 0;
-  filMonths.forEach(function(m){ totalFilGrams += filByMonth[m]; });
-  var avgFilPerMonth = filMonths.length ? totalFilGrams / filMonths.length : 0;
-  var recentFilAvg = 0;
-  var recentFil = filMonths.slice(-3);
-  if(recentFil.length > 0){
-    var recentSum = 0;
-    recentFil.forEach(function(m){ recentSum += filByMonth[m]; });
-    recentFilAvg = recentSum / recentFil.length;
-  }
-
-  // Current inventory
-  var sg = spoolGrams();
-  var totalInvGrams = 0;
-  (state.inventory || []).forEach(function(inv){
-    totalInvGrams += (inv.spools || 0) * sg;
-  });
-
-  // Pending orders need
-  var pendingGrams = 0;
-  var needed = computeNeededByColor();
-  Object.keys(needed).forEach(function(c){ pendingGrams += needed[c]; });
-
-  var netAvailable = totalInvGrams - pendingGrams;
-  var runwayMonths = recentFilAvg > 0 ? (Math.max(0, netAvailable) / recentFilAvg) : 0;
-  var filCostPerMonth = 0;
-  // Estimate from raw materials expenses
-  var rawMatExpenses = expenses.filter(function(e){
-    return (e.category || '').toLowerCase().indexOf('raw material') !== -1;
-  });
-  var rawMatMonths = {};
-  rawMatExpenses.forEach(function(e){
-    var mk = (e.date || '').slice(0, 7);
-    if(!mk) return;
-    rawMatMonths[mk] = (rawMatMonths[mk] || 0) + (e.cost || 0);
-  });
-  var rmKeys = Object.keys(rawMatMonths);
-  if(rmKeys.length > 0){
-    var rmTotal = 0;
-    rmKeys.forEach(function(k){ rmTotal += rawMatMonths[k]; });
-    filCostPerMonth = rmTotal / rmKeys.length;
-  }
-
-  var filHtml = '';
-  filHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Avg monthly consumption</span><span class="exp-burn-val">' + Math.round(avgFilPerMonth) + 'g (' + (avgFilPerMonth / sg).toFixed(1) + ' spools)</span></div>';
-  filHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Recent 3-mo avg</span><span class="exp-burn-val">' + Math.round(recentFilAvg) + 'g (' + (recentFilAvg / sg).toFixed(1) + ' spools)</span></div>';
-  filHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Current stock</span><span class="exp-burn-val">' + Math.round(totalInvGrams) + 'g (' + (totalInvGrams / sg).toFixed(1) + ' spools)</span></div>';
-  filHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Pending order need</span><span class="exp-burn-val" style="color:var(--amber);">' + Math.round(pendingGrams) + 'g</span></div>';
-  filHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Net available after pending</span><span class="exp-burn-val' + (netAvailable < 0 ? ' exp-delta-up' : '') + '">' + Math.round(netAvailable) + 'g</span></div>';
-  var runwayColor = runwayMonths < 1 ? 'var(--red)' : (runwayMonths < 2 ? 'var(--amber)' : 'var(--green)');
-  filHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Stock runway</span><span class="exp-burn-val" style="color:' + runwayColor + ';">' + runwayMonths.toFixed(1) + ' months</span></div>';
-  filHtml += '<div class="exp-burn-row"><span class="exp-burn-label">Avg monthly raw-mat spend</span><span class="exp-burn-val">' + '\u20b9' + Math.round(filCostPerMonth).toLocaleString() + '</span></div>';
-
-  // Next month projection
-  var nextMonthNeed = Math.max(recentFilAvg, avgFilPerMonth);
-  var spoolsToOrder = Math.max(0, Math.ceil((nextMonthNeed - Math.max(0, netAvailable)) / sg));
-  if(spoolsToOrder > 0){
-    filHtml += '<div class="exp-burn-row" style="background:rgba(232,97,90,0.08);border-radius:6px;padding:8px 10px;margin-top:4px;"><span class="exp-burn-label" style="font-weight:600;color:var(--text);">\u26a0 Order ~' + spoolsToOrder + ' spool' + (spoolsToOrder > 1 ? 's' : '') + ' this month</span><span class="exp-burn-val" style="color:var(--red);">~\u20b9' + Math.round(spoolsToOrder * filCostPerMonth / Math.max(1, (avgFilPerMonth / sg))).toLocaleString() + '</span></div>';
-  } else {
-    filHtml += '<div class="exp-burn-row" style="background:rgba(126,208,138,0.08);border-radius:6px;padding:8px 10px;margin-top:4px;"><span class="exp-burn-label" style="font-weight:600;color:var(--green);">\u2713 Stock covers next month</span><span class="exp-burn-val" style="color:var(--green);">' + (netAvailable / sg).toFixed(1) + ' spools surplus</span></div>';
-  }
-
-  // ---- Assemble ----
-  var html = '<div class="exp-analytics-grid">';
-
-  // A: Monthly trend (full width)
-  html += '<div class="exp-analytics-card full-width">';
-  html += '<div class="exp-analytics-title">Monthly Spend Trend (Capex / Opex / Raw Materials)</div>';
-  html += '<div class="exp-trend-chart">' + svg + '</div>';
-  html += '</div>';
-
-  // B: Burn rate
-  html += '<div class="exp-analytics-card">';
-  html += '<div class="exp-analytics-title">Burn Rate & Revenue</div>';
-  html += burnHtml;
-  html += '</div>';
-
-  // C: Category MoM
-  html += '<div class="exp-analytics-card">';
-  html += '<div class="exp-analytics-title">Category Trends (this mo vs last)</div>';
-  html += catDeltaHtml || '<div style="color:var(--dim);font-size:11px;">No data for current month yet.</div>';
-  html += '</div>';
-
-  // D: Recurring vs one-time
-  html += '<div class="exp-analytics-card">';
-  html += '<div class="exp-analytics-title">Recurring vs One-Time</div>';
-  html += recurHtml;
-  html += '</div>';
-
-  // E: Filament projection
-  html += '<div class="exp-analytics-card">';
-  html += '<div class="exp-analytics-title">Filament Stocking Forecast</div>';
-  html += filHtml;
-  html += '</div>';
-
-  html += '</div>';
-
-  el.innerHTML = html;
-}
 
 // ---------- EXPENSES: EXCEL IMPORT / EXPORT ----------
 // Finds the header that best matches a field's patterns, preferring an EXACT match (header
@@ -9428,7 +9037,6 @@ const METRIC_DEFS = {
       ['Capacity Utilization', 'Bar chart showing print-hours loaded per day over the next 14 days. Red bar = capacity line (all running printers \u00d7 hours/day). Orders are scheduled serially in priority order.'],
       ['Order Timeline', 'Gantt chart showing when each order starts and finishes. Red bar = order won\u2019t finish before its due date. Amber vertical line = due date marker.'],
       ['Printer Load', 'Hours distributed evenly across running printers. Shows how many days of work each printer has.'],
-      ['What-If', 'Enter hypothetical print hours and a deadline. The scheduler checks whether your fleet can absorb it alongside existing work, and suggests how many dedicated printers you\u2019d need if the shared pool can\u2019t make it.']
     ]
   },
   monthlySpend: {
@@ -9491,14 +9099,6 @@ const METRIC_DEFS = {
       ['Source', 'The "Already made" and "Failed" fields logged on each order\u2019s product lines \u2014 not period-filtered, all-time.'],
       ['Grouped views', 'By Product / By Color only list entries with at least 2 attempts and at least 1 failure \u2014 a single clean success or one-off failure isn\u2019t treated as a pattern yet.'],
       ['Chronic badge', 'Shown when a product/color\u2019s failure rate is at or above the app\u2019s chronic threshold.']
-    ]
-  },
-  filamentStockHealth: {
-    section: 'Production Dashboard',
-    title: 'Filament Stock Health',
-    body: [
-      ['Needed vs Have', 'Same have-vs-need math as the Filament Inventory tab\u2019s Requirements table \u2014 grams booked-but-not-yet-made, by color, compared to grams on hand.'],
-      ['Below Par', 'A separate, independent check: fires whenever spools on hand for a color drop under that color\u2019s own Reorder Point (set per-item on the Filament Inventory tab) \u2014 even if nothing is currently booked in that color, so a color can be flagged low before an order finds it empty.']
     ]
   },
   expenseSummary: {
@@ -10273,38 +9873,6 @@ function computeFilamentStockHealth(){
   return { totalColors: allColors.length, ok: ok, short: short, shortGrams: shortGrams, belowPar: belowParColors.length, belowParColors: belowParColors };
 }
 
-function renderFilamentStockHealth(){
-  const el = document.getElementById('productionStockHealth');
-  const subtitle = document.getElementById('productionStockSubtitle');
-  if(!el) return;
-  const s = computeFilamentStockHealth();
-  if(subtitle) subtitle.textContent = s.totalColors > 0 ? ('(' + s.totalColors + ' color' + (s.totalColors === 1 ? '' : 's') + ' tracked)') : '';
-
-  if(s.totalColors === 0){
-    el.innerHTML = '<div class="empty-state" style="padding:14px 0;">No filament colors tracked yet \u2014 add spools in the Filament Inventory tab.</div>';
-    return;
-  }
-
-  function stat(key, label, value){
-    return '<div class="pipeline-stat ' + key + '"><div class="pipeline-stat-val">' + value + '</div><div class="pipeline-stat-key">' + label + '</div></div>';
-  }
-  const grid = '<div class="pipeline-grid">' + stat('done', 'Stocked', s.ok) + stat('overdue', 'Short', s.short) + stat('low', 'Below Par', s.belowPar) + '</div>';
-
-  let note = '';
-  if(s.short > 0){
-    note += '<div class="warn" style="margin-top:14px;">\u26A0 About ' + fmt(s.shortGrams) + 'g short across ' + s.short + ' color' + (s.short === 1 ? '' : 's') + ' for orders still on the books. Full breakdown in the Filament Inventory tab.</div>';
-  }
-  if(s.belowPar > 0){
-    const list = s.belowParColors.slice(0, 6).map(function(c){
-      return escapeHtml(c.color) + ' (' + fmt(c.have) + '/' + fmt(c.par) + ' spools)';
-    }).join(', ');
-    note += '<div class="warn" style="margin-top:' + (s.short > 0 ? '8px' : '14px') + ';">\uD83D\uDCE6 Reorder soon \u2014 below par regardless of what\'s currently booked: ' + list + (s.belowParColors.length > 6 ? ', +' + (s.belowParColors.length - 6) + ' more' : '') + '.</div>';
-  }
-  if(s.short === 0 && s.belowPar === 0){
-    note = '<div style="font-size:12px; color:var(--dim); margin-top:12px;">Every tracked color has enough on hand for orders still on the books, and nothing has dropped below its reorder point.</div>';
-  }
-  el.innerHTML = grid + note;
-}
 
 // ---------- PRINT SUCCESS RATE ----------
 // A line's "successful" count is the same "made so far" logic used everywhere else
@@ -10442,7 +10010,6 @@ function renderProduction(){
   renderProductionHeadline();
   renderFleetUtilization();
   renderBufferImpact();
-  renderFilamentStockHealth();
   renderPrintSuccessRate();
 }
 
@@ -12525,493 +12092,7 @@ function showClientInvoices(clientId){
 // ========== HOME / TODAY VIEW ==========
 
 function renderHome(){
-  renderHomeKpis();
-  renderHomeAlerts();
-  renderHomeOrdersAction();
-  renderHomeRevenueChart();
-  renderHomeOverduePayments();
-  renderHomeLowStock();
   renderHomeTimeline();
-}
-
-function renderHomeKpis(){
-  var grid = document.getElementById('homeKpiGrid');
-  var now = new Date();
-  var thisMonth = now.getMonth(), thisYear = now.getFullYear();
-  var lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-  var lastYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-
-  // This month + last month ranges for comparison
-  var thisMonthStart = new Date(thisYear, thisMonth, 1).toISOString().slice(0,10);
-  var thisMonthEnd = new Date(thisYear, thisMonth + 1, 0).toISOString().slice(0,10);
-  var lastMonthStart = new Date(lastYear, lastMonth, 1).toISOString().slice(0,10);
-  var lastMonthEnd = new Date(lastYear, lastMonth + 1, 0).toISOString().slice(0,10);
-
-  var metricsThis = computeBusinessMetrics({start: thisMonthStart, end: thisMonthEnd});
-  var metricsLast = computeBusinessMetrics({start: lastMonthStart, end: lastMonthEnd});
-
-  // Revenue delta
-  var revDelta = metricsLast.revenue > 0 ? ((metricsThis.revenue - metricsLast.revenue) / metricsLast.revenue * 100) : (metricsThis.revenue > 0 ? 100 : 0);
-
-  // Active orders
-  var activeOrders = state.orders.filter(function(o){ return ['booked','in_production'].indexOf(o.status) >= 0; });
-
-  // Pipeline value (active order value)
-  var pipelineVal = 0;
-  activeOrders.forEach(function(o){ pipelineVal += orderTotals(o).orderValue; });
-
-  // Outstanding payments
-  var outstanding = 0;
-  var unpaidCount = 0;
-  state.orders.forEach(function(o){
-    if(o.status === 'delivered' && o.paymentStatus !== 'paid' && o.paymentStatus !== 'refunded'){
-      var t = orderTotals(o);
-      outstanding += t.orderValue - (parseFloat(o.amountPaid)||0);
-      unpaidCount++;
-    }
-  });
-
-  // Orders delivered this month
-  var deliveredCount = state.orders.filter(function(o){
-    if(o.status !== 'delivered') return false;
-    var d = new Date(o.deliveryDate || o.productionDoneDate || o.orderedDate);
-    return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
-  }).length;
-
-  // Mini sparklines — last 7 days revenue
-  var sparkData = [];
-  for(var i = 6; i >= 0; i--){
-    var day = new Date(now); day.setDate(day.getDate() - i);
-    var dayStr = day.toISOString().slice(0,10);
-    var dayRev = 0;
-    state.orders.forEach(function(o){
-      if(['lost','cancelled','quoted'].indexOf(o.status) >= 0) return;
-      var bd = orderBucketDate(o);
-      if(bd && bd.slice(0,10) === dayStr) dayRev += orderTotals(o).orderValue;
-    });
-    sparkData.push(dayRev);
-  }
-  var sparkMax = Math.max.apply(null, sparkData) || 1;
-  var sparkW = 60, sparkH = 24;
-  var sparkPts = sparkData.map(function(v, i){ return (i * sparkW / 6) + ',' + (sparkH - v / sparkMax * sparkH); }).join(' ');
-  var sparkSvg = '<svg class="kpi-spark" width="'+sparkW+'" height="'+sparkH+'" viewBox="0 0 '+sparkW+' '+sparkH+'"><polyline points="'+sparkPts+'" fill="none" stroke="var(--cyan)" stroke-width="1.5" stroke-linejoin="round"/></svg>';
-
-  // Delta helpers
-  function delta(curr, prev){ return prev > 0 ? ((curr - prev) / prev * 100) : (curr > 0 ? 100 : 0); }
-  function deltaHtml(pct){
-    var cls = pct > 0 ? 'up' : (pct < 0 ? 'down' : 'flat');
-    var arrow = pct > 0 ? '↑' : (pct < 0 ? '↓' : '→');
-    return '<span class="kpi-delta ' + cls + '">' + arrow + ' ' + Math.abs(pct).toFixed(0) + '%</span>';
-  }
-
-  var netDelta = delta(metricsThis.netProfit, metricsLast.netProfit);
-  var gmDelta = delta(metricsThis.grossMargin, metricsLast.grossMargin);
-  var netColor = metricsThis.netProfit >= 0 ? 'var(--green)' : 'var(--red)';
-
-  grid.innerHTML =
-    // Row 1: Revenue, Net Profit, Gross Margin, Pipeline
-    '<div class="home-kpi">' +
-      '<div class="kpi-label">Revenue This Month</div>' +
-      '<div class="kpi-val">₹' + Math.round(metricsThis.revenue).toLocaleString('en-IN') +
-        deltaHtml(revDelta) + '</div>' +
-      '<div class="kpi-sub">vs ₹' + Math.round(metricsLast.revenue).toLocaleString('en-IN') + ' last month</div>' +
-      sparkSvg +
-    '</div>' +
-    '<div class="home-kpi">' +
-      '<div class="kpi-label">Net Profit</div>' +
-      '<div class="kpi-val" style="color:' + netColor + '">' + (metricsThis.netProfit < 0 ? '−₹' : '₹') + Math.round(Math.abs(metricsThis.netProfit)).toLocaleString('en-IN') +
-        deltaHtml(netDelta) + '</div>' +
-      '<div class="kpi-sub">' + Math.round(metricsThis.margin) + '% net margin · COGS ₹' + Math.round(metricsThis.cogs).toLocaleString('en-IN') + '</div>' +
-    '</div>' +
-    '<div class="home-kpi">' +
-      '<div class="kpi-label">Gross Margin</div>' +
-      '<div class="kpi-val">' + Math.round(metricsThis.grossMargin) + '%' +
-        deltaHtml(gmDelta) + '</div>' +
-      '<div class="kpi-sub">₹' + Math.round(metricsThis.grossProfit).toLocaleString('en-IN') + ' gross profit · ' + metricsThis.orderCount + ' orders</div>' +
-    '</div>' +
-    '<div class="home-kpi">' +
-      '<div class="kpi-label">Pipeline Value</div>' +
-      '<div class="kpi-val" style="color:var(--amber)">₹' + Math.round(pipelineVal).toLocaleString('en-IN') + '</div>' +
-      '<div class="kpi-sub">' + activeOrders.filter(function(o){ return o.status === 'in_production'; }).length + ' in production · ' +
-        activeOrders.filter(function(o){ return o.status === 'booked'; }).length + ' booked</div>' +
-    '</div>' +
-    // Row 2: Outstanding, AOV, OpEx, Delivered
-    '<div class="home-kpi">' +
-      '<div class="kpi-label">Payments Outstanding</div>' +
-      '<div class="kpi-val" style="color:var(--red)">₹' + Math.round(outstanding).toLocaleString('en-IN') + '</div>' +
-      '<div class="kpi-sub">' + unpaidCount + ' unpaid deliveries</div>' +
-    '</div>' +
-    '<div class="home-kpi">' +
-      '<div class="kpi-label">Avg Order Value</div>' +
-      '<div class="kpi-val">₹' + Math.round(metricsThis.aov).toLocaleString('en-IN') + '</div>' +
-      '<div class="kpi-sub">vs ₹' + Math.round(metricsLast.aov).toLocaleString('en-IN') + ' last month</div>' +
-    '</div>' +
-    '<div class="home-kpi">' +
-      '<div class="kpi-label">Operating Expenses</div>' +
-      '<div class="kpi-val">₹' + Math.round(metricsThis.opex).toLocaleString('en-IN') + '</div>' +
-      '<div class="kpi-sub">CapEx ₹' + Math.round(metricsThis.capex).toLocaleString('en-IN') + ' · Raw Mat ₹' + Math.round(metricsThis.rawMat).toLocaleString('en-IN') + '</div>' +
-    '</div>' +
-    '<div class="home-kpi">' +
-      '<div class="kpi-label">Delivered This Month</div>' +
-      '<div class="kpi-val" style="color:var(--green)">' + deliveredCount + '</div>' +
-      '<div class="kpi-sub">orders completed & delivered</div>' +
-    '</div>';
-}
-
-function renderHomeAlerts(){
-  var list = document.getElementById('homeAlertsList');
-  var alerts = [];
-  var now = new Date();
-
-  // Overdue payments (delivered > 7 days, unpaid)
-  state.orders.forEach(function(o){
-    if(o.status !== 'delivered') return;
-    if(o.paymentStatus === 'paid' || o.paymentStatus === 'refunded') return;
-    var dd = new Date(o.deliveryDate || o.productionDoneDate || o.orderedDate);
-    var days = Math.floor((now - dd) / 86400000);
-    if(days > 7){
-      var t = orderTotals(o);
-      var due = t.orderValue - (parseFloat(o.amountPaid)||0);
-      alerts.push({type:'red', text:'₹' + due.toLocaleString('en-IN',{maximumFractionDigits:0}) + ' overdue from ' + escapeHtml(o.clientName || o.name || 'Unknown') + ' — ' + days + ' days', badge:'Payment', tab:'orders'});
-    }
-  });
-
-  // Production bottlenecks (in_production > 5 days)
-  state.orders.forEach(function(o){
-    if(o.status !== 'in_production') return;
-    var sd = new Date(o.productionStartDate || o.orderedDate);
-    var days = Math.floor((now - sd) / 86400000);
-    if(days > 5){
-      alerts.push({type:'amber', text:escapeHtml(o.name || 'Order') + ' has been in production for ' + days + ' days', badge:'Production', tab:'orders'});
-    }
-  });
-
-  // Low filament stock
-  if(state.inventory){
-    state.inventory.forEach(function(inv){
-      if(inv.qty !== undefined && inv.par !== undefined && inv.qty <= inv.par){
-        alerts.push({type:'cyan', text:escapeHtml(inv.material || '') + ' ' + escapeHtml(inv.color || '') + ' — ' + inv.qty + 'g left (par: ' + inv.par + 'g)', badge:'Stock', tab:'filament'});
-      }
-    });
-  }
-
-  // Stale quotes (quoted > 3 days)
-  state.orders.forEach(function(o){
-    if(o.status !== 'quoted') return;
-    var qd = new Date(o.orderedDate);
-    var days = Math.floor((now - qd) / 86400000);
-    if(days > 3){
-      alerts.push({type:'pink', text:'Quote for ' + escapeHtml(o.clientName || o.name || 'Unknown') + ' sent ' + days + ' days ago — follow up?', badge:'Quote', tab:'orders'});
-    }
-  });
-
-  // Client reorder gaps
-  if(state.clients){
-    state.clients.forEach(function(cl){
-      var clientOrders = state.orders.filter(function(o){
-        return o.clientId === cl.id && ['lost','cancelled','quoted'].indexOf(o.status) < 0;
-      }).sort(function(a,b){ return new Date(orderBucketDate(b)) - new Date(orderBucketDate(a)); });
-      if(clientOrders.length >= 2){
-        var gaps = [];
-        for(var i = 0; i < clientOrders.length - 1; i++){
-          gaps.push(Math.abs(new Date(orderBucketDate(clientOrders[i])) - new Date(orderBucketDate(clientOrders[i+1]))) / 86400000);
-        }
-        var avgGap = gaps.reduce(function(s,v){ return s+v; }, 0) / gaps.length;
-        var lastOrder = new Date(orderBucketDate(clientOrders[0]));
-        var daysSince = Math.floor((now - lastOrder) / 86400000);
-        if(avgGap > 0 && daysSince > avgGap * 2 && daysSince > 14){
-          alerts.push({type:'pink', text:escapeHtml(cl.name) + ' hasn\'t ordered in ' + daysSince + ' days (avg gap: ' + Math.round(avgGap) + 'd)', badge:'Reorder', tab:'clients'});
-        }
-      }
-    });
-  }
-
-  if(alerts.length === 0){
-    list.innerHTML = '<div style="color:var(--dim); font-size:13px; padding:8px 0;">All clear — nothing needs attention right now.</div>';
-    return;
-  }
-
-  list.innerHTML = alerts.slice(0, 10).map(function(a){
-    return '<div class="alert-item" onclick="document.querySelector(\'[data-tab=' + a.tab + ']\').click()">' +
-      '<div class="alert-dot ' + a.type + '"></div>' +
-      '<div class="alert-text">' + a.text + '</div>' +
-      '<div class="alert-badge">' + a.badge + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function renderHomeOrdersAction(){
-  var el = document.getElementById('homeOrdersAction');
-  var actionable = state.orders.filter(function(o){
-    return ['booked','in_production','production_done'].indexOf(o.status) >= 0;
-  }).sort(function(a,b){ return priorityWeight(b.priority) - priorityWeight(a.priority); }).slice(0, 8);
-
-  if(actionable.length === 0){
-    el.innerHTML = '<div style="color:var(--dim); font-size:13px;">No orders needing action.</div>';
-    return;
-  }
-
-  el.innerHTML = actionable.map(function(o){
-    var t = orderTotals(o);
-    var now = new Date();
-    var stageDate = new Date(o.productionStartDate || o.orderedDate);
-    var daysInStage = Math.max(0, Math.floor((now - stageDate) / 86400000));
-    var client = o.clientId ? getClientById(o.clientId) : null;
-    var clientName = client ? client.name : (o.clientName || '—');
-    return '<div class="home-order-row">' +
-      '<div><div class="home-order-name">' + escapeHtml(o.name || 'Order') + '</div><div class="home-order-client">' + escapeHtml(clientName) + '</div></div>' +
-      '<div class="home-order-val">₹' + t.orderValue.toLocaleString('en-IN', {maximumFractionDigits:0}) + '</div>' +
-      '<div class="home-order-days">' + daysInStage + 'd</div>' +
-      '<div class="home-order-status"><span class="status-pill ' + o.status + '">' + o.status.replace(/_/g,' ') + '</span></div>' +
-    '</div>';
-  }).join('');
-}
-
-var homeRevRange = 'thisMonth';
-
-function getRevDateRange(range){
-  var now = new Date();
-  var y = now.getFullYear(), m = now.getMonth();
-  switch(range){
-    case 'thisMonth': return { start: new Date(y, m, 1), end: now };
-    case 'lastMonth': return { start: new Date(y, m-1, 1), end: new Date(y, m, 0) };
-    case '3m': return { start: new Date(y, m-2, 1), end: now };
-    case '6m': return { start: new Date(y, m-5, 1), end: now };
-    case 'ytd': return { start: new Date(y, 0, 1), end: now };
-    case 'custom':
-      var f = document.getElementById('revFromDate').value;
-      var t = document.getElementById('revToDate').value;
-      if(f && t) return { start: new Date(f), end: new Date(t) };
-      return { start: new Date(y, m, 1), end: now };
-    default: return { start: new Date(y, m, 1), end: now };
-  }
-}
-
-function renderHomeRevenueChart(){
-  var el = document.getElementById('homeRevenueChart');
-  var summaryEl = document.getElementById('homeRevenueSummary');
-  var range = getRevDateRange(homeRevRange);
-  var startDate = range.start, endDate = range.end;
-
-  // Calculate number of days in range
-  var totalDays = Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
-
-  // Decide granularity: daily if <= 62 days, weekly if <= 180, monthly otherwise
-  var granularity = totalDays <= 62 ? 'daily' : (totalDays <= 180 ? 'weekly' : 'monthly');
-
-  // Build buckets
-  var buckets = [];
-  var bucketLabels = [];
-
-  if(granularity === 'daily'){
-    for(var i = 0; i < totalDays; i++){
-      var d = new Date(startDate.getTime() + i * 86400000);
-      buckets.push({ start: d.toISOString().slice(0,10), end: d.toISOString().slice(0,10), rev: 0, cost: 0, orders: 0 });
-      bucketLabels.push(d.getDate() + ' ' + d.toLocaleString('default',{month:'short'}));
-    }
-  } else if(granularity === 'weekly'){
-    var cursor = new Date(startDate);
-    while(cursor <= endDate){
-      var weekEnd = new Date(Math.min(cursor.getTime() + 6*86400000, endDate.getTime()));
-      buckets.push({ start: cursor.toISOString().slice(0,10), end: weekEnd.toISOString().slice(0,10), rev: 0, cost: 0, orders: 0 });
-      bucketLabels.push(cursor.getDate() + ' ' + cursor.toLocaleString('default',{month:'short'}));
-      cursor = new Date(cursor.getTime() + 7*86400000);
-    }
-  } else {
-    var cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    while(cursor <= endDate){
-      var mEnd = new Date(cursor.getFullYear(), cursor.getMonth()+1, 0);
-      if(mEnd > endDate) mEnd = endDate;
-      buckets.push({ start: cursor.toISOString().slice(0,10), end: mEnd.toISOString().slice(0,10), rev: 0, cost: 0, orders: 0 });
-      bucketLabels.push(cursor.toLocaleString('default',{month:'short',year:'2-digit'}));
-      cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
-    }
-  }
-
-  // Fill buckets with order data
-  var totalRev = 0, totalCost = 0, totalOrders = 0, totalProfit = 0;
-  state.orders.forEach(function(o){
-    if(!isOrderComplete(o.status)) return;
-    var od = orderBucketDate(o);
-    if(!od) return;
-    var t = orderTotals(o);
-    for(var i = 0; i < buckets.length; i++){
-      if(od >= buckets[i].start && od <= buckets[i].end){
-        buckets[i].rev += t.orderValue;
-        buckets[i].cost += t.allInCost;
-        buckets[i].orders++;
-        totalRev += t.orderValue;
-        totalCost += t.allInCost;
-        totalProfit += t.profit;
-        totalOrders++;
-        break;
-      }
-    }
-  });
-
-  // Build cumulative arrays
-  var cumRev = [], cumProfit = [], runRev = 0, runProfit = 0;
-  var dailyRev = [];
-  for(var i = 0; i < buckets.length; i++){
-    runRev += buckets[i].rev;
-    runProfit += (buckets[i].rev - buckets[i].cost);
-    cumRev.push(runRev);
-    cumProfit.push(runProfit);
-    dailyRev.push(buckets[i].rev);
-  }
-
-  var maxCum = Math.max.apply(null, cumRev) || 1;
-  var maxDaily = Math.max.apply(null, dailyRev) || 1;
-  var n = buckets.length;
-  if(n === 0){ el.innerHTML = '<div style="color:var(--dim);font-size:13px">No data for this range.</div>'; summaryEl.innerHTML=''; return; }
-
-  // SVG dimensions
-  var w = 500, h = 180, padL = 45, padR = 15, padT = 15, padB = 35;
-  var chartW = w - padL - padR, chartH = h - padT - padB;
-
-  function xPos(i){ return padL + (n > 1 ? i * chartW / (n - 1) : chartW / 2); }
-  function yPos(v, max){ return padT + chartH - (v / max * chartH); }
-
-  // Grid lines (4 horizontal)
-  var gridSvg = '';
-  for(var g = 0; g <= 4; g++){
-    var gy = padT + (chartH / 4) * g;
-    var gVal = maxCum - (maxCum / 4) * g;
-    gridSvg += '<line x1="'+padL+'" y1="'+gy+'" x2="'+(w-padR)+'" y2="'+gy+'" stroke="var(--line)" stroke-width="0.5" opacity="0.5"/>';
-    gridSvg += '<text x="'+(padL-4)+'" y="'+(gy+3)+'" text-anchor="end" font-size="8" fill="var(--dim)">₹'+(gVal >= 100000 ? (gVal/100000).toFixed(1)+'L' : (gVal >= 1000 ? (gVal/1000).toFixed(0)+'k' : gVal.toFixed(0)))+'</text>';
-  }
-
-  // Bar chart for daily/period revenue
-  var barSvg = '';
-  var barW = Math.max(2, Math.min(16, chartW / n * 0.6));
-  for(var i = 0; i < n; i++){
-    var bh = dailyRev[i] / maxCum * chartH;
-    var bx = xPos(i) - barW/2;
-    var by = padT + chartH - bh;
-    barSvg += '<rect x="'+bx+'" y="'+by+'" width="'+barW+'" height="'+bh+'" rx="1.5" fill="var(--cyan)" opacity="0.2"/>';
-  }
-
-  // Cumulative revenue line
-  var cumPoints = [];
-  for(var i = 0; i < n; i++) cumPoints.push(xPos(i)+','+yPos(cumRev[i], maxCum));
-
-  // Cumulative profit line
-  var profitPoints = [];
-  var profitMax = maxCum; // same scale
-  for(var i = 0; i < n; i++) profitPoints.push(xPos(i)+','+yPos(Math.max(0, cumProfit[i]), profitMax));
-
-  // Area fill under revenue line
-  var areaPath = 'M'+padL+','+(padT+chartH)+' ';
-  for(var i = 0; i < n; i++) areaPath += 'L'+xPos(i)+','+yPos(cumRev[i], maxCum)+' ';
-  areaPath += 'L'+xPos(n-1)+','+(padT+chartH)+' Z';
-
-  // X-axis labels (show subset to avoid crowding)
-  var xLabelSvg = '';
-  var labelInterval = Math.max(1, Math.ceil(n / 12));
-  for(var i = 0; i < n; i += labelInterval){
-    xLabelSvg += '<text x="'+xPos(i)+'" y="'+(h-padB+14)+'" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 '+xPos(i)+' '+(h-padB+14)+')">'+bucketLabels[i]+'</text>';
-  }
-  // Always show last label
-  if((n-1) % labelInterval !== 0){
-    xLabelSvg += '<text x="'+xPos(n-1)+'" y="'+(h-padB+14)+'" text-anchor="middle" font-size="7.5" fill="var(--dim)" transform="rotate(-30 '+xPos(n-1)+' '+(h-padB+14)+')">'+bucketLabels[n-1]+'</text>';
-  }
-
-  // Dots on data points (only if few enough)
-  var dotSvg = '';
-  if(n <= 35){
-    for(var i = 0; i < n; i++){
-      if(dailyRev[i] > 0){
-        dotSvg += '<circle cx="'+xPos(i)+'" cy="'+yPos(cumRev[i], maxCum)+'" r="2.5" fill="var(--cyan)" stroke="var(--panel)" stroke-width="1"/>';
-      }
-    }
-  }
-
-  var svg = '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;font-family:\'JetBrains Mono\',monospace;">' +
-    gridSvg +
-    barSvg +
-    '<path d="'+areaPath+'" fill="var(--cyan)" opacity="0.06"/>' +
-    '<polyline points="'+cumPoints.join(' ')+'" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linejoin="round"/>' +
-    '<polyline points="'+profitPoints.join(' ')+'" fill="none" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>' +
-    dotSvg +
-    xLabelSvg +
-    // Legend
-    '<circle cx="'+(padL+8)+'" cy="'+(h-4)+'" r="3" fill="var(--cyan)"/>' +
-    '<text x="'+(padL+14)+'" y="'+(h-1)+'" font-size="7.5" fill="var(--text)">Revenue</text>' +
-    '<line x1="'+(padL+60)+'" y1="'+(h-4)+'" x2="'+(padL+72)+'" y2="'+(h-4)+'" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>' +
-    '<text x="'+(padL+76)+'" y="'+(h-1)+'" font-size="7.5" fill="var(--green)">Profit</text>' +
-  '</svg>';
-
-  el.innerHTML = svg;
-
-  // Summary stats
-  var avgMargin = totalRev ? (totalProfit / totalRev * 100) : 0;
-  summaryEl.innerHTML =
-    '<div class="client-stat" style="min-width:auto"><div class="kpi-label">Revenue</div><div style="font-size:1rem;font-weight:700;color:var(--cyan)">₹' + totalRev.toLocaleString('en-IN',{maximumFractionDigits:0}) + '</div></div>' +
-    '<div class="client-stat" style="min-width:auto"><div class="kpi-label">Profit</div><div style="font-size:1rem;font-weight:700;color:var(--green)">₹' + totalProfit.toLocaleString('en-IN',{maximumFractionDigits:0}) + '</div></div>' +
-    '<div class="client-stat" style="min-width:auto"><div class="kpi-label">Margin</div><div style="font-size:1rem;font-weight:700;color:'+(avgMargin>=20?'var(--green)':'var(--amber)')+'">' + avgMargin.toFixed(1) + '%</div></div>' +
-    '<div class="client-stat" style="min-width:auto"><div class="kpi-label">Orders</div><div style="font-size:1rem;font-weight:700">' + totalOrders + '</div></div>';
-}
-
-function renderHomeOverduePayments(){
-  var el = document.getElementById('homeOverduePayments');
-  var now = new Date();
-  var overdue = [];
-
-  state.orders.forEach(function(o){
-    if(o.status !== 'delivered') return;
-    if(o.paymentStatus === 'paid' || o.paymentStatus === 'refunded') return;
-    var t = orderTotals(o);
-    var due = t.orderValue - (parseFloat(o.amountPaid)||0);
-    var dd = new Date(o.deliveryDate || o.productionDoneDate || o.orderedDate);
-    var days = Math.floor((now - dd) / 86400000);
-    overdue.push({name: o.clientName || o.name || 'Unknown', due: due, days: days, payStatus: o.paymentStatus});
-  });
-
-  overdue.sort(function(a,b){ return b.due - a.due; });
-
-  if(overdue.length === 0){
-    el.innerHTML = '<div style="color:var(--dim); font-size:13px;">All payments collected.</div>';
-    return;
-  }
-
-  el.innerHTML = overdue.slice(0, 6).map(function(p){
-    var urgency = p.days > 14 ? 'red' : (p.days > 7 ? 'amber' : 'cyan');
-    return '<div class="home-order-row" style="grid-template-columns:1fr 100px 60px 80px;">' +
-      '<div class="home-order-name">' + escapeHtml(p.name) + '</div>' +
-      '<div class="home-order-val" style="color:var(--red)">₹' + p.due.toLocaleString('en-IN',{maximumFractionDigits:0}) + '</div>' +
-      '<div class="home-order-days">' + p.days + 'd</div>' +
-      '<div class="home-order-status"><span class="status-pill ' + p.payStatus + '">' + (p.payStatus || 'unpaid') + '</span></div>' +
-    '</div>';
-  }).join('');
-}
-
-function renderHomeLowStock(){
-  var el = document.getElementById('homeLowStock');
-  if(!state.inventory || state.inventory.length === 0){
-    el.innerHTML = '<div style="color:var(--dim); font-size:13px;">No inventory tracked.</div>';
-    return;
-  }
-
-  var low = state.inventory.filter(function(inv){
-    return inv.qty !== undefined && inv.par !== undefined && inv.qty <= inv.par;
-  }).sort(function(a,b){ return (a.qty / (a.par||1)) - (b.qty / (b.par||1)); });
-
-  if(low.length === 0){
-    el.innerHTML = '<div style="color:var(--green); font-size:13px;">All stock levels healthy.</div>';
-    return;
-  }
-
-  el.innerHTML = low.slice(0, 6).map(function(inv){
-    var pct = inv.par > 0 ? Math.round(inv.qty / inv.par * 100) : 0;
-    var color = pct < 30 ? 'var(--red)' : (pct < 70 ? 'var(--amber)' : 'var(--cyan)');
-    return '<div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); font-size:13px;">' +
-      '<div style="flex:1;">' + escapeHtml(inv.material || '') + ' ' + escapeHtml(inv.color || '') + '</div>' +
-      '<div style="width:80px; font-family:\'JetBrains Mono\',monospace; font-size:11px; text-align:right;">' + inv.qty + 'g / ' + inv.par + 'g</div>' +
-      '<div style="width:60px; height:6px; background:var(--line); border-radius:3px; overflow:hidden;">' +
-        '<div style="width:' + pct + '%; height:100%; background:' + color + '; border-radius:3px;"></div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
 }
 
 function renderHomeTimeline(){
@@ -13103,25 +12184,6 @@ document.getElementById('clientsSortBy').addEventListener('change', function(){
 document.getElementById('clientSearchInput').addEventListener('input', function(){
   clientSearchQuery = this.value.toLowerCase().trim();
   renderClients();
-});
-
-// ========== REVENUE CHART RANGE CONTROLS ==========
-document.querySelectorAll('.rev-range-btn').forEach(function(btn){
-  btn.addEventListener('click', function(){
-    document.querySelectorAll('.rev-range-btn').forEach(function(b){ b.classList.remove('active'); });
-    btn.classList.add('active');
-    homeRevRange = btn.getAttribute('data-range');
-    var customPanel = document.getElementById('revCustomRange');
-    if(homeRevRange === 'custom'){
-      customPanel.style.display = 'flex';
-    } else {
-      customPanel.style.display = 'none';
-      renderHomeRevenueChart();
-    }
-  });
-});
-document.getElementById('revApplyCustom').addEventListener('click', function(){
-  renderHomeRevenueChart();
 });
 
 // ========== INITIAL HOME RENDER ==========
@@ -13407,62 +12469,6 @@ function renderSchedPrinterLoad(){
   svg += '<div style="font-size:11px; color:var(--dim); margin-top:6px;">Hours shown per printer assume even distribution across ' + running.length + ' running printers. ' + daysLoad.toFixed(1) + ' days of work each at ' + hoursPerDay + 'h/day.</div>';
   el.innerHTML = svg;
 }
-
-// What-if check
-document.getElementById('whatifCheckBtn').addEventListener('click', function(){
-  var hours = parseFloat(document.getElementById('whatifHours').value) || 0;
-  var deadline = parseInt(document.getElementById('whatifDeadline').value) || 7;
-  var dedicated = parseInt(document.getElementById('whatifPrinters').value) || 0;
-  var result = document.getElementById('whatifResult');
-  result.style.display = '';
-
-  if(hours <= 0){ result.innerHTML = '<div class="whatif-verdict" style="color:var(--dim);">Enter print hours to check.</div>'; return; }
-
-  var totalPrinters = 0, runningPrinters = 0;
-  (state.printers || []).forEach(function(p){ totalPrinters++; if(p.status !== 'down') runningPrinters++; });
-  if(totalPrinters === 0){ totalPrinters = state.fleet.printers || 0; runningPrinters = totalPrinters; }
-  var hoursPerDay = state.fleet.hoursPerDay || 0;
-  var dailyCap = runningPrinters * hoursPerDay;
-
-  // Current queue
-  var active = getActiveOrders();
-  var currentQueued = 0;
-  active.forEach(function(o){ currentQueued += orderTotals(o).hours; });
-
-  if(dedicated > 0){
-    // Dedicated printers path
-    var availForDedicated = Math.max(0, runningPrinters - active.filter(function(o){ return (o.reservedPrinters || 0) > 0; }).reduce(function(s, o){ return s + o.reservedPrinters; }, 0));
-    var dedicatedCap = dedicated * hoursPerDay;
-    var daysNeeded = dedicatedCap > 0 ? Math.ceil(hours / dedicatedCap) : 999;
-    var canFit = dedicated <= availForDedicated && daysNeeded <= deadline;
-
-    result.innerHTML = '<div class="whatif-verdict" style="color:' + (canFit ? 'var(--green)' : 'var(--red)') + '">' +
-      (canFit ? '✓ Yes — fits within deadline' : '✗ Won\'t make it in time') + '</div>' +
-      '<div class="whatif-detail">' +
-      '<strong>' + hours + 'h</strong> on <strong>' + dedicated + '</strong> dedicated printer' + (dedicated === 1 ? '' : 's') + ' = <strong>' + daysNeeded + ' days</strong> (deadline: ' + deadline + ' days)<br>' +
-      'Available printers for dedication: <strong>' + availForDedicated + '</strong> of ' + runningPrinters + ' running' +
-      (dedicated > availForDedicated ? '<br><span style="color:var(--red)">⚠ Not enough free printers — ' + (dedicated - availForDedicated) + ' short</span>' : '') +
-      '</div>';
-  } else {
-    // Shared pool
-    var totalWithNew = currentQueued + hours;
-    var daysTotal = dailyCap > 0 ? Math.ceil(totalWithNew / dailyCap) : 999;
-    var currentDays = dailyCap > 0 ? Math.ceil(currentQueued / dailyCap) : 0;
-    var newOrderStartDay = currentDays + 1;
-    var newOrderEndDay = daysTotal;
-    var canFit2 = newOrderEndDay <= deadline;
-    var delayToExisting = daysTotal - currentDays;
-
-    result.innerHTML = '<div class="whatif-verdict" style="color:' + (canFit2 ? 'var(--green)' : 'var(--red)') + '">' +
-      (canFit2 ? '✓ Yes — fits within deadline' : '✗ Won\'t make it in time') + '</div>' +
-      '<div class="whatif-detail">' +
-      'Current queue: <strong>' + currentQueued.toFixed(0) + 'h</strong> (' + currentDays + ' days) + new <strong>' + hours + 'h</strong> = <strong>' + totalWithNew.toFixed(0) + 'h total</strong><br>' +
-      'At <strong>' + dailyCap + 'h/day</strong> fleet capacity → finishes day <strong>' + daysTotal + '</strong> (deadline: ' + deadline + ')<br>' +
-      'New order would start around day ' + newOrderStartDay + ', adding ' + delayToExisting + ' day' + (delayToExisting === 1 ? '' : 's') + ' to the queue' +
-      (!canFit2 ? '<br><span style="color:var(--amber)">💡 Try dedicating ' + Math.ceil(hours / (hoursPerDay * deadline)) + '+ printers to meet the deadline</span>' : '') +
-      '</div>';
-  }
-});
 
 // ─── RENDER ALL NEW METRICS ───
 function renderNewDashboardMetrics(){
@@ -13928,7 +12934,6 @@ function renderInventory(){
         delete item.grams;
         hintEl.textContent = '\u2248 ' + fmt(item.spools * spoolGrams()) + 'g';
         renderRequirements();
-        renderFilamentStockHealth();
         scheduleSave();
       }
       [colorHexEl, colorEl, spoolsEl, parEl].forEach(function(el){ el.addEventListener('input', onEdit); });
@@ -16750,7 +15755,7 @@ document.getElementById('inventoryList').addEventListener('input', function(e){
   const item = (state.inventory || []).find(function(i){ return i.id === id; });
   if(!item) return;
   item.parSpools = posNum(e.target.value);
-  renderRequirements(); renderFilamentStockHealth(); scheduleSave();
+  renderRequirements(); scheduleSave();
 });
 
 // ---------- rendering ----------
@@ -17481,7 +16486,7 @@ function filAfterChange(keepView){
   filSyncLegacy();
   scheduleSave();
   renderFilament();
-  try{ renderInventory(); renderFilamentStockHealth(); }catch(e){}
+  try{ renderInventory(); }catch(e){}
   filRefreshSuggestions();
 }
 function filRefreshSuggestions(){
@@ -18165,12 +17170,12 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
 <script src="buyers-admin.js?v=24"></script>
 <script src="partner-planning.js?v=4"></script>
-<script src="control-room.js?v=12"></script>
+<script src="control-room.js?v=13"></script>
 <script src="projects.js?v=9"></script>
 <script src="print-files.js?v=1"></script>
 <script src="sales-admin.js?v=11"></script>
 <script src="shop-admin.js?v=2"></script>
-<script src="owner-home.js?v=4"></script>
+<script src="owner-home.js?v=5"></script>
 <script src="daily-tasks.js?v=1"></script>
 <script src="automations.js?v=5"></script>
 <script src="app-shell.js?v=3"></script>

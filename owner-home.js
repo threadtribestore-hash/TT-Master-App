@@ -353,7 +353,6 @@
 
   const css = document.createElement('style');
   css.textContent =
-    '#homeAlerts{display:none}' +
     '#ownerHome{margin-bottom:18px}' +
     '.oh-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}' +
     '.oh-hello{font-size:22px;font-weight:600}.oh-sub{color:var(--dim);font-size:13px}' +

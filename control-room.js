@@ -554,9 +554,9 @@
   function problemsHtml(p){
     function list(title, rows, fn){ return rows.length ? '<div class="cr-prob"><b>' + title + ' <span class="cr-count">' + rows.length + '</span></b>' + rows.slice(0, 8).map(fn).join('') + '</div>' : ''; }
     const html = list('Overdue', p.overdue, function(x){ return '<div class="cr-pr">' + orderLink(x.o) + '<span>' + esc(who(x.o)) + '</span><span class="cr-bad">' + x.late + 'd late</span></div>'; }) +
-      list('At risk', p.risk, function(x){ return '<div class="cr-pr">' + orderLink(x.o) + '<span>' + esc(who(x.o)) + '</span><span class="cr-warn">finish ≈ ' + fmt(x.finish) + ', due ' + fmt(target(x.o)) + '</span></div>'; }) +
-      list('Waiting for payment', p.unpaid, function(x){ return '<div class="cr-pr">' + orderLink(x.o) + '<span>' + esc(who(x.o)) + '</span><span class="cr-warn">' + money(x.due) + ' · ' + x.days + 'd</span></div>'; });
-    return html || '<p class="cr-dim">Nothing overdue, at risk or unpaid. 🎉</p>';
+      list('At risk', p.risk, function(x){ return '<div class="cr-pr">' + orderLink(x.o) + '<span>' + esc(who(x.o)) + '</span><span class="cr-warn">finish ≈ ' + fmt(x.finish) + ', due ' + fmt(target(x.o)) + '</span></div>'; });
+      // Unpaid orders are money, not the floor: they are in Home → Needs you and Finance.
+    return html || '<p class="cr-dim">Nothing overdue or at risk. 🎉</p>';
   }
   function appInbox(){
     const reqs = ((window.TTBuyers && window.TTBuyers.requests()) || []).filter(function(q){ return q.status === 'open'; });
