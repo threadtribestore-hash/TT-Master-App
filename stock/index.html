@@ -1668,6 +1668,10 @@
   .pon-calc-val{ font-size:18px; font-weight:700; margin-top:2px; }
   .pon-modal-actions{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:22px; flex-wrap:wrap; }
   @media (max-width:560px){ .pon-form-grid{ grid-template-columns:1fr 1fr; } .pon-score-grid{ grid-template-columns:1fr; } }
+
+  /* Thread Tribe logomark before the page title (a mask, so it follows the theme's text colour). */
+  header h1::before{ content:""; display:inline-block; width:1.5em; height:.9em; margin-right:.32em; vertical-align:-.06em;
+    background:currentColor; -webkit-mask:url(../brand/tt-logomark.svg) center/contain no-repeat; mask:url(../brand/tt-logomark.svg) center/contain no-repeat; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="../config.js"></script>

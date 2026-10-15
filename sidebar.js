@@ -22,7 +22,7 @@
   const side = document.createElement('aside');
   side.id = 'ttSidebar';
   side.setAttribute('aria-label', 'Menu');
-  side.innerHTML = '<div class="sb-brand" title="Home"><b>Thread Tribe</b><span>Studio</span></div><nav class="sb-nav"></nav>' +
+  side.innerHTML = '<div class="sb-brand" title="Home"><i class="sb-logo" role="img" aria-label="Thread Tribe"></i><span>Studio</span></div><nav class="sb-nav"></nav>' +
     '<div class="sb-foot"><button type="button" class="sb-hide" title="Hide the sidebar and use the top menu">« Hide sidebar</button></div>';
   document.body.appendChild(side);
   const nav = side.querySelector('.sb-nav');
@@ -53,6 +53,7 @@
     'html.tt-has-sidebar body{padding-left:' + (W + 18) + 'px}' +
     'html.tt-has-sidebar #ttSidebar{display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;width:' + W + 'px;background:var(--panel);border-right:1px solid var(--line);z-index:950}' +
     '.sb-brand{padding:18px 20px 12px;cursor:pointer;border-bottom:1px solid var(--line)}' +
+    '.sb-logo{display:block;width:132px;height:76px;margin-bottom:6px;background:var(--text);-webkit-mask:url(brand/tt-lockup.svg) left center/contain no-repeat;mask:url(brand/tt-lockup.svg) left center/contain no-repeat}' +
     '.sb-brand b{display:block;font-size:17px}.sb-brand span{font-size:12px;color:var(--dim);font-family:"JetBrains Mono",monospace;letter-spacing:1.5px;text-transform:uppercase}' +
     '.sb-nav{flex:1;overflow-y:auto;padding:8px 10px 16px}' +
     'html.tt-has-sidebar #ttSidebar .tab-dropdown{display:block;position:static;border:none;border-radius:0;box-shadow:none;background:transparent;max-height:none;overflow:visible;padding:0}' +

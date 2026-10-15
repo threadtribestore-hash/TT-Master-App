@@ -1,7 +1,7 @@
 // Offline support for TT Stock.
 // Bump VERSION whenever index.html changes so phones pick up the new build.
-const VERSION = 'tt-stock-202610080542';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', '../config.js', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
+const VERSION = 'tt-stock-202610161000';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', '../brand/tt-logomark.svg', '../config.js', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
 const THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];
 
 self.addEventListener('install', function(e){

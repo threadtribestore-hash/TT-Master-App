@@ -1680,6 +1680,10 @@
   @media (max-width:560px){ .pon-form-grid{ grid-template-columns:1fr 1fr; } .pon-score-grid{ grid-template-columns:1fr; } }
 .pon-designer-chk{ display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; cursor:pointer; }
 .pon-designer-chk input{ width:auto; }
+
+  /* Thread Tribe logomark before the page title (a mask, so it follows the theme's text colour). */
+  header h1::before{ content:""; display:inline-block; width:1.5em; height:.9em; margin-right:.32em; vertical-align:-.06em;
+    background:currentColor; -webkit-mask:url(brand/tt-logomark.svg) center/contain no-repeat; mask:url(brand/tt-logomark.svg) center/contain no-repeat; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -17189,7 +17193,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="ops-planning.js?v=2"></script>
 <script src="shipturtle-admin.js?v=1"></script>
 <script src="print-matching.js?v=1"></script>
-<script src="sidebar.js?v=1"></script>
+<script src="sidebar.js?v=2"></script>
 
 
 <datalist id="indianStatesList">
