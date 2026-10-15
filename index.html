@@ -1644,6 +1644,9 @@
   .pon-prog{ min-width:120px; } .pon-prog-n{ white-space:nowrap; font-size:12px; }
   .pon-prog-bar{ height:6px; background:var(--input-bg); border-radius:4px; overflow:hidden; margin-top:5px; }
   .pon-prog-bar i{ display:block; height:100%; background:var(--cyan); border-radius:4px; }
+  .pon-pay-toggle{ background:none; border:none; padding:4px 0 0; color:var(--cyan); font:12px 'JetBrains Mono', monospace; cursor:pointer; }
+  .pon-pay-detail > td{ background:var(--panel2); padding:6px 12px 12px; }
+  .pon-pay-jobs th{ background:transparent; }
   .pon-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
   .pon-table th{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:0.5px; text-transform:uppercase; color:var(--dim); text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); background:var(--panel2); white-space:nowrap; font-weight:500; }
   .pon-table td{ padding:9px 12px; border-bottom:1px dotted var(--line); vertical-align:top; }
@@ -14610,7 +14613,7 @@ function ponAgo(ts){
   if(m < 60 * 24) return Math.round(m / 60) + ' h ago';
   return new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
-function ponMoney(v){ return '₹' + Math.round(v || 0).toLocaleString('en-IN'); }
+function ponMoney(v){ const r = Math.round(v || 0); return '₹' + (r === 0 ? 0 : r).toLocaleString('en-IN'); }
 function ponGrams(g){ g = g || 0; return Math.abs(g) >= 1000 ? (Math.round(g / 100) / 10) + 'kg' : Math.round(g) + 'g'; }
 
 function ensurePon(){
@@ -15011,6 +15014,25 @@ function ponFilamentHtml(){
   return html + '</div>';
 }
 
+// Payouts → what each partner printed: every job behind the balance, and its order link.
+const ponPayOpen = {};
+function ponPayJobsHtml(jobs){
+  jobs = jobs.slice().sort(function(a, b){ return (b.deliveredDate || b.shippedDate || b.createdDate || '').localeCompare(a.deliveredDate || a.shippedDate || a.createdDate || ''); });
+  return '<table class="pon-table pon-pay-jobs"><thead><tr><th>Job</th><th>Product</th><th>Status</th><th class="num">Printed</th><th class="num">Accepted</th><th class="num">Paid output</th><th class="num">Earned</th><th>Order</th></tr></thead><tbody>' +
+    jobs.map(function(j){
+      const l = ponLinked(j), printed = typeof ponPrinted === 'function' ? ponPrinted(j) : (j.unitsShipped || 0);
+      const earned = j.status === 'delivered' ? ponMoney(ponAccrued(j)) : '<span class="pon-dim">~' + ponMoney(ponEstPayout(j)) + '</span>';
+      return '<tr><td><a href="#" data-act="open-job" data-id="' + j.id + '" style="color:var(--cyan); font-weight:700; text-decoration:none;">' + escapeHtml(j.jobCode || 'Job') + '</a></td>' +
+        '<td>' + escapeHtml(j.productName || '—') + (j.color || j.material ? '<div class="pon-dim">' + escapeHtml([j.color, j.material].filter(Boolean).join(' · ')) + '</div>' : '') + '</td>' +
+        '<td>' + ponStatusPill(j.status) + '</td>' +
+        '<td class="num">' + printed + ' / ' + (j.qty || 0) + '</td>' +
+        '<td class="num">' + ponPayableUnits(j) + (j.clientRejects ? ' <span style="color:var(--red);">−' + j.clientRejects + '</span>' : '') + '</td>' +
+        '<td class="num">' + (j.status === 'delivered' ? ponGrams(ponPayableGrams(j)) : '<span class="pon-dim">—</span>') + '</td>' +
+        '<td class="num">' + earned + '</td>' +
+        '<td>' + (l ? escapeHtml(l.order.displayId || 'Order') + ' <span class="pon-dim">· ' + escapeHtml(l.order.clientName || l.order.name || '') + (l.line ? ' · ' + escapeHtml(l.line.name || '') : '') + '</span>'
+          : '<button class="client-trend-mini-btn" data-act="open-job" data-id="' + j.id + '" style="color:var(--amber); border-color:var(--amber);">Link to order</button>') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
 function ponPayoutsHtml(){
   const P = state.pon;
   if(!P.partners.length) return ponEmptyPartnersHtml();
@@ -15018,12 +15040,17 @@ function ponPayoutsHtml(){
     '<div class="pon-table-wrap"><table class="pon-table"><thead><tr><th>Partner</th><th class="num">Rate</th><th class="num">Paid output</th><th class="num">Earned</th><th class="num">Paid</th><th class="num">Outstanding</th><th class="num">On open jobs</th><th></th></tr></thead><tbody>';
   P.partners.forEach(function(p){
     const s = ponPartnerStats(p.id);
-    html += '<tr><td>' + escapeHtml(p.name || 'Unnamed') + (typeof ponProfileHtml === 'function' ? ponProfileHtml(p.id, true) : '') + '</td><td class="num">₹' + fmt(p.ratePerGram || 0) + '/g</td><td class="num">' + ponGrams(s.gramsDelivered) + '</td>' +
+    const pj = P.jobs.filter(function(j){ return j.partnerId === p.id && j.status !== 'cancelled'; });
+    const unlinked = pj.filter(function(j){ return !ponLinked(j); }).length;
+    html += '<tr><td>' + escapeHtml(p.name || 'Unnamed') + (typeof ponProfileHtml === 'function' ? ponProfileHtml(p.id, true) : '') +
+      (pj.length ? '<div><button class="pon-pay-toggle" data-act="pay-jobs" data-id="' + p.id + '">' + (ponPayOpen[p.id] ? '▾' : '▸') + ' ' + pj.length + ' job' + (pj.length === 1 ? '' : 's') + ' printed' +
+        (unlinked ? ' <span style="color:var(--amber);">· ' + unlinked + ' not linked to an order</span>' : '') + '</button></div>' : '') + '</td><td class="num">₹' + fmt(p.ratePerGram || 0) + '/g</td><td class="num">' + ponGrams(s.gramsDelivered) + '</td>' +
       '<td class="num">' + ponMoney(s.accrued) + '</td><td class="num">' + ponMoney(s.paid) + '</td>' +
       '<td class="num" style="font-weight:700; color:' + (s.outstanding > 0.5 ? 'var(--amber)' : (s.outstanding < -0.5 ? 'var(--purple)' : 'var(--green)')) + ';">' + ponMoney(s.outstanding) + (s.outstanding < -0.5 ? ' <span class="pon-dim">advance</span>' : '') + '</td>' +
       '<td class="num pon-dim">~' + ponMoney(s.estOpen) + '</td>' +
       '<td style="white-space:nowrap;"><button class="client-trend-mini-btn" data-act="pay-partner" data-id="' + p.id + '">Pay</button> ' +
       '<button class="client-trend-mini-btn" data-act="statement" data-id="' + p.id + '">Copy statement</button></td></tr>';
+    if(ponPayOpen[p.id] && pj.length) html += '<tr class="pon-pay-detail"><td colspan="8">' + ponPayJobsHtml(pj) + '</td></tr>';
   });
   html += '</tbody></table></div><div class="pon-dim" style="margin-top:8px;">Payouts accrue only when a job is marked Delivered, on units shipped minus client rejects.</div></div>';
 
@@ -15570,7 +15597,8 @@ function ponImportUpdate(text){
     const act = el.getAttribute('data-act'), id = el.getAttribute('data-id');
     if(act === 'add-partner') ponAddPartner();
     else if(act === 'new-job') ponOpenJob(null, ponJobFilter.partner !== 'all' ? ponJobFilter.partner : null);
-    else if(act === 'open-job') ponOpenJob(id);
+    else if(act === 'open-job'){ e.preventDefault(); ponOpenJob(id); }
+    else if(act === 'pay-jobs'){ ponPayOpen[id] = !ponPayOpen[id]; renderPartners(); }
     else if(act === 'job-filter'){ ponJobFilter.status = el.getAttribute('data-val'); renderPartners(); }
     else if(act === 'partner-jobs'){ ponView = 'jobs'; ponJobFilter = { status: 'open', partner: id }; renderPartners(); }
     else if(act === 'pay-partner') ponOpenPayment(id);
