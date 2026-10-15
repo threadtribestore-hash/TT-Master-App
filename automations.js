@@ -72,7 +72,7 @@
   // kind 'acts' changes data (with Undo); 'flags' adds items to Home → Needs you.
   const RULES = [
     { id: 'made-done', area: 'Operations', kind: 'acts', name: 'Fully made → production done',
-      desc: 'When every line of an in-production order is made (Studio’s count or the farm’s), mark it Production Done and note the date. Undo from the log.' },
+      desc: 'When every line of an in-production order is made (Studio’s count or the farm’s), mark it Production Done and note the date. Runs around the clock: the workshop bridge checks every 5 minutes, even with Studio closed. Undo from the log.' },
     { id: 'printer-down', area: 'Operations', kind: 'flags', name: 'Printer down → recheck promises',
       desc: 'When a printer is marked down or back up, log it and list the orders that will now miss their date.' },
     { id: 'repeat-fail', area: 'Operations', kind: 'flags', name: 'Repeat failures',
@@ -85,8 +85,10 @@
       desc: 'For each partner job past its due date, put a ready WhatsApp nudge to the partner in Needs you.' },
     { id: 'lead-idle', area: 'Sales', kind: 'flags', name: 'Idle leads',
       desc: 'Flag open leads with no call, visit or message logged for 5 days.' },
-    { id: 'pay-remind', area: 'Finances', kind: 'flags', name: 'Payment reminders',
-      desc: 'For orders unpaid 7 days after delivery, prepare a WhatsApp reminder (Home always lists them; this adds one per order).' }
+    { id: 'pay-remind', area: 'Finances', kind: 'flags', name: 'Payment ladder · day 7, 14, 21',
+      desc: 'Unpaid delivered orders get a WhatsApp reminder at day 7, a firmer one at day 14 and a final one at day 21, each in Needs you with the message ready. Tapping Send records the step. At day 21 the client’s sales rep also gets a task.' },
+    { id: 'credit-hold', area: 'Finances', kind: 'flags', name: 'Credit hold on new bookings',
+      desc: 'Booking an order for a client who owes money delivered more than 21 days ago asks first, and the order pop-up shows what they owe.' }
   ];
   const NEXT = [
     ['Auto re-queue failed plates', 'Workshop bridge: re-queues a failed plate on the printers and notes it on the order.'],
@@ -187,11 +189,8 @@
       });
       if(idle.length) out.push({ level: 2, rank: 0, score: idle.length, text: idle.length + ' open lead' + (idle.length === 1 ? ' has' : 's have') + ' had no activity for 5 days', act: 'tab', id: 'sales', btn: 'Sales' });
     }
-    if(isOn('pay-remind') && window.TTControl){
-      window.TTControl.problems().unpaid.slice(1, 4).forEach(function(x){
-        out.push({ level: 1, rank: 3, score: x.days, text: who(x.o) + ' owes ' + rupees(x.due) + ' · ' + x.days + ' days', act: 'remind', id: x.o.id, btn: 'Remind' });
-      });
-    }
+    // Payment ladder (payment-ladder.js): one item per order with a reminder due.
+    if(window.TTPayLadder) try{ out.push.apply(out, window.TTPayLadder.needs()); }catch(e){ console.warn('[automations] ladder', e); }
     if(window.TTMarketing) try{ out.push.apply(out, window.TTMarketing.needs()); }catch(e){}
     if(window.TTShipturtle) try{ out.push.apply(out, window.TTShipturtle.needs()); }catch(e){}
     if(window.TTSupport) try{

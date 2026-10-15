@@ -107,7 +107,8 @@
       out.push({ level: 1, rank: 2, score: 0, text: (q.kind === 'order' ? 'Order request' : 'Request') + ' from ' + name + ' in the Buyer app', act: 'tab', id: 'buyers', btn: 'Answer' });
     });
     // Money owed: the oldest one by name, the rest as one line so it can't crowd out the floor.
-    if(ctl.unpaid.length){
+    // With the payment ladder on, it lists them instead (one item per reminder that's due).
+    if(ctl.unpaid.length && !(window.TTPayLadder && window.TTPayLadder.on())){
       const x = ctl.unpaid[0];
       out.push({ level: 1, rank: 3, score: x.days, text: who(x.o) + ' owes ' + rupees(x.due) + ' · ' + x.days + ' days since delivery', act: 'remind', id: x.o.id, btn: 'Remind' });
       if(ctl.unpaid.length > 1){
@@ -336,6 +337,7 @@
     else if(act === 'order' && typeof openOrderDetailModal === 'function') openOrderDetailModal(id);
     else if(act === 'tab') goTab(id);
     else if(act === 'remind') remind(id);
+    else if(act === 'ladder' && window.TTPayLadder){ window.TTPayLadder.send(id); render(); }
     else if(act === 'tool' && window.TTAutomations){ H.tool = id; render(); const o = document.querySelector('#ownerHome .oh-toolout'); if(o) o.scrollIntoView({ block: 'nearest' }); }
     else if(act === 'hometool'){ H.tool = H.tool === id ? '' : id; render(); const o = document.querySelector('#ownerHome .oh-toolout'); if(o) o.scrollIntoView({ block: 'nearest' }); }
     else if(act === 'copytool'){ if(navigator.clipboard) navigator.clipboard.writeText(H.text || '').then(function(){ if(window.ttToast) window.ttToast('Copied'); }); }

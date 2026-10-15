@@ -52,7 +52,7 @@
     badge();
   }
   // For the owner's Home: the shared pipeline, loaded on first use.
-  window.TTSales = { reps: function(){ return X.reps; }, acts: function(){ return X.acts; }, leads: function(){ return X.leads; }, loaded: function(){ return X.loaded; }, load: function(){ return X.loaded ? Promise.resolve() : load(); } };
+  window.TTSales = { channelOf: channelOf, repFor: function(ch){ return repFor(ch); }, reps: function(){ return X.reps; }, acts: function(){ return X.acts; }, leads: function(){ return X.leads; }, loaded: function(){ return X.loaded; }, load: function(){ return X.loaded ? Promise.resolve() : load(); } };
   function wonToSetUp(){ return X.leads.filter(function(l){ return l.stage === 'won' && !(l.data || {}).clientId; }); }
   function badge(){
     const b = document.querySelector('.tab-btn[data-tab="sales"]'), n = wonToSetUp().length;
