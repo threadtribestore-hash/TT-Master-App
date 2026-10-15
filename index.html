@@ -15114,6 +15114,8 @@ function ponJobModalHtml(){
     f('Name', 'shipName', 'text', '') + f('Phone', 'shipPhone', 'tel', '') + '</div>' +
     '<div style="margin-top:10px;"><textarea rows="2" data-jf="shipAddress" placeholder="Delivery address">' + escapeHtml(d.shipAddress) + '</textarea></div>';
 
+  if(typeof ponFilesHtml === 'function') html += ponFilesHtml(d);
+
   html += '<div class="pon-section-label">Status</div><div class="pon-status-pills">' + PON_STATUSES.map(function(s){
     const active = d.status === s;
     const c = PON_COLOR[s];
@@ -15276,6 +15278,7 @@ function ponDeleteJob(){
   showConfirmModal('Delete ' + j.jobCode + '? Any units it credited to the linked order are taken back off. This can’t be undone.', function(){
     ponSyncCredit(j, true);
     state.pon.jobs = state.pon.jobs.filter(function(x){ return x.id !== j.id; });
+    if(typeof ponFilesGone === 'function') ponFilesGone(j);
     ponCloseModal();
     scheduleSave();
     renderPartners(); renderOrders(); recalcQueue(); renderInventory();
@@ -18136,6 +18139,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="partner-planning.js?v=4"></script>
 <script src="control-room.js?v=12"></script>
 <script src="projects.js?v=9"></script>
+<script src="print-files.js?v=1"></script>
 <script src="sales-admin.js?v=11"></script>
 <script src="shop-admin.js?v=2"></script>
 <script src="owner-home.js?v=3"></script>
