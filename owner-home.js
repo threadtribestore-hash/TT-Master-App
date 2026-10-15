@@ -222,6 +222,8 @@
       (urgent ? urgent + ' thing' + (urgent === 1 ? '' : 's') + ' need you' : 'nothing urgent needs you') + '</div></div>' +
       '<span class="oh-health oh-h' + worst + '">' + hl.map(function(x){ return esc(x.text); }).join(' · ') + '</span></div>';
 
+    if(window.TTDaily) try{ h += window.TTDaily.html(); }catch(e){ console.warn('[owner home] daily tasks', e); }
+
     h += '<div class="oh-grid2">' +
       '<div class="home-section oh-card"><div class="oh-title"><span>In-house · ' + f.total + ' printers</span><span>' + pct(f.printing, f.total) + '% printing</span></div>' +
       bar([[pct(f.printing, f.total), 'var(--green)'], [pct(f.idle, f.total), 'var(--line)'], [pct(f.down, f.total), 'var(--red)']]) +
