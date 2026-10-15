@@ -3609,6 +3609,12 @@ function cloneOrder(orderId){
   copy.refundAmount = 0;
   copy.paymentClearedDate = '';
   delete copy._consumedGrams;
+  // Dispatch, payment-chasing and automation marks belong to the original's delivery.
+  copy.shippedDate = '';
+  copy.courier = '';
+  copy.trackingNo = '';
+  copy.trackingUrl = '';
+  ['extraShipments', 'shipturtleId', 'shipturtleTracking', 'shipturtleFin', 'payReminders', 'payRepFlaggedAt', 'autoDoneBy'].forEach(function(k){ delete copy[k]; });
   // A clone is a brand-new job, not a re-completion of the original — it should price
   // itself live like any other open order, not inherit the original's frozen numbers.
   copy.costSnapshot = null;
@@ -17181,7 +17187,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="shop-admin.js?v=2"></script>
 <script src="owner-home.js?v=6"></script>
 <script src="daily-tasks.js?v=1"></script>
-<script src="automations.js?v=6"></script>
+<script src="automations.js?v=7"></script>
 <script src="app-shell.js?v=3"></script>
 <script src="ui-polish.js?v=12"></script>
 <script src="upsell.js?v=1"></script>
@@ -17192,7 +17198,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="support-admin.js?v=3"></script>
 <script src="ops-planning.js?v=2"></script>
 <script src="shipturtle-admin.js?v=1"></script>
-<script src="payment-ladder.js?v=1"></script>
+<script src="payment-ladder.js?v=2"></script>
 <script src="print-matching.js?v=1"></script>
 <script src="sidebar.js?v=2"></script>
 

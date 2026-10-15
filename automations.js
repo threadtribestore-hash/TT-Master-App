@@ -88,7 +88,7 @@
     { id: 'pay-remind', area: 'Finances', kind: 'flags', name: 'Payment ladder · day 7, 14, 21',
       desc: 'Unpaid delivered orders get a WhatsApp reminder at day 7, a firmer one at day 14 and a final one at day 21, each in Needs you with the message ready. Tapping Send records the step. At day 21 the client’s sales rep also gets a task.' },
     { id: 'credit-hold', area: 'Finances', kind: 'flags', name: 'Credit hold on new bookings',
-      desc: 'Booking an order for a client who owes money delivered more than 21 days ago asks first, and the order pop-up shows what they owe.' }
+      desc: 'Booking an order for a client who owes money delivered 21 or more days ago asks first, and the order pop-up shows what they owe.' }
   ];
   const NEXT = [
     ['Auto re-queue failed plates', 'Workshop bridge: re-queues a failed plate on the printers and notes it on the order.'],

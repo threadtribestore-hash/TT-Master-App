@@ -11,7 +11,7 @@
 //                   that step on the order, so the next one comes due a week
 //                   later. At day 21 the client's sales rep also gets a task.
 //   Credit hold     Booking an order for a client who owes money delivered
-//                   more than 21 days ago asks first, and the order pop-up
+//                   21 or more days ago asks first, and the order pop-up
 //                   shows the amount while the order is a quote or booked.
 //
 // Nothing is sent without a person tapping Send. Reminders sent are stored on
@@ -34,7 +34,13 @@
   function who(o){ const c = client(o.clientId); return (c && c.name) || o.clientName || o.name || 'there'; }
   function owed(o){ return o.paymentStatus === 'paid' || o.paymentStatus === 'refunded' ? 0 : Math.max(0, Math.round(orderTotals(o).grandTotal - (+o.amountPaid || 0))); }
   function deliveredOn(o){ return (o.status === 'delivered' || o.shippedDate) ? (o.deliveryDate || o.shippedDate || '').slice(0, 10) : ''; }
-  function phoneOf(o){ const c = client(o.clientId), raw = String((c && c.phone) || o.clientPhone || '').replace(/\D/g, ''); return raw.length === 10 ? '91' + raw : raw; }
+  // WhatsApp wants 91XXXXXXXXXX: accepts 98765 43210, 098765 43210, +91 98765 43210.
+  function phoneOf(o){
+    const c = client(o.clientId);
+    let raw = String((c && c.phone) || o.clientPhone || '').replace(/\D/g, '');
+    if(raw.length === 11 && raw[0] === '0') raw = raw.slice(1);
+    return raw.length === 10 ? '91' + raw : raw;
+  }
   function save(){ if(typeof scheduleSave === 'function') scheduleSave(); }
 
   // ---------- the ladder ----------
@@ -43,6 +49,7 @@
     const since = deliveredOn(o), due = owed(o);
     if(!since || !due) return null;
     const days = dayDiff(today(), since);
+    if(!isFinite(days)) return null;   // a delivery date Studio can't read
     const step = STEPS.filter(function(d){ return days >= d; }).length;
     const sentStep = (o.payReminders || []).reduce(function(m, r){ return Math.max(m, +r.step || 0); }, 0);
     return { o: o, days: days, due: due, since: since, step: step, sentStep: sentStep,
@@ -53,10 +60,10 @@
   function waiting(){ return all().filter(function(x){ return x.step > 0 && x.step <= x.sentStep; }); }
 
   function message(x, step){
-    const o = x.o, id = o.displayId ? ' ' + o.displayId : '', upi = state.business && state.business.upi ? ' UPI: ' + state.business.upi + '.' : '';
-    if(step <= 1) return 'Hi ' + who(o) + ', a friendly reminder that ' + rupees(x.due) + ' for order' + id + ' (delivered ' + fmt(x.since) + ') is now due. Our terms are payment on delivery with 7 days’ grace.' + upi + ' Thank you! — Thread Tribe';
-    if(step === 2) return 'Hi ' + who(o) + ', following up on ' + rupees(x.due) + ' for order' + id + ', delivered ' + fmt(x.since) + ' — it’s now two weeks past delivery. Could you let us know when we can expect it?' + upi + ' — Thread Tribe';
-    return 'Hi ' + who(o) + ', ' + rupees(x.due) + ' for order' + id + ' is now three weeks past delivery (' + fmt(x.since) + '). Please clear it this week or call us to agree a date — we’ll need it settled before we book new orders.' + upi + ' — Thread Tribe';
+    const o = x.o, ord = o.displayId ? 'order ' + o.displayId : 'your order', upi = state.business && state.business.upi ? ' UPI: ' + state.business.upi + '.' : '';
+    if(step <= 1) return 'Hi ' + who(o) + ', a friendly reminder that ' + rupees(x.due) + ' for ' + ord + ' (delivered ' + fmt(x.since) + ') is now due. Our terms are payment on delivery with 7 days’ grace.' + upi + ' Thank you! — Thread Tribe';
+    if(step === 2) return 'Hi ' + who(o) + ', following up on ' + rupees(x.due) + ' for ' + ord + ', delivered ' + fmt(x.since) + ' — it’s now two weeks past delivery. Could you let us know when we can expect it?' + upi + ' — Thread Tribe';
+    return 'Hi ' + who(o) + ', ' + rupees(x.due) + ' for ' + ord + ' is now three weeks past delivery (' + fmt(x.since) + '). Please clear it this week or call us to agree a date — we’ll need it settled before we book new orders.' + upi + ' — Thread Tribe';
   }
   const STEP_NAME = ['', 'Reminder', 'Second reminder', 'Final reminder'];
 
@@ -116,7 +123,7 @@
   // ---------- credit hold ----------
   function hold(clientId){
     if(!clientId) return null;
-    const late = all().filter(function(x){ return x.o.clientId === clientId && x.days > HOLD_DAYS; });
+    const late = all().filter(function(x){ return x.o.clientId === clientId && x.days >= HOLD_DAYS; });
     if(!late.length) return null;
     return { due: late.reduce(function(s, x){ return s + x.due; }, 0), days: Math.max.apply(null, late.map(function(x){ return x.days; })), orders: late.map(function(x){ return x.o.displayId || ''; }).filter(Boolean) };
   }
