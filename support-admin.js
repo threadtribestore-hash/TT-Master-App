@@ -61,7 +61,7 @@
   function owed(o){ try{ return o.paymentStatus === 'paid' || o.paymentStatus === 'refunded' ? 0 : Math.max(0, Math.round(orderTotals(o).grandTotal - (o.amountPaid || 0))); }catch(e){ return 0; } }
   function urgency(q){
     if(q.kind === 'claim') return 0;
-    const o = orderOf(q), tp = topic(text(q)), late = o && target(o) && target(o) < new Date().toISOString().slice(0, 10) && !o.shippedDate && o.status !== 'delivered';
+    const o = orderOf(q), tp = topic(text(q)), late = o && target(o) && target(o) < isoLocal() && !o.shippedDate && o.status !== 'delivered';
     if(late || tp === 'payment') return 1;
     if(tp === 'delay' || ageH(q) > 24) return 1;
     return 2;
@@ -157,7 +157,7 @@
     else if(a === 'task'){
       const q = reqs().find(function(x){ return x.id === id; }); if(!q || !window.TTTasks) return;
       const o = orderOf(q);
-      await window.TTTasks.add('Support: ' + name(q) + ' — ' + (q.kind === 'claim' ? 'claim on ' + ((q.payload || {}).displayId || 'an order') : text(q).slice(0, 60)), '', new Date().toISOString().slice(0, 10), q.kind === 'claim' ? 'high' : 'normal', o ? { type: 'order', id: o.id } : null, text(q));
+      await window.TTTasks.add('Support: ' + name(q) + ' — ' + (q.kind === 'claim' ? 'claim on ' + ((q.payload || {}).displayId || 'an order') : text(q).slice(0, 60)), '', isoLocal(), q.kind === 'claim' ? 'high' : 'normal', o ? { type: 'order', id: o.id } : null, text(q));
       showToast('Task added');
     }
     else if(a === 'faq-add'){ state.buyerFaq = faqFromForm().concat([{ q: 'New question', a: 'Answer' }]); render(); }

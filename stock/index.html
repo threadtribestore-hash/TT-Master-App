@@ -2883,6 +2883,11 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
 </div>
 
 <script>
+// Calendar date in this device's timezone (India), as yyyy-mm-dd; toISOString() is UTC.
+function isoLocal(d){
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 const PALETTE = ['--cyan','--amber','--purple','--green','--pink','--red'];
 const COLOR_HEX = {
   black:'#2b2f36', white:'#f2f4f7', red:'#e8615a', blue:'#4f7fd6', green:'#7ed08a',
@@ -3521,7 +3526,7 @@ function posNum(val, max){
 
 // ---------- ORDERS ----------
 function newOrderShell(status){
-  const today = new Date().toISOString().slice(0, 10);
+  const today = isoLocal();
   return { id: newId(), displayId: nextOrderDisplayId(), name: status === 'quoted' ? 'New quote' : 'New order', status: status, priority: 'normal', dueDate: '', orderedDate: '', productionStartDate: '', deliveryDate: '', productionDoneDate: '', reservedPrinters: 0, clientId: null, orderSource: '', clientName: '', clientPhone: '', clientAddress: '', clientState: '', clientGstin: '', notes: '', sellingPrice: 0, sellingPriceMode: 'total', packagingCost: 0, deliveryCost: 0, discount: 0, paymentStatus: 'unpaid', paymentMode: '', amountPaid: 0, refundAmount: 0, paymentClearedDate: '', products: [], wasQuoted: status === 'quoted', quotedDate: status === 'quoted' ? today : '', lostDate: '' };
 }
 function addOrder(){
@@ -3559,7 +3564,7 @@ function convertQuoteToOrder(orderId){
   const order = state.orders.find(function(o){ return o.id === orderId; });
   if(!order) return;
   order.status = 'booked';
-  if(!order.orderedDate) order.orderedDate = new Date().toISOString().slice(0, 10);
+  if(!order.orderedDate) order.orderedDate = isoLocal();
   renderOrders(); recalcQueue(); renderInventory(); scheduleSave();
 }
 
@@ -3570,7 +3575,7 @@ function markQuoteLost(orderId){
   if(!order) return;
   showConfirmModal('Mark this quote as lost? It\'ll stop counting toward open quotes and count as a lost conversion instead. You can reopen it later by clicking its status pill.', function(){
     order.status = 'lost';
-    order.lostDate = new Date().toISOString().slice(0, 10);
+    order.lostDate = isoLocal();
     renderOrders(); recalcQueue(); renderInventory(); scheduleSave();
   }, 'Mark Lost');
 }
@@ -3614,7 +3619,7 @@ function cloneOrder(orderId){
   copy.productionDoneDate = '';
   copy.invoiceNumber = '';
   copy.wasQuoted = wasQuoteOrLost;
-  copy.quotedDate = wasQuoteOrLost ? new Date().toISOString().slice(0, 10) : '';
+  copy.quotedDate = wasQuoteOrLost ? isoLocal() : '';
   copy.lostDate = '';
   copy.paymentStatus = 'unpaid';
   copy.paymentMode = '';
@@ -3828,7 +3833,7 @@ function enterCompleteState(order, nextStatus){
   const grams = computeOrderColorGrams(order);
   order._consumedGrams = deductInventory(grams);
   if(nextStatus === 'production_done' && !order.productionDoneDate){
-    order.productionDoneDate = new Date().toISOString().slice(0, 10);
+    order.productionDoneDate = isoLocal();
   }
   refreshOrderCostSnapshot(order);
 }
@@ -3875,7 +3880,7 @@ function cycleStatus(orderId){
   // Crossing into Delivered: auto-fill today's date if it wasn't already set by hand
   // (the "Delivered on" field on the card stays editable for backdating).
   if(next === 'delivered' && !order.deliveryDate){
-    order.deliveryDate = new Date().toISOString().slice(0, 10);
+    order.deliveryDate = isoLocal();
   }
   order.status = next;
   renderOrders(); recalcQueue(); renderInventory(); scheduleSave();
@@ -3896,7 +3901,7 @@ function cancelOrder(orderId){
     order.statusBeforeCancel = order.status;
     if(isOrderComplete(order.status)) exitCompleteState(order);
     order.status = 'cancelled';
-    order.cancelledDate = new Date().toISOString().slice(0, 10);
+    order.cancelledDate = isoLocal();
     renderOrders(); recalcQueue(); renderInventory(); scheduleSave();
   }, 'Cancel Order');
 }
@@ -3951,7 +3956,7 @@ function cyclePaymentStatus(orderId){
     order.amountPaid = orderTotals(order).grandTotal;
     // Auto-fill today's date if it wasn't already set by hand (the field stays
     // editable on the card for backdating, same pattern as "Delivered on").
-    if(!order.paymentClearedDate) order.paymentClearedDate = new Date().toISOString().slice(0, 10);
+    if(!order.paymentClearedDate) order.paymentClearedDate = isoLocal();
   } else if(next === 'refunded'){
     // Defaults to a full refund of whatever the order was worth going into this —
     // edit the amount down on the card if only part of it is being refunded.
@@ -4504,7 +4509,7 @@ function renderPaymentReminderBanner(){
 // link alone can't drop a ready-made message into a group. Instead we copy the reminder
 // text to the clipboard and open the group chat; the user pastes and sends it themselves.
 function buildWhatsappReminderMessage(flagged){
-  const today = formatDateDisplay(new Date().toISOString().slice(0, 10));
+  const today = formatDateDisplay(isoLocal());
   const totalDue = flagged.reduce(function(sum, o){ return sum + orderAmountDue(o); }, 0);
   const lines = flagged
     .slice()
@@ -5317,24 +5322,24 @@ function setOrderStatusDirect(orderId, newStatus){
     }
 
     if(prevStatus === 'quoted' && newStatus !== 'quoted' && !order.orderedDate){
-      order.orderedDate = new Date().toISOString().slice(0, 10);
+      order.orderedDate = isoLocal();
     }
     if(newStatus === 'quoted'){
       order.lostDate = '';
     } else if(newStatus === 'lost'){
-      order.lostDate = new Date().toISOString().slice(0, 10);
+      order.lostDate = isoLocal();
     } else if(prevStatus === 'lost'){
       order.lostDate = '';
     }
     if(newStatus === 'cancelled'){
       order.statusBeforeCancel = prevStatus;
-      order.cancelledDate = new Date().toISOString().slice(0, 10);
+      order.cancelledDate = isoLocal();
     } else if(prevStatus === 'cancelled'){
       delete order.statusBeforeCancel;
       delete order.cancelledDate;
     }
     if(newStatus === 'delivered' && !order.deliveryDate){
-      order.deliveryDate = new Date().toISOString().slice(0, 10);
+      order.deliveryDate = isoLocal();
     }
 
     order.status = newStatus;
@@ -5622,7 +5627,7 @@ function exportOrdersTable(){
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-  XLSX.writeFile(wb, 'thread-tribe-orders-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'thread-tribe-orders-' + isoLocal() + '.xlsx');
 }
 document.getElementById('exportOrdersTableBtn').addEventListener('click', exportOrdersTable);
 
@@ -6000,7 +6005,7 @@ document.getElementById('importOrdersFile').addEventListener('change', function(
         if(explicitAmountPaidOrders.has(order)) return;
         if(order.paymentStatus === 'paid'){
           order.amountPaid = orderTotals(order).grandTotal;
-          if(!order.paymentClearedDate) order.paymentClearedDate = new Date().toISOString().slice(0, 10);
+          if(!order.paymentClearedDate) order.paymentClearedDate = isoLocal();
         } else if(order.paymentStatus === 'refunded' && !order.refundAmount){
           order.refundAmount = orderTotals(order).grandTotal;
         }
@@ -7407,7 +7412,7 @@ document.getElementById('exportClientsBtn').addEventListener('click', function()
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Clients');
-  XLSX.writeFile(wb, 'thread-tribe-clients-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'thread-tribe-clients-' + isoLocal() + '.xlsx');
 });
 
 document.getElementById('clearClientsBtn').addEventListener('click', function(){
@@ -7506,7 +7511,7 @@ function addExpense(){
 let newExpenseType = 'opex';
 
 function openAddExpenseModal(){
-  document.getElementById('newExpDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('newExpDate').value = isoLocal();
   document.getElementById('newExpCost').value = '';
   document.getElementById('newExpItem').value = '';
   document.getElementById('newExpCategory').value = '';
@@ -8102,7 +8107,7 @@ function matchExpenseHeader(headers, patterns, used){
 // plain-text formats, and normalizes everything to yyyy-mm-dd for the date input.
 function parseExpenseDate(val){
   if(val == null || val === '') return '';
-  if(val instanceof Date && !isNaN(val.getTime())) return val.toISOString().slice(0, 10);
+  if(val instanceof Date && !isNaN(val.getTime())) return isoLocal(val);
   if(typeof val === 'number' && typeof XLSX !== 'undefined' && XLSX.SSF){
     const d = XLSX.SSF.parse_date_code(val);
     if(d) return d.y + '-' + String(d.m).padStart(2, '0') + '-' + String(d.d).padStart(2, '0');
@@ -8127,7 +8132,7 @@ function parseExpenseDate(val){
     return '';
   }
   const parsed = new Date(str);
-  if(!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  if(!isNaN(parsed.getTime())) return isoLocal(parsed);
   return '';
 }
 
@@ -8240,7 +8245,7 @@ document.getElementById('exportExpensesBtn').addEventListener('click', function(
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
-  XLSX.writeFile(wb, 'thread-tribe-expenses-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'thread-tribe-expenses-' + isoLocal() + '.xlsx');
 });
 
 // ---------- DASHBOARD ----------
@@ -8258,33 +8263,33 @@ function orderBucketDate(order){
 }
 
 function periodRange(period){
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = isoLocal();
   const now = new Date();
   if(period === 'month'){
     // End is the last day of the current calendar month (not "today") so a record
     // dated later this month is never silently excluded from "This Month."
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+    const end = isoLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
     return { start: todayKey.slice(0, 7) + '-01', end: end };
   }
   if(period === 'prevMonth'){
     var pm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     var pmEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-    return { start: pm.toISOString().slice(0, 10), end: pmEnd.toISOString().slice(0, 10) };
+    return { start: isoLocal(pm), end: isoLocal(pmEnd) };
   }
   if(period === '3m'){
     var d3 = new Date(); d3.setDate(1); d3.setMonth(d3.getMonth() - 2);
-    return { start: d3.toISOString().slice(0, 10), end: todayKey };
+    return { start: isoLocal(d3), end: todayKey };
   }
   if(period === '6m'){
     // Trailing window ending today by design — this one's meant to be "the last 6
     // months up to now," not a calendar unit, so it keeps the today-based end.
     const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5);
-    return { start: d.toISOString().slice(0, 10), end: todayKey };
+    return { start: isoLocal(d), end: todayKey };
   }
   if(period === 'year'){
     // End is Dec 31 of the current calendar year (not "today") so a record dated
     // later this year is never silently excluded from "This Year."
-    const end = new Date(now.getFullYear(), 11, 31).toISOString().slice(0, 10);
+    const end = isoLocal(new Date(now.getFullYear(), 11, 31));
     return { start: todayKey.slice(0, 4) + '-01-01', end: end };
   }
   if(period === 'custom' && dashCustomStart && dashCustomEnd){
@@ -9747,7 +9752,7 @@ function renderDealerPerformanceBoard(){
 function isOrderOverdue(order){
   if(isOrderComplete(order.status)) return false;
   if(order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled') return false;
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = isoLocal();
   return order.dueDate < todayKey;
 }
 
@@ -9778,7 +9783,7 @@ function computeFleetUtilization(range){
     // into the future, so a partially-elapsed month/year isn't diluted by days that
     // haven't occurred yet. Order inclusion above (inRange) still uses the full
     // range.end unchanged, so a future-dated order isn't excluded from "This Month."
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayKey = isoLocal();
     const cappedEnd = range.end < todayKey ? range.end : todayKey;
     days = Math.max(1, Math.round((new Date(cappedEnd) - new Date(range.start)) / 86400000) + 1);
   } else {
@@ -11125,7 +11130,7 @@ function renderDaysBetweenOrders(){
     byClient[o.clientId].push(orderBucketDate(o));
   });
 
-  var today = new Date().toISOString().slice(0, 10);
+  var today = isoLocal();
   var warnings = [];
   Object.keys(byClient).forEach(function(cid){
     var dates = byClient[cid].sort();
@@ -11534,7 +11539,7 @@ function renderPipelineForecast(){
   var completedLast30Days = [];
   var quotedCount = 0, quotedValue = 0, convertedCount = 0, lostCount = 0;
   var allCompletedDays = []; // days from booked to completed
-  var last30Start = new Date(now.getTime() - 30*86400000).toISOString().slice(0,10);
+  var last30Start = isoLocal(new Date(now.getTime() - 30*86400000));
 
   state.orders.forEach(function(o){
     if(activeStatuses.indexOf(o.status) >= 0){
@@ -11592,8 +11597,8 @@ function renderOrderVelocityChart(){
   for(var w = weeks - 1; w >= 0; w--){
     var wEnd = new Date(now.getTime() - w * 7 * 86400000);
     var wStart = new Date(wEnd.getTime() - 7 * 86400000);
-    var wStartStr = wStart.toISOString().slice(0,10);
-    var wEndStr = wEnd.toISOString().slice(0,10);
+    var wStartStr = isoLocal(wStart);
+    var wEndStr = isoLocal(wEnd);
     var completed = 0, booked = 0, revenue = 0;
     state.orders.forEach(function(o){
       var bd = orderBucketDate(o);
@@ -11962,7 +11967,7 @@ function calcCreateQuote(){
 
   // Create a new order in quoted status
   var orderId = newId();
-  var today = new Date().toISOString().slice(0,10);
+  var today = isoLocal();
   var order = {
     id: orderId,
     name: name,
@@ -12175,8 +12180,8 @@ function renderClientProfile(client, container){
   for(var m = 5; m >= 0; m--){
     var d = new Date(now.getFullYear(), now.getMonth() - m, 1);
     monthLabels.push(d.toLocaleString('default',{month:'short'}));
-    var mStart = d.toISOString().slice(0,10);
-    var mEnd = new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().slice(0,10);
+    var mStart = isoLocal(d);
+    var mEnd = isoLocal(new Date(d.getFullYear(), d.getMonth()+1, 0));
     var rev = 0;
     completeOrders.forEach(function(o){
       var od = orderBucketDate(o);
@@ -12293,10 +12298,10 @@ function renderHomeKpis(){
   var lastYear = thisMonth === 0 ? thisYear - 1 : thisYear;
 
   // This month + last month ranges for comparison
-  var thisMonthStart = new Date(thisYear, thisMonth, 1).toISOString().slice(0,10);
-  var thisMonthEnd = new Date(thisYear, thisMonth + 1, 0).toISOString().slice(0,10);
-  var lastMonthStart = new Date(lastYear, lastMonth, 1).toISOString().slice(0,10);
-  var lastMonthEnd = new Date(lastYear, lastMonth + 1, 0).toISOString().slice(0,10);
+  var thisMonthStart = isoLocal(new Date(thisYear, thisMonth, 1));
+  var thisMonthEnd = isoLocal(new Date(thisYear, thisMonth + 1, 0));
+  var lastMonthStart = isoLocal(new Date(lastYear, lastMonth, 1));
+  var lastMonthEnd = isoLocal(new Date(lastYear, lastMonth + 1, 0));
 
   var metricsThis = computeBusinessMetrics({start: thisMonthStart, end: thisMonthEnd});
   var metricsLast = computeBusinessMetrics({start: lastMonthStart, end: lastMonthEnd});
@@ -12333,7 +12338,7 @@ function renderHomeKpis(){
   var sparkData = [];
   for(var i = 6; i >= 0; i--){
     var day = new Date(now); day.setDate(day.getDate() - i);
-    var dayStr = day.toISOString().slice(0,10);
+    var dayStr = isoLocal(day);
     var dayRev = 0;
     state.orders.forEach(function(o){
       if(['lost','cancelled','quoted'].indexOf(o.status) >= 0) return;
@@ -12557,14 +12562,14 @@ function renderHomeRevenueChart(){
   if(granularity === 'daily'){
     for(var i = 0; i < totalDays; i++){
       var d = new Date(startDate.getTime() + i * 86400000);
-      buckets.push({ start: d.toISOString().slice(0,10), end: d.toISOString().slice(0,10), rev: 0, cost: 0, orders: 0 });
+      buckets.push({ start: isoLocal(d), end: isoLocal(d), rev: 0, cost: 0, orders: 0 });
       bucketLabels.push(d.getDate() + ' ' + d.toLocaleString('default',{month:'short'}));
     }
   } else if(granularity === 'weekly'){
     var cursor = new Date(startDate);
     while(cursor <= endDate){
       var weekEnd = new Date(Math.min(cursor.getTime() + 6*86400000, endDate.getTime()));
-      buckets.push({ start: cursor.toISOString().slice(0,10), end: weekEnd.toISOString().slice(0,10), rev: 0, cost: 0, orders: 0 });
+      buckets.push({ start: isoLocal(cursor), end: isoLocal(weekEnd), rev: 0, cost: 0, orders: 0 });
       bucketLabels.push(cursor.getDate() + ' ' + cursor.toLocaleString('default',{month:'short'}));
       cursor = new Date(cursor.getTime() + 7*86400000);
     }
@@ -12573,7 +12578,7 @@ function renderHomeRevenueChart(){
     while(cursor <= endDate){
       var mEnd = new Date(cursor.getFullYear(), cursor.getMonth()+1, 0);
       if(mEnd > endDate) mEnd = endDate;
-      buckets.push({ start: cursor.toISOString().slice(0,10), end: mEnd.toISOString().slice(0,10), rev: 0, cost: 0, orders: 0 });
+      buckets.push({ start: isoLocal(cursor), end: isoLocal(mEnd), rev: 0, cost: 0, orders: 0 });
       bucketLabels.push(cursor.toLocaleString('default',{month:'short',year:'2-digit'}));
       cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
     }
@@ -13600,7 +13605,7 @@ document.getElementById('exportCatalogBtn').addEventListener('click', function()
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Product Catalog');
-  XLSX.writeFile(wb, 'thread-tribe-product-catalog-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'thread-tribe-product-catalog-' + isoLocal() + '.xlsx');
   if(skippedPhotoCount > 0){
     showNoticeModal(skippedPhotoCount + ' product photo' + (skippedPhotoCount === 1 ? ' was' : 's were') + ' too large to fit in an Excel cell and ' + (skippedPhotoCount === 1 ? 'was' : 'were') + ' left out of this export. For a copy that keeps every photo, use the full "Export" backup (top of the page) instead \u2014 that one isn\'t limited by Excel\'s cell size.');
   }
@@ -13862,7 +13867,7 @@ function generateInvoice(orderId){
 
   const t = orderTotals(order);
   const biz = state.business || {};
-  const today = formatDateDisplay(new Date().toISOString().slice(0, 10));
+  const today = formatDateDisplay(isoLocal());
 
   const lineItems = order.products.filter(function(p){ return (p.qty || 0) > 0 || (p.name || '').trim(); });
   // Only break price out into List/Discount/Net columns when at least one line actually
@@ -14101,7 +14106,7 @@ function exportBackup(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'thread-tribe-studio-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = 'thread-tribe-studio-backup-' + isoLocal() + '.json';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -14262,7 +14267,7 @@ document.getElementById('exportAllExcelBtn').addEventListener('click', function(
     return;
   }
 
-  XLSX.writeFile(wb, 'thread-tribe-all-data-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  XLSX.writeFile(wb, 'thread-tribe-all-data-' + isoLocal() + '.xlsx');
 });
 
 document.getElementById('importBtn').addEventListener('click', function(){
@@ -15156,7 +15161,7 @@ function ponBuildPack(pid){
   const p = ponPartner(pid);
   const s = ponPartnerStats(pid);
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 45);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const cutoffStr = isoLocal(cutoff);
   const jobs = state.pon.jobs.filter(function(j){
     if(j.partnerId !== pid) return false;
     if(ponIsOpen(j)) return true;
@@ -16564,7 +16569,7 @@ function filSpoolsHtml(){
 function filPurchasesHtml(){
   const ps = state.fil.purchases.slice().sort(function(a, b){ return (b.date || '').localeCompare(a.date || ''); });
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
-  const cut = cutoff.toISOString().slice(0, 10);
+  const cut = isoLocal(cutoff);
   const recent = ps.filter(function(p){ return (p.date || '') >= cut; });
   const spent = recent.reduce(function(a, p){ return a + (p.total || 0); }, 0);
   const kg = recent.reduce(function(a, p){ return a + (p.qty || 0) * (p.netG || 0) / 1000; }, 0);

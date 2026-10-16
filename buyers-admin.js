@@ -69,7 +69,7 @@
   function tierPrice(base, pct){ return Math.round(base * (1 - (pct || 0) / 100)); }
 
   // ---------- tiers ----------
-  function isoDaysAgo(n){ const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+  function isoDaysAgo(n){ const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d); }
   function orderDate(o){ return o.orderedDate || o.productionStartDate || o.quotedDate || o.dueDate || ''; }
   function counts(o){ return ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }
   function spend30(cid){
@@ -402,7 +402,7 @@
     Object.assign(order, {
       name: 'Buyer app order' + (q.payload.reference ? ' · ' + String(q.payload.reference).slice(0, 60) : ''),
       clientId: c.id, clientName: c.name || '', clientPhone: c.phone || '', clientAddress: c.address || '', clientState: c.state || '', clientGstin: gstinOf(c),
-      orderSource: 'Buyer app', orderedDate: new Date().toISOString().slice(0, 10), notes: String(q.payload.notes || '').slice(0, 2000),
+      orderSource: 'Buyer app', orderedDate: isoLocal(), notes: String(q.payload.notes || '').slice(0, 2000),
       buyerRequestId: q.id
     });
     order.products = lines.map(function(x){
@@ -430,7 +430,7 @@
     Object.assign(order, {
       name: 'Replacement for ' + (p.displayId || 'order') + ' (' + (ISSUE_LABEL[p.issue] || 'claim') + ')',
       clientId: c.id, clientName: c.name || '', clientPhone: c.phone || '', clientAddress: c.address || '', clientState: c.state || '', clientGstin: gstinOf(c),
-      orderSource: 'Buyer app claim', orderedDate: new Date().toISOString().slice(0, 10), notes: String(p.notes || '').slice(0, 2000), buyerRequestId: q.id
+      orderSource: 'Buyer app claim', orderedDate: isoLocal(), notes: String(p.notes || '').slice(0, 2000), buyerRequestId: q.id
     });
     order.products = (p.lines || []).map(function(l){
       const it = (state.productCatalog || []).find(function(i){ return i.id === l.catalogId; }) ||
@@ -696,7 +696,7 @@
     else if(act === 'dispatch'){
       const o = orderById(id); if(!o) return;
       if(o.status !== 'production_done' && !confirm(o.displayId + ' isn’t marked Production Done yet. Mark it dispatched anyway?')) return;
-      o.shippedDate = new Date().toISOString().slice(0, 10);
+      o.shippedDate = isoLocal();
       if(o.status !== 'production_done') setOrderStatusDirect(o.id, 'production_done');
       scheduleSave(); render(); showToast(o.displayId + ' marked dispatched' + (o.trackingNo ? '' : ' — add the tracking number too'));
     }
@@ -704,7 +704,7 @@
     else if(act === 'ship-add' || act === 'ship-del'){
       const o = state.orders.find(function(x){ return x.id === id; }); if(!o) return;
       if(!Array.isArray(o.extraShipments)) o.extraShipments = [];
-      if(act === 'ship-add') o.extraShipments.push({ courier: o.courier || '', trackingNo: '', date: o.shippedDate || new Date().toISOString().slice(0, 10) });
+      if(act === 'ship-add') o.extraShipments.push({ courier: o.courier || '', trackingNo: '', date: o.shippedDate || isoLocal() });
       else o.extraShipments.splice(+b.getAttribute('data-i'), 1);
       scheduleSave(); render();
     }
@@ -775,13 +775,13 @@
   }
   function collections(){ return Array.isArray(state.buyerCollections) ? state.buyerCollections : []; }
   function activeCollections(){
-    const t = new Date().toISOString().slice(0, 10);
+    const t = isoLocal();
     return collections().filter(function(c){ return c.name && (c.items || []).length && (!c.until || c.until >= t); })
       .map(function(c){ return { id: c.id, name: c.name, note: c.note || '', until: c.until || '', items: c.items.slice(0, 200) }; });
   }
   function saveCollections(list){ state.buyerCollections = list; scheduleSave(); }
   function collectionsHtml(){
-    const toys = catalogue(0).slice().sort(function(a, b){ return a.name.localeCompare(b.name); }), t = new Date().toISOString().slice(0, 10);
+    const toys = catalogue(0).slice().sort(function(a, b){ return a.name.localeCompare(b.name); }), t = isoLocal();
     return '<p class="ba-dim">Group toys for a season or launch (e.g. Diwali Collection). Buyers see it as its own section in the shop until the end date.</p>' +
       collections().map(function(c){
         const live = c.name && (c.items || []).length && (!c.until || c.until >= t);
