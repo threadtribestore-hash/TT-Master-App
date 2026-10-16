@@ -968,6 +968,9 @@
   @media print{
     @page{ margin: 12mm; }
     .wrap > *:not(.invoice-overlay){ display: none !important; }
+    /* Add-ons draw outside .wrap (sidebar, app bar, phone bars, toasts): none belong on an invoice. */
+    body > *:not(.wrap){ display: none !important; }
+    html body{ padding: 0 !important; }
     .invoice-overlay{ position: static !important; inset: auto; background: #fff; overflow: visible; }
     .invoice-toolbar{ display: none; }
     .invoice-doc{ box-shadow: none; margin: 0 auto; }
