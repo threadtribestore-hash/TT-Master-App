@@ -235,7 +235,7 @@
     const d = p.data || {};
     const partners = state.pon.partners.filter(function(x){ return isDesigner(x.id) || x.id === p.designer_id; }).map(function(x){ return [x.id, x.name || 'Partner'] ; });
     const clients = (state.clients || []).filter(function(c){ return c.buyerApp; }).map(function(c){ return [c.id, c.name || 'Client']; });
-    let h = '<div class="panel pj-detail"><div class="panel-title" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>' + esc(d.title || 'Untitled') + '</span><span><button class="pj-btn" data-pj="delete">Delete</button><button class="pj-btn" data-pj="close">Close</button></span></div>' +
+    let h = '<div class="panel pj-detail"><div class="panel-title" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>' + esc(d.title || 'Untitled') + '</span><span>' + (p.designer_id && window.TTNotify ? '<button class="pj-btn" data-pj="notify-designer">🔔 Notify designer</button>' : '') + '<button class="pj-btn" data-pj="delete">Delete</button><button class="pj-btn" data-pj="close">Close</button></span></div>' +
       '<div class="pj-form">' +
         '<label>Title<input data-pf="title" value="' + esc(d.title || '') + '"></label>' +
         '<label>Stage<select data-pf="stage">' + opts(STAGES.concat(OTHER), stageOf(p)) + '</select></label>' +
@@ -310,6 +310,15 @@
     if(act === 'open'){ X.sel = id; render(); const dEl = tab.querySelector('.pj-detail'); if(dEl) dEl.scrollIntoView({ behavior: 'smooth' }); return; }
     if(act === 'close'){ X.sel = null; render(); return; }
     if(act === 'toggle-other'){ X.showOther = !X.showOther; render(); return; }
+    if(act === 'notify-designer' && p){
+      ensurePon();
+      const des = state.pon.partners.find(function(x){ return x.id === p.designer_id; }), d = p.data || {}, chk = briefCheck(p);
+      if(!des || !/@/.test(des.email || '')){ showToast('Add an email for ' + partnerName(p.designer_id) + ' in Partner Network first'); return; }
+      window.TTNotify.compose({ to: [{ email: des.email, app: 'partner' }],
+        title: (chk.pct >= 80 ? 'Brief ready: ' : 'Update: ') + (d.title || 'your project'),
+        body: chk.pct >= 80 ? 'The brief is complete in your Designer profile' + ((d.inspo || []).length ? ', with ' + d.inspo.length + ' inspiration picture' + (d.inspo.length === 1 ? '' : 's') : '') + '. Please add your steps and dates' + (d.due ? ' (due ' + fmt(d.due) + ')' : '') + '.' : 'There’s an update on this project in your Designer profile.' });
+      return;
+    }
     if(act === 'inspo-pick' && p){
       X.pick = p.id; X.pickQ = '';
       if(window.TTResearch && !(window.TTResearch._x.items || []).length) await window.TTResearch.load();
