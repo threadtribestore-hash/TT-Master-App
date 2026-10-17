@@ -55,6 +55,107 @@
   function needsPlan(p){ return !!p.designer_id && ['request', 'live', 'cancelled', 'on_hold'].indexOf(stageOf(p)) === -1 && !items(p.id, 'task').some(function(x){ return x.data.owner !== 'tt'; }); }
   // Thread Tribe's own steps on every new project.
   const TT_STEPS = [['Share brief and references', 1], ['Review prototype', null], ['Final approval', null]];
+  // ---------- the brief ----------
+  // A structured brief the designer can work from, in project.data.spec. The free-text
+  // brief stays as notes. The same fields show (read-only) in the designer's Partner app.
+  const SPEC = [
+    { sec: 'What it is', fields: [
+      { k: 'type', label: 'Product type', type: 'select', opts: ['Lamp / lighting', 'Home décor', 'Toy / fidget', 'Gift / hamper item', 'Corporate merchandise', 'Desk / organiser', 'Signage / display', 'Other'], key: true },
+      { k: 'purpose', label: 'What it’s for, where it’s used', ph: 'e.g. Paperweight for a door company’s showroom desks', key: true, wide: true },
+      { k: 'audience', label: 'Who it’s for', ph: 'e.g. Their dealers and walk-in customers' } ] },
+    { sec: 'Size & build', fields: [
+      { k: 'dims', label: 'Size W × D × H (mm)', ph: 'e.g. 90 × 20 × 120', key: true },
+      { k: 'material', label: 'Material', type: 'select', opts: ['PLA', 'PETG', 'TPU (flexible)', 'PLA + PETG', 'Silk PLA', 'Wood-fill PLA', 'Designer to suggest'], key: true },
+      { k: 'colours', label: 'Colours', ph: 'e.g. Walnut brown + brass gold accent', key: true },
+      { k: 'finish', label: 'Finish', type: 'select', opts: ['Matte', 'Silk / satin', 'Gloss', 'Textured', 'Painted / post-processed', 'Any'] },
+      { k: 'parts', label: 'Parts & assembly', ph: 'e.g. 3 parts, snap-fit, no glue' },
+      { k: 'moving', label: 'Moving parts', ph: 'e.g. The door opens and closes on a print-in-place hinge' },
+      { k: 'hardware', label: 'Inserts & hardware', ph: 'e.g. NFC tag (25 mm round) near the handle, 2 magnets', wide: true } ] },
+    { sec: 'Branding', fields: [
+      { k: 'branding', label: 'Logo, text or engraving', ph: 'e.g. “Infinity Woodkraft” embossed on the base, 2 mm deep', wide: true } ] },
+    { sec: 'Constraints', fields: [
+      { k: 'printer', label: 'Must print on', type: 'select', opts: ['Any farm printer (256 mm bed)', 'A1 mini (180 mm bed)', 'Large format (300 mm+)', 'Designer to suggest'] },
+      { k: 'supports', label: 'Supports', type: 'select', opts: ['Avoid supports', 'OK if easy to remove', 'Any'] },
+      { k: 'printTime', label: 'Print time / piece (h)', type: 'number', ph: 'e.g. 3' },
+      { k: 'safety', label: 'Safety', type: 'select', opts: ['None', 'Kid-safe (no small parts)', 'Food contact', 'Outdoor / UV', 'Heat (near a bulb)'] } ] }
+  ];
+  const DELIVERABLES = [['files', 'Print-ready 3MF / STL with settings'], ['renders', 'Renders or photos'], ['cad', 'Source CAD (STEP / F3D)'], ['proto', 'Printed prototype'], ['notes', 'Assembly & print notes']];
+  function specOf(p){ return Object.assign({}, (p.data || {}).spec || {}); }
+  // How complete the brief is, and what's missing, for the meter.
+  function briefCheck(p){
+    const d = p.data || {}, sp = specOf(p), need = [];
+    SPEC.forEach(function(g){ g.fields.forEach(function(f){ if(f.key && !String(sp[f.k] || '').trim()) need.push(f.label.replace(/ \(.*$/, '')); }); });
+    if(!(sp.deliverables || []).length) need.push('Deliverables');
+    if(!String(sp.doneWhen || '').trim()) need.push('Done when');
+    if(!d.due) need.push('Due date');
+    if(!(d.inspo || []).length && !((d.refs || []).length) && !items(p.id, 'image').length) need.push('Inspiration or references');
+    const total = SPEC.reduce(function(n, g){ return n + g.fields.filter(function(f){ return f.key; }).length; }, 0) + 4;
+    return { pct: Math.round(100 * (total - need.length) / total), need: need };
+  }
+  function specField(f, sp){
+    const v = sp[f.k] == null ? '' : sp[f.k];
+    const ctl = f.type === 'select'
+      ? '<select data-ps="' + f.k + '"><option value="">—</option>' + f.opts.map(function(o){ return '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + (v && f.opts.indexOf(v) === -1 ? '<option selected>' + esc(v) + '</option>' : '') + '</select>'
+      : '<input' + (f.type === 'number' ? ' type="number" min="0" step="0.5"' : '') + ' data-ps="' + f.k + '" value="' + esc(v) + '" placeholder="' + esc(f.ph || '') + '">';
+    return '<label class="' + (f.wide ? 'pj-span2' : '') + (f.key && !String(v).trim() ? ' pj-need' : '') + '"><span>' + esc(f.label) + (f.key ? ' <i class="pj-key">key</i>' : '') + '</span>' + ctl + '</label>';
+  }
+  function licenceText(l){
+    const t = String(l || '').toLowerCase();
+    if(!t) return '';
+    if(/public domain|cc0/.test(t)) return 'Free to use';
+    if(/noncommercial|non-commercial/.test(t)) return 'Not for sale';
+    if(/standard digital|all rights/.test(t)) return 'Personal use only';
+    if(/noderiv/.test(t)) return 'No changes';
+    return 'Can sell, credit maker';
+  }
+  function inspoHtml(p){
+    const list = (p.data || {}).inspo || [];
+    return '<div class="pj-brief-g"><b>Inspiration</b> <span class="pj-dim">From Design research · the designer sees these with the brief</span>' +
+      '<div class="pj-inspo">' + list.map(function(x, i){
+        return '<div class="pj-insp"><a href="' + esc(x.url || '#') + '" target="_blank" rel="noopener">' + (x.image ? '<img loading="lazy" src="' + esc(x.image) + '" alt="">' : '<span class="pj-noimg"></span>') + '</a>' +
+          '<span class="pj-insp-t">' + esc(x.title || '') + '</span>' + (x.license ? '<span class="pj-dim">' + esc(licenceText(x.license)) + '</span>' : x.store ? '<span class="pj-dim">' + esc(x.store) + '</span>' : '') +
+          (x.note ? '<span class="pj-dim">“' + esc(x.note) + '”</span>' : '') +
+          '<button class="pj-x" data-pj="inspo-del" data-i="' + i + '" title="Remove">×</button></div>';
+      }).join('') + '<button class="pj-insp pj-insp-add" data-pj="inspo-pick">+ Add from<br>Design research</button></div>' +
+      (X.pick === p.id ? pickerHtml(p) : '') + '</div>';
+  }
+  function pickerHtml(p){
+    const R = window.TTResearch && window.TTResearch._x;
+    if(!R || !R.items) return '<div class="pj-pick"><p class="pj-dim">Open Design research once to load it.</p></div>';
+    const q = String(X.pickQ || '').toLowerCase().trim(), have = ((p.data || {}).inspo || []).map(function(x){ return x.source + '|' + x.ext_id; });
+    let pool = R.items.slice();
+    (R.ideas || []).forEach(function(i){ (i.refs || []).forEach(function(r){ if(r.image) pool.unshift(Object.assign({ fromIdea: i.title }, r)); }); });
+    if(q) pool = pool.filter(function(i){ return ((i.title || '') + ' ' + (i.tags || []).join(' ') + ' ' + (i.keyword || '') + ' ' + (i.store || '') + ' ' + (i.fromIdea || '')).toLowerCase().indexOf(q) !== -1; });
+    else pool.sort(function(a, b){ return (b.fromIdea ? 1 : 0) - (a.fromIdea ? 1 : 0) || (+b.score || 0) - (+a.score || 0); });
+    const seen = {};
+    pool = pool.filter(function(i){ const k = i.source + '|' + i.ext_id; if(!i.image || seen[k] || have.indexOf(k) !== -1) return false; seen[k] = 1; return true; }).slice(0, 24);
+    return '<div class="pj-pick"><div class="pj-add"><input id="pjPickQ" placeholder="Search designs, e.g. door, voronoi, ribbed" value="' + esc(X.pickQ || '') + '"><button class="pj-btn" data-pj="inspo-close">Done</button></div>' +
+      (pool.length ? '<div class="pj-inspo">' + pool.map(function(i){
+        return '<button class="pj-insp pj-insp-pick" data-pj="inspo-add" data-src="' + esc(i.source) + '" data-id="' + esc(i.ext_id) + '"><img loading="lazy" src="' + esc(i.image) + '" alt=""><span class="pj-insp-t">' + esc(i.title) + '</span><span class="pj-dim">' + esc(i.fromIdea ? 'Idea: ' + i.fromIdea : i.source === 'store' ? i.store : licenceText(i.license)) + '</span></button>';
+      }).join('') + '</div>' : '<p class="pj-dim">No designs match.</p>') + '</div>';
+  }
+  function briefHtml(p){
+    const sp = specOf(p), chk = briefCheck(p);
+    return '<div class="pj-brief"><div class="pj-brief-h"><b>Brief</b><span class="pj-bar"><i style="width:' + chk.pct + '%;background:' + (chk.pct >= 80 ? 'var(--green)' : 'var(--amber)') + '"></i></span>' +
+        '<span class="pj-dim">' + chk.pct + '% complete' + (chk.need.length ? ' · the designer still needs: ' + esc(chk.need.join(', ')) : ' · ready for the designer') + '</span></div>' +
+      SPEC.map(function(g){ return '<div class="pj-brief-g"><b>' + esc(g.sec) + '</b><div class="pj-form">' + g.fields.map(function(f){ return specField(f, sp); }).join('') + '</div></div>'; }).join('') +
+      '<div class="pj-brief-g"><b>Deliverables</b> <i class="pj-key">key</i><div class="pj-dels">' + DELIVERABLES.map(function(x){
+        return '<label class="pj-chip"><input type="checkbox" data-pdel="' + x[0] + '"' + ((sp.deliverables || []).indexOf(x[0]) !== -1 ? ' checked' : '') + '> ' + esc(x[1]) + '</label>';
+      }).join('') + '</div></div>' +
+      '<label class="pj-wide' + (!String(sp.doneWhen || '').trim() ? ' pj-need' : '') + '"><span>Done when <i class="pj-key">key</i> — how you’ll judge it</span><textarea data-ps="doneWhen" rows="2" placeholder="e.g. Door swings open and shut 50 times without wear; NFC tag reads through the shell; fits in a 100 mm box">' + esc(sp.doneWhen || '') + '</textarea></label>' +
+      '<label class="pj-wide">Notes, story and anything else<textarea data-pf="brief" rows="3">' + esc((p.data || {}).brief || '') + '</textarea></label>' +
+      inspoHtml(p) + '</div>';
+  }
+  async function addInspo(pid, ref){
+    const p = project(pid); if(!p) return false;
+    const list = ((p.data || {}).inspo || []).slice();
+    if(list.some(function(x){ return x.source === ref.source && x.ext_id === ref.ext_id; })) return true;
+    list.push({ source: ref.source, ext_id: ref.ext_id, title: String(ref.title || '').slice(0, 200), image: ref.image || null, url: ref.url || null,
+      license: ref.license || null, store: ref.store || null, note: ref.note || '', by: 'tt', at: new Date().toISOString() });
+    p.data = Object.assign({}, p.data, { inspo: list.slice(-16) });
+    return saveProject(p);
+  }
+
   function progress(id){ const ts = items(id, 'task'); return { done: ts.filter(function(x){ return x.data.done; }).length, total: ts.length }; }
   async function saveProject(p){
     const r = await cloud.sb.from('projects').upsert({ id: p.id, designer_id: p.designer_id || null, client_id: p.client_id || null, data: p.data, created_by: p.created_by || 'tt' }, { onConflict: 'id' });
@@ -143,7 +244,7 @@
         '<label>Due<input type="date" data-pf="due" value="' + esc(d.due || '') + '"></label>' +
         '<label>Quantity<input type="number" min="0" data-pf="qty" value="' + esc(d.qty || '') + '"></label>' +
         '<label>Target price / pc ₹<input type="number" min="0" data-pf="targetPrice" value="' + esc(d.targetPrice || '') + '"></label>' +
-      '</div><label class="pj-wide">Brief<textarea data-pf="brief" rows="3">' + esc(d.brief || '') + '</textarea></label>' + refsHtml(p);
+      '</div>' + briefHtml(p) + refsHtml(p);
     if(stageOf(p) === 'request'){
       h = h.replace('<div class="pj-form">', '<div class="pj-banner">Request from <b>' + esc(clientName(p.client_id) || d.clientName || 'a brand partner') + '</b>. Accept it to start the design (pick a designer), or decline with a reason.' +
         '<div><button class="pj-btn primary" data-pj="accept">Accept → Brief</button><button class="pj-btn" data-pj="decline">Decline</button></div></div><div class="pj-form">');
@@ -184,6 +285,23 @@
   }
   window.renderProjects = function(){ render(); load().then(function(){ render(); badge(); }); };
 
+  document.addEventListener('input', function(e){
+    if(e.target.id !== 'pjPickQ') return;
+    X.pickQ = e.target.value;
+    const p = X.sel && project(X.sel), box = document.querySelector('#tabProjects .pj-pick');
+    if(!p || !box) return;
+    const tmp = document.createElement('div'); tmp.innerHTML = pickerHtml(p);
+    const grid = box.querySelector('.pj-inspo, p.pj-dim'), next = tmp.querySelector('.pj-inspo, p.pj-dim');
+    if(grid && next) grid.replaceWith(next); else if(next) box.appendChild(next);
+  });
+
+  // For Design research: add a design to a project's brief from there.
+  window.TTProjects = {
+    open: function(){ return X.projects.filter(function(p){ return ['live', 'cancelled'].indexOf(stageOf(p)) === -1; }).map(function(p){ return { id: p.id, title: (p.data || {}).title || 'Untitled', designer: p.designer_id ? partnerName(p.designer_id) : '' }; }); },
+    load: function(){ return X.loaded ? Promise.resolve() : load(); },
+    addInspo: addInspo
+  };
+
   // ---------- actions ----------
   document.addEventListener('click', async function(e){
     const tab = document.getElementById('tabProjects'); if(!tab || !tab.contains(e.target)) return;
@@ -192,6 +310,25 @@
     if(act === 'open'){ X.sel = id; render(); const dEl = tab.querySelector('.pj-detail'); if(dEl) dEl.scrollIntoView({ behavior: 'smooth' }); return; }
     if(act === 'close'){ X.sel = null; render(); return; }
     if(act === 'toggle-other'){ X.showOther = !X.showOther; render(); return; }
+    if(act === 'inspo-pick' && p){
+      X.pick = p.id; X.pickQ = '';
+      if(window.TTResearch && !(window.TTResearch._x.items || []).length) await window.TTResearch.load();
+      render(); const q = document.getElementById('pjPickQ'); if(q) q.focus(); return;
+    }
+    if(act === 'inspo-close'){ X.pick = null; render(); return; }
+    if(act === 'inspo-add' && p){
+      const R = window.TTResearch && window.TTResearch._x, src = b.getAttribute('data-src'), ext = b.getAttribute('data-id');
+      let ref = R && (R.items || []).find(function(i){ return i.source === src && i.ext_id === ext; });
+      if(!ref && R) (R.ideas || []).forEach(function(i){ (i.refs || []).forEach(function(r){ if(r.source === src && r.ext_id === ext) ref = r; }); });
+      if(ref && await addInspo(p.id, ref)){ showToast('Added to the brief'); render(); const q = document.getElementById('pjPickQ'); if(q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+      return;
+    }
+    if(act === 'inspo-del' && p){
+      const i = +b.getAttribute('data-i'), list = ((p.data || {}).inspo || []).filter(function(_, j){ return j !== i; });
+      p.data = Object.assign({}, p.data, { inspo: list });
+      if(await saveProject(p)){ showToast('Removed'); render(); }
+      return;
+    }
     if(act === 'new'){
       const title = prompt('Project name'); if(!title) return;
       const np = { id: 'pj' + uid(), designer_id: null, client_id: null, created_by: 'tt', data: { title: title.slice(0, 120), stage: 'brief', createdAt: new Date().toISOString() } };
@@ -266,6 +403,15 @@
       render(); showToast(e.target.checked ? 'Designer profile switched on in their Partner app' : 'Designer profile removed'); return;
     }
     const p = X.sel && project(X.sel); if(!p) return;
+    const sk = e.target.getAttribute('data-ps'), dk = e.target.getAttribute('data-pdel');
+    if(sk || dk){
+      const sp = specOf(p);
+      if(sk) sp[sk] = sk === 'printTime' ? (e.target.value === '' ? '' : Math.max(0, +e.target.value || 0)) : String(e.target.value).slice(0, sk === 'doneWhen' ? 1500 : 300);
+      else { const l = (sp.deliverables || []).filter(function(x){ return x !== dk; }); if(e.target.checked) l.push(dk); sp.deliverables = l; }
+      p.data = Object.assign({}, p.data, { spec: sp });
+      if(await saveProject(p)){ showToast('Saved'); const h = document.querySelector('#tabProjects .pj-brief-h'); if(h){ const c = briefCheck(p); h.outerHTML = '<div class="pj-brief-h"><b>Brief</b><span class="pj-bar"><i style="width:' + c.pct + '%;background:' + (c.pct >= 80 ? 'var(--green)' : 'var(--amber)') + '"></i></span><span class="pj-dim">' + c.pct + '% complete' + (c.need.length ? ' · the designer still needs: ' + esc(c.need.join(', ')) : ' · ready for the designer') + '</span></div>'; } }
+      return;
+    }
     const f = e.target.getAttribute('data-pf'); if(!f) return;
     const v = e.target.value;
     if(f === 'designer_id') p.designer_id = v || null;
@@ -299,5 +445,21 @@
     '#tabProjects .pj-card.pj-req{border-color:var(--amber)} #tabProjects .pj-banner{background:var(--input-bg);border:1px solid var(--amber);border-radius:8px;padding:10px;margin:8px 0;font-size:13px}' +
     '#tabProjects .pj-refs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0} #tabProjects .pj-refs img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}' +
     '#tabProjects .pj-msg{border-left:3px solid var(--line);padding:4px 10px;margin:6px 0;font-size:13px} #tabProjects .pj-msg.designer{border-color:var(--cyan)} #tabProjects .pj-msg.client{border-color:var(--amber)}';
+  css.textContent +=
+    '#tabProjects .pj-brief{border-top:1px dashed var(--line);margin-top:12px;padding-top:10px}' +
+    '#tabProjects .pj-brief-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}#tabProjects .pj-brief-h b{font-size:15px}#tabProjects .pj-brief-h .pj-bar{display:inline-block;width:140px}' +
+    '#tabProjects .pj-brief-g{margin:10px 0 4px}#tabProjects .pj-brief-g > b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)}' +
+    '#tabProjects .pj-span2{grid-column:span 2}@media (max-width:600px){#tabProjects .pj-span2{grid-column:auto}}' +
+    '#tabProjects .pj-key{font-style:normal;font-size:9.5px;border:1px solid var(--line);border-radius:999px;padding:0 5px;color:var(--dim);margin-left:2px}' +
+    '#tabProjects label.pj-need input,#tabProjects label.pj-need select,#tabProjects label.pj-need textarea{border-color:var(--amber)}' +
+    '#tabProjects .pj-dels{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px}#tabProjects .pj-dels label{flex-direction:row;align-items:center;color:var(--text);font-size:12.5px}' +
+    '#tabProjects .pj-inspo{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px}' +
+    '#tabProjects .pj-insp{position:relative;display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:8px;padding:6px;background:var(--panel);text-align:left;font:inherit;color:var(--text);min-width:0}' +
+    '#tabProjects .pj-insp img,#tabProjects .pj-noimg{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--input-bg);display:block}' +
+    '#tabProjects .pj-insp-t{font-size:11.5px;font-weight:600;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}' +
+    '#tabProjects .pj-insp-add{align-items:center;justify-content:center;text-align:center;border-style:dashed;color:var(--cyan);cursor:pointer;min-height:110px;font-size:12px}' +
+    '#tabProjects .pj-insp-pick{cursor:pointer}#tabProjects .pj-insp-pick:hover{border-color:var(--cyan)}' +
+    '#tabProjects .pj-x{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;line-height:22px;padding:0}' +
+    '#tabProjects .pj-pick{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px;background:var(--input-bg)}';
   document.head.appendChild(css);
 })();

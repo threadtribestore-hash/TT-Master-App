@@ -159,7 +159,8 @@
       (it.source === 'printables'
         ? '<div class="dr-dim">♥ ' + (it.likes || 0) + ' · made ' + (it.makes || 0) + ' · ↓ ' + (it.downloads || 0) + '</div><span class="dr-lic ' + lic.cls + '" title="' + esc(it.license || '') + '">' + esc(lic.text) + '</span>'
         : (it.price != null ? '<div><b>' + esc(money(it.price, it.currency)) + '</b></div>' : '')) +
-      '<button class="dr-btn" data-dr="idea-item" data-src="' + esc(it.source) + '" data-id="' + esc(it.ext_id) + '">+ Idea board</button></div>';
+      '<div class="dr-actions"><button class="dr-btn" data-dr="idea-item" data-src="' + esc(it.source) + '" data-id="' + esc(it.ext_id) + '">+ Idea board</button>' +
+      '<button class="dr-btn" data-dr="to-project" data-src="' + esc(it.source) + '" data-id="' + esc(it.ext_id) + '">+ Project</button></div></div>';
   }
   function trendingHtml(){
     const list = X.items.filter(function(i){ return i.source === 'printables' && (!V.kw || i.keyword === V.kw); })
@@ -218,6 +219,7 @@
           '<textarea class="dr-idea-n" placeholder="Notes: size, material, price point, who it’s for…">' + esc(i.notes) + '</textarea>' +
           thumbs((i.refs || []).filter(function(r){ return r.image; })) +
           '<div class="dr-dim">' + esc(i.created_by || '') + ' · ' + ago(i.created_at) + '</div>' +
+          '<label class="dr-share"><input type="checkbox" class="dr-idea-sh"' + (i.shared ? ' checked' : '') + '> Share with designers <span class="dr-dim">(they see it in their Partner app)</span></label>' +
           '<div class="dr-actions"><button class="dr-btn" data-dr="idea-save">Save</button><button class="dr-btn" data-dr="idea-task">Make a task</button><button class="dr-btn" data-dr="idea-del">Delete</button></div></div>';
       }).join('');
     }).join('');
@@ -235,6 +237,14 @@
           ((m.errors || []).length ? '<br><span class="dr-warn">' + esc(m.errors.slice(0, 3).join(' · ')) + '</span>' : '') + '</span></div>'; }).join('') : '<p class="dr-dim">No runs yet.</p>') +
     '</details>';
   }
+  function pickHtml(){
+    if(!V.pickFor) return '';
+    const it = findItem(V.pickFor.source, V.pickFor.ext_id); if(!it) return '';
+    return '<div class="dr-pickp" id="drProjPick"><div class="dr-pickp-h">' + (it.image ? '<img src="' + esc(it.image) + '" alt="">' : '') + '<div><b>Add to a project brief</b><div class="dr-dim">' + esc(it.title) + '</div></div></div>' +
+      '<input id="drProjNote" placeholder="Note for the designer (optional), e.g. like the hinge, not the shape">' +
+      '<div class="dr-pickp-list">' + (V.pickList || []).map(function(pr){ return '<button class="dr-btn" data-dr="pick-project" data-id="' + esc(pr.id) + '">' + esc(pr.title) + (pr.designer ? ' · ' + esc(pr.designer) : '') + '</button>'; }).join('') +
+      '<button class="dr-link" data-dr="pick-cancel">Cancel</button></div></div>';
+  }
   function empty(t){ return '<p class="dr-dim dr-empty">' + esc(t) + '</p>'; }
   function render(){
     const root = document.getElementById('designResearchRoot');
@@ -251,7 +261,7 @@
         (run ? 'Last gathered ' + esc(when(run.at)) + ' · refreshes every 12 hours' : 'Not gathered yet') + (asked ? ' · refresh requested, within 5 min' : '') + '</div></div>' +
         '<button class="dr-btn" data-dr="refresh"' + (asked ? ' disabled' : '') + '>Refresh now</button></div>' +
       '<div class="dr-tabs">' + tabs.map(function(t){ return '<button class="dr-tab' + (V.view === t[0] ? ' on' : '') + '" data-dr="view" data-v="' + t[0] + '">' + t[1] + (t[2] !== '' ? ' <span>' + t[2] + '</span>' : '') + '</button>'; }).join('') + '</div>' +
-      (V.err ? '<p class="dr-warn">' + esc(V.err) + '</p>' : '') + body +
+      (V.err ? '<p class="dr-warn">' + esc(V.err) + '</p>' : '') + pickHtml() + body +
       '<p class="dr-note">For inspiration only. Competitors’ products and makers’ models belong to them: design your own take, and check a model’s licence before printing or selling it.</p>' +
       watchHtml() + '</div>';
   }
@@ -277,6 +287,21 @@
     }
     else if(act === 'idea-item'){ const it = findItem(b.getAttribute('data-src'), b.getAttribute('data-id')); if(it) await addIdea(it.title, (it.source === 'printables' ? 'Printables · ' + (it.license || 'licence unknown') : 'Seen at ' + (it.store || 'a competitor') + (it.price != null ? ' · ' + money(it.price, it.currency) : '')), [ref(it)]); }
     else if(act === 'idea-text'){ await addIdea(b.getAttribute('data-t'), b.getAttribute('data-n'), []); }
+    else if(act === 'to-project'){
+      const it = findItem(b.getAttribute('data-src'), b.getAttribute('data-id'));
+      if(!it || !window.TTProjects){ showToast('Projects aren’t available'); return; }
+      await window.TTProjects.load();
+      const list = window.TTProjects.open();
+      if(!list.length){ showToast('No open projects. Start one in Projects first.'); return; }
+      V.pickFor = { source: it.source, ext_id: it.ext_id }; V.pickList = list; render();
+      const el = document.getElementById('drProjPick'); if(el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    else if(act === 'pick-project'){
+      const it = V.pickFor && findItem(V.pickFor.source, V.pickFor.ext_id);
+      const note = (document.getElementById('drProjNote') || {}).value || '';
+      if(it && await window.TTProjects.addInspo(b.getAttribute('data-id'), Object.assign(ref(it), { note: note.slice(0, 200) }))){ showToast('Added to the project brief'); V.pickFor = null; render(); }
+    }
+    else if(act === 'pick-cancel'){ V.pickFor = null; render(); }
     else if(act === 'save-kw'){
       const kws = (document.getElementById('drKw').value || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean).slice(0, 30);
       V.openWatch = true; await saveCfg({ keywords: kws }, 'Keywords saved · used from the next run');
@@ -307,6 +332,12 @@
     }
   });
   document.addEventListener('change', function(e){
+    const sh = e.target.closest && e.target.closest('.dr-idea-sh');
+    if(sh){
+      const card = sh.closest('.dr-idea'), idea = X.ideas.find(function(x){ return x.id === card.getAttribute('data-id'); });
+      if(idea){ idea.shared = sh.checked; saveIdea(idea).then(function(ok){ if(ok) showToast(sh.checked ? 'Shared with designers' : 'No longer shared'); }); }
+      return;
+    }
     const s = e.target.closest && e.target.closest('.dr-idea-s'); if(!s) return;
     const card = s.closest('.dr-idea'), idea = X.ideas.find(function(x){ return x.id === card.getAttribute('data-id'); });
     if(idea){ idea.status = s.value; idea.title = card.querySelector('.dr-idea-t').value.trim() || idea.title; idea.notes = card.querySelector('.dr-idea-n').value; saveIdea(idea).then(function(ok){ if(ok) render(); }); }
@@ -346,6 +377,9 @@
     '.dr-idea-h{display:flex;gap:8px;flex-wrap:wrap}.dr-idea-t{flex:1;min-width:180px;font-weight:600}' +
     '.dr-idea input,.dr-idea select,.dr-idea textarea,.dr-watch textarea,.dr-watch input{background:var(--input-bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;box-sizing:border-box}' +
     '.dr-idea textarea{min-height:56px;width:100%}.dr-idea .dr-thumbs{grid-template-columns:repeat(6,1fr);max-width:420px}.dr-actions{display:flex;gap:6px;flex-wrap:wrap}' +
+    '.dr-share{display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer}' +
+    '.dr-pickp{border:1px solid var(--cyan);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}.dr-pickp-h{display:flex;gap:10px;align-items:center}.dr-pickp-h img{width:56px;height:42px;object-fit:cover;border-radius:6px}' +
+    '.dr-pickp input{background:var(--input-bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px}.dr-pickp-list{display:flex;flex-wrap:wrap;gap:6px;align-items:center}' +
     '.dr-note{font-size:12px;color:var(--dim);border-top:1px solid var(--line);margin-top:16px;padding-top:10px}' +
     '.dr-watch{margin-top:10px}.dr-watch summary{cursor:pointer;padding:6px 0}.dr-lab{display:block;font-size:12px;color:var(--dim);margin:12px 0 4px}.dr-watch textarea{width:100%;min-height:60px;margin-top:4px}' +
     '.dr-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.dr-add input{flex:1;min-width:160px}' +
