@@ -52,7 +52,7 @@
     badge();
   }
   // For the owner's Home: the shared pipeline, loaded on first use.
-  window.TTSales = { channelOf: channelOf, repFor: function(ch){ return repFor(ch); }, reps: function(){ return X.reps; }, acts: function(){ return X.acts; }, leads: function(){ return X.leads; }, loaded: function(){ return X.loaded; }, load: function(){ return X.loaded ? Promise.resolve() : load(); } };
+  window.TTSales = { channelOf: channelOf, repFor: function(ch){ return repFor(ch); }, incentivePack: function(r){ return incentivePack(r); }, reps: function(){ return X.reps; }, acts: function(){ return X.acts; }, leads: function(){ return X.leads; }, loaded: function(){ return X.loaded; }, load: function(){ return X.loaded ? Promise.resolve() : load(); } };
   function wonToSetUp(){ return X.leads.filter(function(l){ return l.stage === 'won' && !(l.data || {}).clientId; }); }
   function badge(){
     const b = document.querySelector('.tab-btn[data-tab="sales"]'), n = wonToSetUp().length;
@@ -120,6 +120,45 @@
     return out;
   }
 
+  // A salesperson's incentive: the orders set to them, what they earn on each, and where it stands.
+  // Waiting = the client hasn't paid yet; due = the client has paid, not yet paid out; paid = paid out.
+  function incentiveFor(r){
+    const mo = today().slice(0, 7);
+    const os = state.orders.filter(function(o){ return o.salesRep === r.email && counts(o); })
+      .map(function(o){ const t = orderTotals(o); return { o: o, value: t.orderValue || 0, inc: t.incentive || 0 }; });
+    const month = os.filter(function(x){ return (orderDate(x.o) || '').slice(0, 7) === mo; });
+    const due = os.filter(function(x){ return x.inc > 0 && !(x.o.incentive || {}).paidAt && x.o.paymentStatus === 'paid'; });
+    const waiting = os.filter(function(x){ return x.inc > 0 && !(x.o.incentive || {}).paidAt && x.o.paymentStatus !== 'paid'; });
+    const paid = os.filter(function(x){ return (x.o.incentive || {}).paidAt; });
+    const sum = function(l, k){ return l.reduce(function(t, x){ return t + x[k]; }, 0); };
+    return { r: r, os: os, monthSales: sum(month, 'value'), monthInc: sum(month, 'inc'), due: due, dueAmt: sum(due, 'inc'), waitAmt: sum(waiting, 'inc'), paidAmt: sum(paid, 'inc') };
+  }
+  // What the Sales app shows that salesperson (and no one else): amounts and statuses, never costs.
+  function incentivePack(r){
+    const x = incentiveFor(r), INC = state.salesIncentive || {}, yr = today().slice(0, 4);
+    const months = {};
+    for(let i = 5; i >= 0; i--){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); months[isoLocal(d).slice(0, 7)] = { sales: 0, earned: 0 }; }
+    x.os.forEach(function(y){ const m = (orderDate(y.o) || '').slice(0, 7); if(months[m]){ months[m].sales += y.value; months[m].earned += y.inc; } });
+    const stateOf = function(y){ const inc = y.o.incentive || {}; return inc.paidAt ? 'paid' : y.inc <= 0 ? 'none' : y.o.paymentStatus === 'paid' ? 'due' : 'waiting'; };
+    const list = x.os.slice().sort(function(a, b){ return (orderDate(b.o) || '').localeCompare(orderDate(a.o) || ''); });
+    const keep = list.filter(function(y, i){ return i < 60 || stateOf(y) === 'due' || stateOf(y) === 'waiting'; });
+    const round = function(v){ return Math.round(v || 0); };
+    return {
+      email: r.email, name: r.name || '', basis: INC.basis || 'profit', rate: incentiveRate(r.email),
+      monthSales: round(x.monthSales), monthEarned: round(x.monthInc), due: round(x.dueAmt), waiting: round(x.waitAmt), paidOut: round(x.paidAmt),
+      paidThisYear: round(x.os.filter(function(y){ return ((y.o.incentive || {}).paidAt || '').slice(0, 4) === yr; }).reduce(function(t, y){ return t + y.inc; }, 0)),
+      lastPaidAt: x.os.reduce(function(m, y){ const p = (y.o.incentive || {}).paidAt || ''; return p > m ? p : m; }, ''),
+      months: Object.keys(months).map(function(m){ return { month: m, sales: round(months[m].sales), earned: round(months[m].earned) }; }),
+      orders: keep.map(function(y){
+        const inc = y.o.incentive || {}, c = (state.clients || []).find(function(cl){ return cl.id === y.o.clientId; });
+        return { displayId: y.o.displayId || '', client: (c && c.name) || y.o.clientName || y.o.name || '', date: (orderDate(y.o) || '').slice(0, 10),
+          value: round(y.value), incentive: round(y.inc), state: stateOf(y), paidAt: inc.paidAt || '', clientPaid: y.o.paymentStatus === 'paid',
+          orderStatus: y.o.status === 'production_done' && y.o.shippedDate ? 'shipped' : y.o.status,
+          basis: incentiveBasis(y.o), custom: inc.value != null && inc.value !== '' ? +inc.value : null };
+      })
+    };
+  }
+
   function accounts(ch){
     const cut90 = daysAgo(90);
     return (state.clients || []).map(function(c){
@@ -174,6 +213,8 @@
       // which only that channel's salesperson (and admins) can read.
       const cat = catalogue(), rows = [{ id: 'main', pack: { targets: targets(), actuals: actuals(), salesAppUrl: salesUrl() } }];
       Object.keys(CH).forEach(function(ch){ rows.push({ id: ch, pack: { channel: ch, accounts: accounts(ch), catalogue: cat[ch] } }); });
+      // Each salesperson's incentive, in a row only they (and admins) can read (sales_incentive_setup.sql).
+      X.reps.filter(function(r){ return r.email; }).forEach(function(r){ rows.push({ id: 'rep:' + String(r.email).toLowerCase(), pack: { incentive: incentivePack(r) } }); });
       const changed = rows.filter(function(r){ return JSON.stringify(r.pack) !== X.hashes[r.id]; });
       if(!changed.length) return;
       const at = new Date().toISOString();
@@ -277,15 +318,7 @@
 
     // incentives: per salesperson, from the orders set to them
     const INC = state.salesIncentive || {}, mo = today().slice(0, 7);
-    const incRows = X.reps.map(function(r){
-      const os = state.orders.filter(function(o){ return o.salesRep === r.email && counts(o); }).map(function(o){ const t = orderTotals(o); return { o: o, value: t.orderValue, inc: t.incentive || 0 }; }).filter(function(x){ return x.inc > 0 || x.o.salesRep; });
-      const month = os.filter(function(x){ return (orderDate(x.o) || '').slice(0, 7) === mo; });
-      const due = os.filter(function(x){ return x.inc > 0 && !(x.o.incentive || {}).paidAt && x.o.paymentStatus === 'paid'; });
-      const waiting = os.filter(function(x){ return x.inc > 0 && !(x.o.incentive || {}).paidAt && x.o.paymentStatus !== 'paid'; });
-      const paid = os.filter(function(x){ return (x.o.incentive || {}).paidAt; });
-      const sum = function(l, k){ return l.reduce(function(t, x){ return t + x[k]; }, 0); };
-      return { r: r, os: os, monthSales: sum(month, 'value'), monthInc: sum(month, 'inc'), due: due, dueAmt: sum(due, 'inc'), waitAmt: sum(waiting, 'inc'), paidAmt: sum(paid, 'inc') };
-    });
+    const incRows = X.reps.map(incentiveFor);
     h += '<div class="panel"><div class="panel-title">Incentives</div><p class="sa-dim">Set the salesperson on an order (order pop-up → Order details) and their incentive is worked out on net profit by default: order value before GST minus filament, machine, packaging and delivery cost (nothing on a loss). It is counted as a cost in profit and due once the client has paid.</p>' +
       '<div class="sa-add"><label class="sa-dim">Incentive is a % of</label><select data-sa-inc="basis"><option value="profit"' + ((INC.basis || 'profit') === 'profit' ? ' selected' : '') + '>Net profit</option><option value="pct"' + (INC.basis === 'pct' ? ' selected' : '') + '>Order value</option></select><label class="sa-dim">Default %</label><input type="number" min="0" step="0.5" style="width:90px" data-sa-inc="default" value="' + esc(INC.defaultPct || 0) + '"></div>' +
       (X.reps.length ? '<table class="ba-table"><tr><th>Salesperson</th><th>Their %</th><th>Sales this month</th><th>Incentive this month</th><th>Due now</th><th>Waiting for client payment</th><th>Paid out</th><th></th></tr>' + incRows.map(function(x){
