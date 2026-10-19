@@ -461,6 +461,7 @@
     if(!q || !c) return;
     const p = q.payload || {};
     ['contact', 'phone', 'address', 'city', 'state', 'gstin'].forEach(function(f){ if(typeof p[f] === 'string' && p[f].trim()) c[f] = p[f].trim().slice(0, 300); });
+    if(typeof tidyClientCity === 'function') tidyClientCity(c);
     scheduleSave();
     if(typeof renderClients === 'function') renderClients();
     reply(q.id, 'done', 'Your details are updated.');

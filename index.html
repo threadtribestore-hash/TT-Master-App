@@ -3638,6 +3638,32 @@ function cloneOrder(orderId){
 // the client record from here on (see renderOrders' client block), so this just stamps
 // the id and does an immediate one-time sync so search/filter/invoice have fresh values
 // Combines a client's street address and city into one display string for order/invoice use.
+// A whole address typed or pasted into a client's City box: move it to Address and keep just
+// the city. Also rescues the split-city paste, where an address landed inside "Hyderabad" after
+// the H: "HFIRST FLOOR …, 500014yderabad" → address "FIRST FLOOR …, 500014", city "Hyderabad".
+// Returns true if it changed anything.
+function tidyClientCity(c){
+  if(!c) return false;
+  const city = String(c.city || '').trim();
+  if(!(city.length > 40 || /,.*,/.test(city) || /(^|\D)\d{6}(\D|$)/.test(city))) return false;
+  let rest = city, found = '';
+  const split = /^([A-Z])(?=[A-Z\s])([\s\S]*?[\d.,:;)\]])([a-z]{3,})$/.exec(city);
+  if(split){ found = split[1] + split[3]; rest = split[2]; }
+  rest = rest.replace(/^[\s,]+|[\s,]+$/g, '');
+  const addr = String(c.address || '').trim();
+  c.address = !addr ? rest : (addr.indexOf(rest) !== -1 ? addr : addr + ', ' + rest);
+  c.city = found;
+  return true;
+}
+
+// Tidy every saved client once data is loaded (local or from the cloud), and update their orders.
+function fixClientCities(){
+  let n = 0;
+  (state.clients || []).forEach(function(c){ if(tidyClientCity(c)){ n++; refreshLinkedOrders(c.id); } });
+  if(n){ scheduleSave(); if(typeof renderClients === 'function') renderClients(); showToast('Fixed ' + n + ' client address' + (n === 1 ? '' : 'es') + ' that had been typed into City'); }
+  return n;
+}
+
 function clientAddressText(client){
   if(!client) return '';
   const parts = [(client.address || '').trim(), (client.city || '').trim()].filter(Boolean);
@@ -7056,6 +7082,7 @@ function saveNewClientFromModal(){
     totalOrders: 0, revenue: 0,
     notes: document.getElementById('newClientNotes').value || ''
   };
+  tidyClientCity(client);
   state.clients.push(client);
   renderClients();
   scheduleSave();
@@ -7414,6 +7441,12 @@ function renderClients(){
     }
     [nameEl, typeEl, cityEl, addressEl, contactEl, phoneEl, emailEl, instagramEl, gstinEl, notesEl]
       .forEach(function(el){ el.addEventListener('input', onEdit); });
+    cityEl.addEventListener('change', function(){
+      if(!tidyClientCity(d)) return;
+      cityEl.value = d.city; addressEl.value = d.address;
+      scheduleSave(); refreshLinkedOrders(d.id);
+      showToast(d.city ? 'Moved the address from City to Address' : 'Moved the address from City to Address. Add the city.');
+    });
 
     rmBtn.addEventListener('click', function(e){
       e.stopPropagation();
@@ -12211,6 +12244,7 @@ document.getElementById('clientSearchInput').addEventListener('input', function(
 // ========== INITIAL HOME RENDER ==========
 // Render Home on load since it's the default tab
 setTimeout(function(){ renderHome(); }, 100);
+setTimeout(function(){ try{ fixClientCities(); }catch(e){} }, 1500);
 
 function renderPricingSimulator(){
   // Populate catalog dropdown
@@ -15078,6 +15112,7 @@ function cloudRenderAll(){
     state.orders.forEach(ensureOrderDefaults);
     state.expenses.forEach(ensureExpenseDefaults);
   });
+  safe(fixClientCities);
   [ensureDealerTiers, ensurePon, ensureFil, filSyncLegacy, renderFilament, renderPartners, ensurePrinterList, syncPrinterCount, hydrateFleetInputs, hydrateBusinessInputs, renderPrinters,
    renderOrders, recalcQueue, renderInventory, renderFilamentRates, renderProductCatalog, renderClients, renderExpenses, renderDealerTiers,
    renderDashboard, renderExpenseDashboard, renderBackupReminder, updateRecalcHistoricalCostsCount].forEach(function(fn){ if(typeof fn === 'function') safe(fn); });
@@ -17217,7 +17252,7 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
-<script src="buyers-admin.js?v=25"></script>
+<script src="buyers-admin.js?v=26"></script>
 <script src="partner-planning.js?v=4"></script>
 <script src="control-room.js?v=13"></script>
 <script src="projects.js?v=11"></script>
