@@ -930,6 +930,8 @@
   .invoice-overlay.hidden{ display: none; }
   .invoice-toolbar{ position: sticky; top: 0; background: var(--panel); padding: 12px 20px; display: flex; gap: 10px; justify-content: flex-end; z-index: 2; border-bottom: 1px solid var(--line); }
   .invoice-toolbar .backup-btn{ color: var(--text); border-color: var(--line); }
+  .invoice-delivery{ display: flex; align-items: center; gap: 6px; margin-right: auto; color: var(--dim); font-size: 13px; }
+  .invoice-delivery input{ width: 96px; padding: 7px 8px; background: var(--input-bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit; }
   .invoice-doc{ max-width: 720px; margin: 26px auto 60px; background: #fff; color: #1a1a1a; padding: 46px 50px; font-family: 'Space Grotesk', sans-serif; box-shadow: 0 4px 24px rgba(0,0,0,0.25); border-radius: 4px; }
   .inv-top{ display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-bottom: 1px solid #ddd; padding-bottom: 18px; margin-bottom: 18px; }
   .inv-biz-name{ font-size: 20px; font-weight: 700; }
@@ -2835,6 +2837,7 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
 
   <div class="invoice-overlay hidden" id="invoiceOverlay">
     <div class="invoice-toolbar">
+      <label class="invoice-delivery" title="Billed to the client as its own line, with GST at the order's rate. Saved on the order.">Delivery charge ₹ <input type="number" id="invoiceDeliveryCharge" min="0" step="1" inputmode="decimal" placeholder="0"></label>
       <button class="backup-btn" id="invoicePrintBtn">⬇ Download PDF / Print</button>
       <button class="backup-btn" id="invoiceCloseBtn">✕ Close</button>
     </div>
@@ -3436,6 +3439,7 @@ function ensureOrderDefaults(o){
   if(o.sellingPriceMode == null) o.sellingPriceMode = 'total';
   if(o.packagingCost == null) o.packagingCost = 0;
   if(o.deliveryCost == null) o.deliveryCost = 0;
+  if(o.deliveryCharge == null) o.deliveryCharge = 0;
   if(o.discount == null) o.discount = 0;
   if(o.invoiceNumber == null) o.invoiceNumber = '';
   if(o.overallDiscountPct == null) o.overallDiscountPct = 0;
@@ -3519,7 +3523,7 @@ function posNum(val, max){
 // ---------- ORDERS ----------
 function newOrderShell(status){
   const today = isoLocal();
-  return { id: newId(), displayId: nextOrderDisplayId(), name: status === 'quoted' ? 'New quote' : 'New order', status: status, priority: 'normal', dueDate: '', orderedDate: '', productionStartDate: '', deliveryDate: '', productionDoneDate: '', reservedPrinters: 0, clientId: null, orderSource: '', clientName: '', clientPhone: '', clientAddress: '', clientState: '', clientGstin: '', notes: '', sellingPrice: 0, sellingPriceMode: 'total', packagingCost: 0, deliveryCost: 0, discount: 0, paymentStatus: 'unpaid', paymentMode: '', amountPaid: 0, refundAmount: 0, paymentClearedDate: '', products: [], wasQuoted: status === 'quoted', quotedDate: status === 'quoted' ? today : '', lostDate: '' };
+  return { id: newId(), displayId: nextOrderDisplayId(), name: status === 'quoted' ? 'New quote' : 'New order', status: status, priority: 'normal', dueDate: '', orderedDate: '', productionStartDate: '', deliveryDate: '', productionDoneDate: '', reservedPrinters: 0, clientId: null, orderSource: '', clientName: '', clientPhone: '', clientAddress: '', clientState: '', clientGstin: '', notes: '', sellingPrice: 0, sellingPriceMode: 'total', packagingCost: 0, deliveryCost: 0, deliveryCharge: 0, discount: 0, paymentStatus: 'unpaid', paymentMode: '', amountPaid: 0, refundAmount: 0, paymentClearedDate: '', products: [], wasQuoted: status === 'quoted', quotedDate: status === 'quoted' ? today : '', lostDate: '' };
 }
 function addOrder(){
   const order = newOrderShell('booked');
@@ -4284,28 +4288,35 @@ function orderTotals(order){
   // Once an order is marked Refunded, the money given back no longer counts as revenue —
   // but the filament/machine/packaging/delivery cost above was already spent and stays
   // exactly as it was, so profit correctly comes out negative (a real loss), not zero.
-  const refundAmount = (order.paymentStatus === 'refunded') ? Math.min(order.refundAmount || 0, preRefundValue) : 0;
+  // Delivery charged to the client (deliveryCharge) is billed on top of the goods, unlike
+  // deliveryCost, which is what delivery costs us. A refund comes off the goods first, then
+  // off the delivery charge.
+  const deliveryChargeGross = Math.max(0, +order.deliveryCharge || 0);
+  const refundAmount = (order.paymentStatus === 'refunded') ? Math.min(order.refundAmount || 0, preRefundValue + deliveryChargeGross) : 0;
   const orderValue = Math.max(0, preRefundValue - refundAmount);
+  const deliveryCharge = Math.max(0, deliveryChargeGross - Math.max(0, refundAmount - preRefundValue));
   const pricePerUnit = totalQty > 0 ? orderValue / totalQty : 0;
   const preRefundPricePerUnit = totalQty > 0 ? preRefundValue / totalQty : 0;
   const grossPricePerUnit = totalQty > 0 ? grossValue / totalQty : 0;
   // A salesperson's incentive on this order is a cost of the sale, so it comes out of profit.
   const incentive = orderIncentive(order, orderValue, baseCost);
   const allInCost = baseCost + incentive;
-  const profit = orderValue - allInCost;
+  const profit = orderValue + deliveryCharge - allInCost;
   // Margin is judged against what the order was actually quoted at (preRefundValue),
   // not the post-refund revenue — so a fully refunded order shows a clear, meaningful
   // "-100%-plus" loss instead of a moot "0% of 0" figure.
-  const margin = preRefundValue > 0 ? (profit / preRefundValue) * 100 : 0;
+  const margin = preRefundValue + deliveryChargeGross > 0 ? (profit / (preRefundValue + deliveryChargeGross)) * 100 : 0;
   // GST is applied on top of the net (post-discount, post-refund) order value, purely for invoice
   // display and what's actually owed — it's tax collected on the client's behalf, not
   // revenue, so it never enters profit/margin above. Rate defaults to 0 (not GST-registered),
   // in which case gstAmount is 0 and grandTotal simply equals orderValue.
   const gstRate = orderGstRate(order);
-  const gstAmount = Math.round(orderValue * gstRate) / 100;
-  const grandTotal = Math.round((orderValue + gstAmount) * 100) / 100;
+  // A delivery charge on the invoice is taxed at the goods' rate, so it's part of the taxable value.
+  const taxableValue = Math.round((orderValue + deliveryCharge) * 100) / 100;
+  const gstAmount = Math.round(taxableValue * gstRate) / 100;
+  const grandTotal = Math.round((taxableValue + gstAmount) * 100) / 100;
   const gst = gstSplit(order, gstRate, gstAmount);
-  return { hours: hours, filament: filament, days: days, cost: filamentCost, machineCost: machineCost, totalCost: totalCost, piecesLeft: piecesLeft, packagingCost: packagingCost, deliveryCost: deliveryCost, allInCost: allInCost, sellingPrice: orderValue, orderValue: orderValue, preRefundValue: preRefundValue, refundAmount: refundAmount, grossValue: grossValue, discount: discount, lineDiscount: lineDiscount, overallDiscountPct: overallDiscountPct, overallDiscountAmt: overallDiscountAmt, pricePerUnit: pricePerUnit, preRefundPricePerUnit: preRefundPricePerUnit, grossPricePerUnit: grossPricePerUnit, totalQty: totalQty, profit: profit, margin: margin, gstRate: gstRate, gstAmount: gstAmount, grandTotal: grandTotal, gst: gst, incentive: incentive };
+  return { hours: hours, filament: filament, days: days, cost: filamentCost, machineCost: machineCost, totalCost: totalCost, piecesLeft: piecesLeft, packagingCost: packagingCost, deliveryCost: deliveryCost, deliveryCharge: deliveryCharge, deliveryChargeGross: deliveryChargeGross, taxableValue: taxableValue, allInCost: allInCost, sellingPrice: orderValue, orderValue: orderValue, preRefundValue: preRefundValue, refundAmount: refundAmount, grossValue: grossValue, discount: discount, lineDiscount: lineDiscount, overallDiscountPct: overallDiscountPct, overallDiscountAmt: overallDiscountAmt, pricePerUnit: pricePerUnit, preRefundPricePerUnit: preRefundPricePerUnit, grossPricePerUnit: grossPricePerUnit, totalQty: totalQty, profit: profit, margin: margin, gstRate: gstRate, gstAmount: gstAmount, grandTotal: grandTotal, gst: gst, incentive: incentive };
 }
 
 // Piece-completion progress across all products in an order: "already made" out of total "qty" ordered.
@@ -4419,7 +4430,9 @@ function updateOrderStatsDOM(orderId){
         parts.push('\u2212 \u20b9' + fmt(Math.round(t.overallDiscountAmt * 100) / 100) + ' overall (' + fmt(t.overallDiscountPct) + '%)');
       }
       parts.push('= \u20b9' + fmt(Math.round(t.preRefundValue * 100) / 100) + ' for ' + fmt(t.totalQty) + ' pc' + (t.totalQty === 1 ? '' : 's'));
+      if(t.deliveryCharge > 0) parts.push('+ \u20b9' + fmt(t.deliveryCharge) + ' delivery');
       if(t.gstAmount > 0) parts.push('+ ' + gstText(t) + ' = \u20b9' + fmt(t.grandTotal) + ' with GST');
+      else if(t.deliveryCharge > 0) parts.push('= \u20b9' + fmt(t.grandTotal) + ' (no GST)');
       else parts.push('(no GST)');
       priceSummaryEl.textContent = parts.join('  ');
     }
@@ -4434,7 +4447,7 @@ function updateGstLine(orderId){
   if(!order || !el) return;
   const t = orderTotals(order), f = function(v){ return '\u20b9' + (Math.round(v * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
   if(!t.gstAmount){ el.innerHTML = '<span style="color:var(--dim)">No GST on this order. Pick a rate above, or set one in Settings.</span>'; return; }
-  el.innerHTML = '<b>Taxable ' + f(t.orderValue) + '</b> \u00b7 ' + escapeHtml(gstText(t)) + ' \u00b7 <b>Total ' + f(t.grandTotal) + '</b>' +
+  el.innerHTML = '<b>Taxable ' + f(t.taxableValue) + '</b> \u00b7 ' + escapeHtml(gstText(t)) + ' \u00b7 <b>Total ' + f(t.grandTotal) + '</b>' +
     (!t.gst.known ? '<div style="color:var(--amber);font-size:12px;margin-top:3px">Add your Place of Supply in Settings and the client\u2019s state to be sure it\u2019s CGST + SGST and not IGST, or pick the tax type.</div>' : '');
 }
 // A message with the GST breakup, for clients who ask for CGST and SGST separately.
@@ -4442,7 +4455,7 @@ function shareGstBreakup(orderId){
   const order = state.orders.find(function(o){ return o.id === orderId; }); if(!order) return;
   const t = orderTotals(order), f = function(v){ return '\u20b9' + (Math.round(v * 100) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   const biz = state.business || {}, ref = order.displayId || order.name || 'your order';
-  const lines = ['GST breakup for ' + ref + (order.invoiceNumber ? ' (invoice ' + order.invoiceNumber + ')' : ''), 'Taxable value: ' + f(t.orderValue)];
+  const lines = ['GST breakup for ' + ref + (order.invoiceNumber ? ' (invoice ' + order.invoiceNumber + ')' : ''), 'Taxable value: ' + f(t.taxableValue) + (t.deliveryCharge > 0 ? ' (incl. delivery ' + f(t.deliveryCharge) + ')' : '')];
   if(!t.gstAmount) lines.push('GST: not charged on this order');
   else if(t.gst.inter) lines.push('IGST @ ' + t.gst.igstRate + '%: ' + f(t.gst.igst));
   else { lines.push('CGST @ ' + t.gst.cgstRate + '%: ' + f(t.gst.cgst)); lines.push('SGST @ ' + t.gst.sgstRate + '%: ' + f(t.gst.sgst)); }
@@ -5088,7 +5101,8 @@ function buildOrderCardBody(order, index){
         '</div>' +
         '<div><label>Overall discount (%)</label><input type="number" class="p-overall-discount" min="0" max="100" step="0.5" value="' + (order.overallDiscountPct || 0) + '" title="Order-level discount applied on top of any per-line discounts. Useful for bundle deals or dealer tier pricing."></div>' +
         '<div><label>Packaging cost (\u20b9)</label><input type="number" class="p-packaging-cost" min="0" step="1" value="' + (order.packagingCost || 0) + '"></div>' +
-        '<div><label>Delivery cost (\u20b9)</label><input type="number" class="p-delivery-cost" min="0" step="1" value="' + (order.deliveryCost || 0) + '"></div>' +
+        '<div><label>Delivery cost (\u20b9)</label><input type="number" class="p-delivery-cost" min="0" step="1" value="' + (order.deliveryCost || 0) + '" title="What delivery costs us. Not shown to the client."></div>' +
+        '<div><label>Delivery charge to client (\u20b9)</label><input type="number" class="p-delivery-charge" min="0" step="1" value="' + (order.deliveryCharge || 0) + '" title="Added to the invoice and quotation as its own line, with GST at the order\u2019s rate."></div>' +
         '<div><label>GST</label><select class="p-gst-rate">' + gstRateOptions(order) + '</select></div>' +
         '<div><label>Tax type</label><select class="p-gst-supply">' + [['auto', 'By client\u2019s state'], ['intra', 'Same state: CGST + SGST'], ['inter', 'Other state: IGST']].map(function(o){ return '<option value="' + o[0] + '"' + ((order.gstSupply || 'auto') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
         '<div><label>Client\u2019s state</label><input type="text" class="p-client-state" list="indianStatesList" placeholder="' + escapeHtml(orderBuyerState(Object.assign({}, order, { clientState: '' })) || 'e.g. Delhi') + '" value="' + escapeHtml(order.clientState || '') + '"></div>' +
@@ -5163,6 +5177,9 @@ function buildOrderCardBody(order, index){
     });
     clientBlock.querySelector('.p-delivery-cost').addEventListener('input', function(e){
       order.deliveryCost = posNum(e.target.value); updateOrderStatsDOM(order.id); scheduleSave();
+    });
+    clientBlock.querySelector('.p-delivery-charge').addEventListener('input', function(e){
+      order.deliveryCharge = posNum(e.target.value); updateOrderStatsDOM(order.id); updatePaymentHint(order.id); updateGstLine(order.id); scheduleSave();
     });
     // GST: rate for this order, CGST+SGST or IGST, and the client's state when it isn't on the client.
     function refreshGst(){ updateOrderStatsDOM(order.id); updatePaymentHint(order.id); updateGstLine(order.id); scheduleSave(); }
@@ -13396,9 +13413,11 @@ function generateInvoice(orderId, opts){
     '<div class="inv-totals"><table>' +
       // Subtotal/Discount/GST only appear when they actually apply, so an invoice with
       // no discount and a 0% GST rate (the default) looks exactly as it did before.
-      ((t.discount > 0 || t.gstAmount > 0) ? '<tr><td>Subtotal</td><td class="num">\u20b9' + t.grossValue.toFixed(2) + '</td></tr>' : '') +
+      ((t.discount > 0 || t.gstAmount > 0 || t.deliveryCharge > 0) ? '<tr><td>Subtotal</td><td class="num">\u20b9' + t.grossValue.toFixed(2) + '</td></tr>' : '') +
       (t.lineDiscount > 0 ? '<tr><td>Line Discount (' + (t.grossValue > 0 ? fmt(Math.round((t.lineDiscount / t.grossValue) * 1000) / 10) : '0') + '%)</td><td class="num">\u2212\u20b9' + t.lineDiscount.toFixed(2) + '</td></tr>' : '') +
       (t.overallDiscountPct > 0 ? '<tr><td>Overall Discount (' + fmt(t.overallDiscountPct) + '%)</td><td class="num">\u2212\u20b9' + t.overallDiscountAmt.toFixed(2) + '</td></tr>' : '') +
+      (t.deliveryCharge > 0 ? '<tr><td>Delivery Charges</td><td class="num">\u20b9' + t.deliveryCharge.toFixed(2) + '</td></tr>' : '') +
+      (t.gstAmount > 0 && (t.discount > 0 || t.deliveryCharge > 0) ? '<tr><td>Taxable Value</td><td class="num">\u20b9' + t.taxableValue.toFixed(2) + '</td></tr>' : '') +
       (t.gstAmount > 0 ? (t.gst.inter
         ? '<tr><td>IGST (' + fmt(t.gst.igstRate) + '%)</td><td class="num">\u20b9' + t.gst.igst.toFixed(2) + '</td></tr>'
         : '<tr><td>CGST (' + fmt(t.gst.cgstRate) + '%)</td><td class="num">\u20b9' + t.gst.cgst.toFixed(2) + '</td></tr>' +
@@ -13406,8 +13425,9 @@ function generateInvoice(orderId, opts){
       '<tr class="grand"><td>Total</td><td class="num">\u20b9' + t.grandTotal.toFixed(2) + '</td></tr>' +
       (paymentRow || '') +
     '</table></div>' +
-    ((order.packagingCost || 0) > 0 || (order.deliveryCost || 0) > 0
-      ? '<div class="inv-packnote">Includes packaging &amp; delivery.</div>' : '') +
+    (t.deliveryCharge > 0
+      ? ((order.packagingCost || 0) > 0 ? '<div class="inv-packnote">Includes packaging.</div>' : '')
+      : ((order.packagingCost || 0) > 0 || (order.deliveryCost || 0) > 0 ? '<div class="inv-packnote">Includes packaging &amp; delivery.</div>' : '')) +
     '<div class="inv-packnote">' + paymentStatusLine + '</div>' +
     ((order.notes || '').trim()
       ? '<div class="inv-notes"><div class="inv-section-label">Notes</div><div class="inv-notes-body">' + escapeHtml(order.notes) + '</div></div>'
@@ -13418,10 +13438,24 @@ function generateInvoice(orderId, opts){
 
   document.getElementById('invoiceDoc').innerHTML = html;
   document.getElementById('invoiceOverlay').classList.remove('hidden');
+  invoiceOpen = { orderId: orderId, opts: opts };
+  const dcInput = document.getElementById('invoiceDeliveryCharge');
+  if(dcInput && document.activeElement !== dcInput) dcInput.value = order.deliveryCharge ? String(order.deliveryCharge) : '';
   // The saved PDF is named after the page title, e.g. "Quotation QT-0007 - Ishita Pandey".
   invoiceDocTitle = (quote ? 'Quotation ' + order.quoteNumber : 'Invoice ' + order.invoiceNumber) + ' - ' + String(order.clientName || order.name || 'Client').replace(/[\\/:*?"<>|]+/g, ' ').trim();
 }
 let invoiceDocTitle = '';
+let invoiceOpen = null;
+// Delivery charge typed on the invoice toolbar: saved on the order, and the document redrawn.
+document.getElementById('invoiceDeliveryCharge').addEventListener('input', function(e){
+  if(!invoiceOpen) return;
+  const order = state.orders.find(function(o){ return o.id === invoiceOpen.orderId; }); if(!order) return;
+  order.deliveryCharge = posNum(e.target.value);
+  scheduleSave();
+  generateInvoice(invoiceOpen.orderId, invoiceOpen.opts);
+  if(typeof updateOrderStatsDOM === 'function') updateOrderStatsDOM(order.id);
+  const field = document.querySelector('#orderDetailModalOverlay .p-delivery-charge'); if(field) field.value = order.deliveryCharge || 0;
+});
 
 document.getElementById('invoicePrintBtn').addEventListener('click', function(){
   const was = document.title;
@@ -17252,7 +17286,7 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
-<script src="buyers-admin.js?v=26"></script>
+<script src="buyers-admin.js?v=27"></script>
 <script src="partner-planning.js?v=4"></script>
 <script src="control-room.js?v=13"></script>
 <script src="projects.js?v=11"></script>

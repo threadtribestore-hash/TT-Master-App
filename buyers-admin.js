@@ -246,7 +246,7 @@
         return { name: p.name || '', color: p.color || '', material: p.material || '', qty: p.qty || 0, made: Math.min(Math.max(p.already || 0, farm), p.qty || 0),
           unitPrice: p.actualPrice || 0, listPrice: p.listPrice || 0, catalogId: catalogIdFor(p) };
       }),
-      subtotal: t.orderValue, discount: t.discount, gstRate: t.gstRate, gst: t.gstAmount, total: t.grandTotal,
+      subtotal: t.orderValue, delivery: t.deliveryCharge || 0, discount: t.discount, gstRate: t.gstRate, gst: t.gstAmount, total: t.grandTotal,
       // CGST + SGST within the seller's state, IGST otherwise, so invoices show the split clients ask for.
       gstSplit: t.gst ? { inter: t.gst.inter, cgstRate: t.gst.cgstRate, cgst: t.gst.cgst, sgstRate: t.gst.sgstRate, sgst: t.gst.sgst, igstRate: t.gst.igstRate, igst: t.gst.igst } : null,
       paid: o.paymentStatus === 'paid' ? t.grandTotal : (o.amountPaid || 0), due: noDue ? 0 : Math.max(0, Math.round((t.grandTotal - (o.amountPaid || 0)) * 100) / 100),
