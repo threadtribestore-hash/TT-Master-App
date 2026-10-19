@@ -17315,6 +17315,9 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   #ttf .ttf-order-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 12px;background:var(--input-bg)}
   #ttf .ttf-order-head b{font-size:14px}
   #ttf .ttf-pill{border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--dim);font-size:11px}
+  #ttf tr.ttf-part td{border-top:1px dashed var(--line)}
+  #ttf [data-act="addpart"],#ttf [data-act="rmpart"]{color:var(--dim)}
+  #ttf [data-act="addpart"]:hover{color:var(--cyan)}
   #ttf .ttf-pill.ok{color:var(--green);border-color:var(--green)}
   #ttf .ttf-pill.warn{color:var(--amber);border-color:var(--amber)}
   #ttf .ttf-pill.bad{color:var(--red);border-color:var(--red)}
@@ -17322,7 +17325,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   #ttf th,#ttf td{text-align:left;padding:7px 10px;border-top:1px solid var(--line);vertical-align:middle}
   #ttf th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
   #ttf td.num,#ttf th.num{text-align:right;font-variant-numeric:tabular-nums}
-  #ttf select,#ttf input[type=number]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font:inherit;max-width:100%}
+  #ttf select,#ttf input[type=number],#ttf input[data-f="label"]{background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font:inherit;max-width:100%}
   #ttf input[type=number]{width:70px}
   #ttf .ttf-spacer{flex:1}
   #ttf .ttf-bar{height:6px;background:var(--input-bg);border-radius:3px;overflow:hidden;min-width:80px}
@@ -17443,6 +17446,31 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   }
   function fileById(id){ return (library || []).filter(function(f){ return f.id === id; })[0]; }
 
+  // A product printed from several files (shade + base, body + lid): part 1 is the map entry
+  // itself, further parts sit in m.parts, each with its own key, file, plate and per-plate count.
+  // Each part goes to the farm as its own line "<lineId>~<key>", and a unit only counts as made
+  // once every part of it is (the scarcest part decides).
+  function partsOf(m){ return m ? [Object.assign({}, m, { key: '1' })].concat(m.parts || []) : []; }
+  function partLineId(lineId, pt){ return pt.key === '1' ? lineId : lineId + '~' + pt.key; }
+  function partLabel(pt, i){ return pt.label || 'Part ' + (i + 1); }
+  function partName(name, pt, i, many){ return many ? name + ' (' + partLabel(pt, i) + ')' : name; }
+  function newPartKey(){ return 'p' + Math.random().toString(36).replace(/[^a-z0-9]/g, '').slice(0, 5); }
+  function getPart(name, key){ return partsOf(getMap()[norm(name)]).filter(function(p){ return p.key === key; })[0]; }
+  function setPart(name, key, patch){
+    if (key === '1') return setMapEntry(name, patch);
+    var all = getMap(), m = all[norm(name)]; if (!m) return;
+    m.parts = (m.parts || []).map(function(p){ return p.key === key ? Object.assign({}, p, patch) : p; });
+    wr(MAP_KEY, all);
+  }
+  function partsReady(parts){ return parts.length > 0 && parts.every(function(pt){ return fileById(pt.fileId); }); }
+  // The map entry a farm batch name belongs to: "Lamp" or "Lamp (Base)" for a part.
+  function partForProduct(map, product){
+    var m = map[norm(product)]; if (m) return m;
+    var x = /^(.*) \(([^)]*)\)$/.exec(product || ''); if (!x) return null;
+    var parts = partsOf(map[norm(x[1])]);
+    return parts.filter(function(pt, i){ return norm(partLabel(pt, i)) === norm(x[2]); })[0] || null;
+  }
+
   function banner(){
     if (!connErr) return '';
     if (connErr.status === 0 && isCustomBridge()) return '<div class="ttf-banner err"><b>Can\'t reach the print-farm Mac</b> at ' + esc(conn().url) + '. Check this device is connected in Tailscale and the Mac is on with the bridge running. <button class="ttf-btn" data-act="retry">Retry</button> <button class="ttf-btn" data-act="setup">Setup</button></div>';
@@ -17486,7 +17514,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     else {
       h += '<div class="ttf-wrap"><table><thead><tr><th>Product</th><th class="num">Plates done</th><th class="num">Failed</th><th class="num">Sliced/unit</th><th class="num">Catalogue wt</th><th class="num">Overhead</th><th class="num">Used</th><th class="num">Wasted</th><th class="num">Waste %</th></tr></thead><tbody>';
       waste.products.forEach(function(p){
-        var m = map[norm(p.product)], per = p.plateGrams != null ? p.plateGrams / Math.max(+((m && m.unitsPerPlate) || 1), 1) : null, cw = catalogWeight(p.product);
+        var m = partForProduct(map, p.product), per =p.plateGrams != null ? p.plateGrams / Math.max(+((m && m.unitsPerPlate) || 1), 1) : null, cw = catalogWeight(p.product);
         h += '<tr><td>' + esc(p.product) + '</td><td class="num">' + p.plates + '</td><td class="num">' + (p.failed ? '<span style="color:var(--red)">' + p.failed + '</span>' : 0) + '</td>' +
           '<td class="num">' + g(per) + '</td><td class="num">' + g(cw) + '</td><td class="num">' + (per && cw ? pct(per - cw, per) : '—') + '</td>' +
           '<td class="num">' + g(p.usedGrams) + '</td><td class="num">' + g(p.wastedGrams) + '</td><td class="num">' + pct(p.wastedGrams, p.usedGrams) + '</td></tr>';
@@ -17520,36 +17548,53 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     var orders = activeOrders(), map = getMap();
     if (!orders.length) return '<p class="ttf-note">No booked or in-production orders.</p>';
     var hold = rd(HOLD_KEY, false);
-    var h = '<p class="ttf-note">Each product line becomes an order batch in Bambuddy, split across free printers of the right model. Units already made (the "already" count) are subtracted. Sending twice won\'t duplicate anything.</p>';
+    var h = '<p class="ttf-note">Each product line becomes an order batch in Bambuddy, split across free printers of the right model. Units already made (the "already" count) are subtracted. Sending twice won\'t duplicate anything. A product made from more than one file (say a shade and a base): choose the first file, then <b>+ Add another file (part)</b>. Each part prints as its own job, and a unit counts as made once every part of it is printed.</p>';
     h += '<label class="ttf-check" style="margin-bottom:14px"><input type="checkbox" id="ttf-hold"' + (hold ? ' checked' : '') + '> Hold sent jobs in Bambuddy until someone presses Start</label>';
     orders.forEach(function(o){
       var st = statusByOrder[o.id] || {}, sendable = 0, unmapped = 0, used = 0, wasted = 0;
       Object.keys(st).forEach(function(k){ used += st[k].usedGrams || 0; wasted += st[k].wastedGrams || 0; });
       var rows = (o.products || []).map(function(p){
-        var m = map[norm(p.name)], f = m && fileById(m.fileId), left = linesLeft(p), lineSt = st[p.id];
-        if (!m || !f) unmapped++; else if (!lineSt && left > 0) sendable++;
-        // Done = units Studio already counts + units from plates the farm has finished, capped at the order qty.
-        var qty = +p.qty || 0, farmUnits = lineSt ? lineSt.completed * Math.max(+((m && m.unitsPerPlate) || 1), 1) : 0;
+        var m = map[norm(p.name)], parts = m ? partsOf(m) : [{ key: '1' }], many = parts.length > 1, left = linesLeft(p);
+        if (!partsReady(m ? parts : [])) unmapped++;
+        else if (left > 0) parts.forEach(function(pt){ if (!st[partLineId(p.id, pt)]) sendable++; });
+        // Done = units Studio already counts + units the farm has finished, capped at the order qty.
+        // With parts, a unit is finished only when every part is, so the scarcest part counts.
+        var qty = +p.qty || 0, farmUnits = Math.min.apply(null, parts.map(function(pt){
+          var s = st[partLineId(p.id, pt)]; return s ? s.completed * Math.max(+(pt.unitsPerPlate || 1), 1) : 0;
+        }));
         var done = Math.min((+p.already || 0) + farmUnits, qty);
-        var fileCell;
-        if (lineSt) fileCell = (f ? esc(f.name) + (m.plateId ? ' · plate ' + m.plateId : '') : '<span style="color:var(--dim)">file unlinked</span>') +
-          '<div style="color:var(--dim);font-size:12px;margin-top:2px">Sent. Undo send to change the file.</div>';
-        else if (library) fileCell = '<select data-f="fileId" aria-label="Bambuddy file for ' + esc(p.name) + '"><option value="">— choose file —</option>' +
-          library.map(function(x){ return '<option value="' + x.id + '"' + (f && x.id === f.id ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') + '</select>' +
-          (f ? ' <a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--dim);font-size:12px">plate / per plate</a>' : '') +
-          (f ? (function(){
-            var opts = printersFor(f, m), pick = pickFor(o.id, p.id), model = (m && m.targetModel) || f.model || '';
-            return '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)">Printer ' +
-              '<select data-pick="' + esc(o.id + ':' + p.id) + '" aria-label="Printer for ' + esc(p.name) + '"><option value="">Any free ' + esc(model || 'printer') + '</option>' +
-              opts.map(function(x){ return '<option value="' + esc(x.id) + '"' + (String(x.id) === String(pick) ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') +
-              '</select></div>';
-          })() : '');
-        else fileCell = f ? esc(f.name) : '—';
-        if (lineSt && pickFor(o.id, p.id)) fileCell += '<div style="color:var(--dim);font-size:12px">On ' + esc(printerName(pickFor(o.id, p.id)) || 'chosen printer') + '</div>';
-        return '<tr data-name="' + esc(p.name) + '"><td>' + esc(p.name) + '</td><td class="num">' + done + ' / ' + qty + '</td><td class="num">' + left + '</td>' +
-          '<td>' + fileCell + '</td>' +
-          '<td class="num">' + (f ? (m.unitsPerPlate || 1) : '') + '</td><td class="num">' + (f ? runsFor(p, m) : '') + '</td>' +
-          '<td>' + progressCell(lineSt, o.id, p.id) + '</td><td>' + filamentCell(lineSt) + '</td></tr>';
+        return parts.map(function(pt, i){
+          var f = fileById(pt.fileId), lid = partLineId(p.id, pt), lineSt = st[lid], fileCell;
+          var label = !many ? '' : lineSt || !library ? '<div style="font-weight:600;margin-bottom:4px">' + esc(partLabel(pt, i)) + '</div>' :
+            '<input data-f="label" value="' + esc(pt.label || '') + '" placeholder="' + esc(partLabel(pt, i)) + ' name, e.g. Base" aria-label="Part name" style="margin-bottom:6px;width:100%;max-width:260px;display:block">';
+          if (lineSt) fileCell = (f ? esc(f.name) + (pt.plateId ? ' · plate ' + pt.plateId : '') : '<span style="color:var(--dim)">file unlinked</span>') +
+            '<div style="color:var(--dim);font-size:12px;margin-top:2px">Sent. Undo send to change the file.</div>';
+          else if (library) fileCell = '<select data-f="fileId" aria-label="Bambuddy file for ' + esc(partName(p.name, pt, i, many)) + '"><option value="">— choose file —</option>' +
+            library.map(function(x){ return '<option value="' + x.id + '"' + (f && x.id === f.id ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') + '</select>' +
+            (f ? ' <a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--dim);font-size:12px">plate / per plate</a>' : '') +
+            (f ? (function(){
+              var opts = printersFor(f, pt), pick = pickFor(o.id, lid), model = pt.targetModel || f.model || '';
+              return '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)">Printer ' +
+                '<select data-pick="' + esc(o.id + ':' + lid) + '" aria-label="Printer for ' + esc(partName(p.name, pt, i, many)) + '"><option value="">Any free ' + esc(model || 'printer') + '</option>' +
+                opts.map(function(x){ return '<option value="' + esc(x.id) + '"' + (String(x.id) === String(pick) ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') +
+                '</select></div>';
+            })() : '');
+          else fileCell = f ? esc(f.name) : '—';
+          if (lineSt && pickFor(o.id, lid)) fileCell += '<div style="color:var(--dim);font-size:12px">On ' + esc(printerName(pickFor(o.id, lid)) || 'chosen printer') + '</div>';
+          // Parts are added or removed only while nothing of them is on the farm for this order.
+          if (library && !lineSt) {
+            var links = [];
+            if (i === parts.length - 1 && m && fileById(m.fileId)) links.push('<a href="#" data-act="addpart" data-name="' + esc(p.name) + '">+ Add another file (part)</a>');
+            if (pt.key !== '1') links.push('<a href="#" data-act="rmpart" data-name="' + esc(p.name) + '" data-part="' + esc(pt.key) + '">Remove part</a>');
+            if (links.length) fileCell += '<div style="margin-top:6px;font-size:12px;display:flex;gap:12px;color:var(--dim)">' + links.join('') + '</div>';
+          }
+          var head = i ? '' : '<td' + (many ? ' rowspan="' + parts.length + '"' : '') + '>' + esc(p.name) + (many ? '<div style="color:var(--dim);font-size:12px;margin-top:2px">' + parts.length + ' files per unit</div>' : '') + '</td>' +
+            '<td class="num"' + (many ? ' rowspan="' + parts.length + '"' : '') + '>' + done + ' / ' + qty + '</td><td class="num"' + (many ? ' rowspan="' + parts.length + '"' : '') + '>' + left + '</td>';
+          return '<tr data-name="' + esc(p.name) + '" data-part="' + esc(pt.key) + '"' + (i ? ' class="ttf-part"' : '') + '>' + head +
+            '<td>' + label + fileCell + '</td>' +
+            '<td class="num">' + (f ? (pt.unitsPerPlate || 1) : '') + '</td><td class="num">' + (f ? runsFor(p, pt) : '') + '</td>' +
+            '<td>' + progressCell(lineSt, o.id, lid) + '</td><td>' + filamentCell(lineSt) + '</td></tr>';
+        }).join('');
       }).join('');
       h += '<div class="ttf-order"><div class="ttf-order-head"><b>' + esc(o.displayId) + '</b><span>' + esc(o.clientName || '') + '</span>' +
         '<span class="ttf-pill">' + ACTIVE[o.status] + '</span>' + (o.dueDate ? '<span class="ttf-pill warn">Due ' + esc(o.dueDate) + '</span>' : '') +
@@ -17573,20 +17618,30 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     if (!library) return '<p class="ttf-note">Connect to Bambuddy to set up products.</p>';
     var map = getMap(), models = {};
     (printers || []).forEach(function(p){ if (p.model) models[p.model] = 1; });
-    var h = '<p class="ttf-note">Match each Studio product to a sliced file in Bambuddy\'s library, once. <b>Per plate</b> is how many units one print makes. Products on open orders are listed first. Only sliced files (.gcode.3mf) appear; upload them in Bambuddy → Library.</p>';
+    var h = '<p class="ttf-note">Match each Studio product to a sliced file in Bambuddy\'s library, once. <b>Per plate</b> is how many units one print makes. A product printed from several files gets one row per file: use <b>+ Add another file (part)</b> and name each part (Shade, Base…). Products on open orders are listed first. Only sliced files (.gcode.3mf) appear; upload them in Bambuddy → Library.</p>';
     if (!library.length) h += '<div class="ttf-banner">Bambuddy\'s library has no sliced files yet. Upload your .gcode.3mf files there first.</div>';
     h += '<div class="ttf-wrap"><table><thead><tr><th>Studio product</th><th>Bambuddy file</th><th>Plate</th><th class="num">Per plate</th><th>Printer model</th></tr></thead><tbody>';
     productNames().forEach(function(p){
-      var m = map[norm(p.name)] || {}, plates = plateCache[m.fileId];
-      var fileOpts = '<option value="">—</option>' + library.map(function(f){ return '<option value="' + f.id + '"' + (f.id === m.fileId ? ' selected' : '') + '>' + esc(f.name) + (f.model ? ' (' + esc(f.model) + ')' : '') + '</option>'; }).join('');
-      var plateOpts = !m.fileId ? '' : !plates ? '<option>loading…</option>' : plates.map(function(pl){ return '<option value="' + pl.index + '"' + (pl.index === m.plateId ? ' selected' : '') + '>' + pl.index + (pl.name ? ' · ' + esc(pl.name) : '') + '</option>'; }).join('');
-      var modelOpts = '<option value="">File\'s model</option>' + Object.keys(models).map(function(md){ return '<option' + (md === m.targetModel ? ' selected' : '') + '>' + esc(md) + '</option>'; }).join('');
-      h += '<tr data-name="' + esc(p.name) + '"><td>' + esc(p.name) + (p.active ? ' <span class="ttf-pill warn">on order</span>' : '') + '</td>' +
-        '<td><select data-f="fileId">' + fileOpts + '</select></td>' +
-        '<td>' + (m.fileId ? '<select data-f="plateId">' + plateOpts + '</select>' : '') + '</td>' +
-        '<td class="num">' + (m.fileId ? '<input type="number" min="1" data-f="unitsPerPlate" value="' + (m.unitsPerPlate || 1) + '">' : '') + '</td>' +
-        '<td>' + (m.fileId ? '<select data-f="targetModel">' + modelOpts + '</select>' : '') + '</td></tr>';
-      if (m.fileId && !plates) loadPlates(m.fileId);
+      var entry = map[norm(p.name)], parts = entry ? partsOf(entry) : [{ key: '1' }], many = parts.length > 1;
+      parts.forEach(function(m, i){
+        var plates = plateCache[m.fileId];
+        var fileOpts = '<option value="">—</option>' + library.map(function(f){ return '<option value="' + f.id + '"' + (f.id === m.fileId ? ' selected' : '') + '>' + esc(f.name) + (f.model ? ' (' + esc(f.model) + ')' : '') + '</option>'; }).join('');
+        var plateOpts = !m.fileId ? '' : !plates ? '<option>loading…</option>' : plates.map(function(pl){ return '<option value="' + pl.index + '"' + (pl.index === m.plateId ? ' selected' : '') + '>' + pl.index + (pl.name ? ' · ' + esc(pl.name) : '') + '</option>'; }).join('');
+        var modelOpts = '<option value="">File\'s model</option>' + Object.keys(models).map(function(md){ return '<option' + (md === m.targetModel ? ' selected' : '') + '>' + esc(md) + '</option>'; }).join('');
+        var links = [];
+        if (i === parts.length - 1 && entry && entry.fileId) links.push('<a href="#" data-act="addpart" data-name="' + esc(p.name) + '">+ Add another file (part)</a>');
+        if (m.key !== '1') links.push('<a href="#" data-act="rmpart" data-name="' + esc(p.name) + '" data-part="' + esc(m.key) + '">Remove part</a>');
+        var span = many ? ' rowspan="' + parts.length + '"' : '';
+        h += '<tr data-name="' + esc(p.name) + '" data-part="' + esc(m.key) + '"' + (i ? ' class="ttf-part"' : '') + '>' +
+          (i ? '' : '<td' + span + '>' + esc(p.name) + (p.active ? ' <span class="ttf-pill warn">on order</span>' : '') + (many ? '<div style="color:var(--dim);font-size:12px;margin-top:2px">' + parts.length + ' files per unit</div>' : '') + '</td>') +
+          '<td>' + (many ? '<input data-f="label" value="' + esc(m.label || '') + '" placeholder="' + esc(partLabel(m, i)) + ' name, e.g. Base" aria-label="Part name" style="margin-bottom:6px;width:100%;max-width:260px;display:block">' : '') +
+          '<select data-f="fileId">' + fileOpts + '</select>' +
+          (links.length ? '<div style="margin-top:6px;font-size:12px;display:flex;gap:12px;color:var(--dim)">' + links.join('') + '</div>' : '') + '</td>' +
+          '<td>' + (m.fileId ? '<select data-f="plateId">' + plateOpts + '</select>' : '') + '</td>' +
+          '<td class="num">' + (m.fileId ? '<input type="number" min="1" data-f="unitsPerPlate" value="' + (m.unitsPerPlate || 1) + '">' : '') + '</td>' +
+          '<td>' + (m.fileId ? '<select data-f="targetModel">' + modelOpts + '</select>' : '') + '</td></tr>';
+        if (m.fileId && !plates) loadPlates(m.fileId);
+      });
     });
     return h + '</tbody></table></div>';
   }
@@ -17674,11 +17729,20 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     var o = activeOrders().filter(function(x){ return x.id === orderId; })[0]; if (!o) return;
     var map = getMap(), st = statusByOrder[o.id] || {}, lines = [];
     (o.products || []).forEach(function(p){
-      var m = map[norm(p.name)];
-      if (!m || !fileById(m.fileId) || st[p.id] || linesLeft(p) < 1) return;
-      var pick = pickFor(o.id, p.id);
-      lines.push({ lineId: p.id, name: p.name, units: linesLeft(p), unitsPerPlate: m.unitsPerPlate || 1, runs: runsFor(p, m), fileId: m.fileId, plateId: m.plateId == null ? null : m.plateId, targetModel: m.targetModel || null,
-        printerId: pick ? +pick : null, printerName: pick ? printerName(pick) : '' });
+      var parts = partsOf(map[norm(p.name)]), many = parts.length > 1;
+      // Every part needs its file before any of the product goes, so a unit is never half sent.
+      if (!partsReady(parts) || linesLeft(p) < 1) return;
+      var keys = parts.map(function(pt){ return pt.key; });
+      parts.forEach(function(pt, i){
+        var lid = partLineId(p.id, pt);
+        if (st[lid]) return;
+        var pick = pickFor(o.id, lid), line = { lineId: lid, name: partName(p.name, pt, i, many), units: linesLeft(p), unitsPerPlate: pt.unitsPerPlate || 1, runs: runsFor(p, pt),
+          fileId: pt.fileId, plateId: pt.plateId == null ? null : pt.plateId, targetModel: pt.targetModel || null,
+          printerId: pick ? +pick : null, printerName: pick ? printerName(pick) : '' };
+        // The farm sync reads the part list from the batch notes to count whole units.
+        if (many) { line.parts = keys; line.partLabel = partLabel(pt, i); }
+        lines.push(line);
+      });
     });
     if (!lines.length) return;
     var hold = rd(HOLD_KEY, false), total = lines.reduce(function(s, l){ return s + l.runs; }, 0);
@@ -17697,9 +17761,10 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 
   function undoLine(orderId, lineId){
     var o = activeOrders().filter(function(x){ return x.id === orderId; })[0];
-    var p = o && (o.products || []).filter(function(x){ return x.id === lineId; })[0];
+    var p = o && (o.products || []).filter(function(x){ return x.id === lineId.split('~')[0]; })[0];
     var st = (statusByOrder[orderId] || {})[lineId] || {};
-    if (!confirm('Undo sending ' + (p ? p.name : 'this line') + ' (' + (o ? o.displayId : '') + ')?\n\n' +
+    var parts = p ? partsOf(getMap()[norm(p.name)]) : [], idx = parts.map(function(pt){ return partLineId(p.id, pt); }).indexOf(lineId);
+    if (!confirm('Undo sending ' + (p ? partName(p.name, parts[idx] || {}, idx, parts.length > 1 && idx >= 0) : 'this line') + ' (' + (o ? o.displayId : '') + ')?\n\n' +
       'The plates still waiting in Bambuddy are cancelled. ' + (st.printing ? st.printing + ' plate(s) printing right now keep printing. ' : '') +
       (st.completed ? st.completed + ' plate(s) already printed stay counted. ' : '') + 'You can send the line again afterwards.')) return;
     api('/cancel-line', { orderId: orderId, lineId: lineId })
@@ -17740,6 +17805,13 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     if (a.dataset.act === 'back') { tab = 'orders'; render(); }
     if (a.dataset.act === 'setup') { tab = 'key'; render(); }
     if (a.dataset.act === 'undo') undoLine(a.dataset.order, a.dataset.line);
+    if (a.dataset.act === 'addpart' || a.dataset.act === 'rmpart') {
+      var all = getMap(), m = all[norm(a.dataset.name)]; if (!m) return;
+      if (a.dataset.act === 'addpart') {
+        m.parts = (m.parts || []).concat([{ key: newPartKey(), label: '', fileId: null, plateId: null, unitsPerPlate: 1, targetModel: '' }]);
+      } else m.parts = (m.parts || []).filter(function(p){ return p.key !== a.dataset.part; });
+      wr(MAP_KEY, all); render();
+    }
   });
   body.addEventListener('submit', function(e){
     var id = e.target.id; if (!/^ttf-/.test(id)) return;
@@ -17752,25 +17824,33 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     if (e.target.id === 'ttf-hold') { wr(HOLD_KEY, e.target.checked); return; }
     if (e.target.dataset.pick) { var picks = rd(PICK_KEY, {}); if (e.target.value) picks[e.target.dataset.pick] = e.target.value; else delete picks[e.target.dataset.pick]; wr(PICK_KEY, picks); return; }
     var row = e.target.closest('tr[data-name]'), f = e.target.dataset.f; if (!row || !f) return;
-    var name = row.dataset.name, v = e.target.value;
+    var name = row.dataset.name, key = row.dataset.part || '1', v = e.target.value;
     if (f === 'fileId') {
-      if (!v) { var m = getMap(); delete m[norm(name)]; wr(MAP_KEY, m); render(); return; }
+      if (!v) {
+        var all = getMap(), cur = all[norm(name)];
+        // Clearing the only file forgets the product; with parts, just that part's file is cleared.
+        if (key === '1' && !(cur && (cur.parts || []).length)) { delete all[norm(name)]; wr(MAP_KEY, all); }
+        else setPart(name, key, { fileId: null, plateId: null });
+        render(); return;
+      }
       var id = +v;
-      setMapEntry(name, { fileId: id, plateId: null, unitsPerPlate: 1, targetModel: '' });
+      setPart(name, key, { fileId: id, plateId: null, unitsPerPlate: 1, targetModel: '' });
       loadPlates(id).then(function(pl){
         var first = pl && pl[0];
-        if (first) setMapEntry(name, { plateId: first.index, unitsPerPlate: Math.max(first.objects || 1, 1) });
+        if (first) setPart(name, key, { plateId: first.index, unitsPerPlate: Math.max(first.objects || 1, 1) });
         render();
       });
       render();
     } else if (f === 'plateId') {
-      var pl = (plateCache[getMap()[norm(name)].fileId] || []).filter(function(p){ return String(p.index) === v; })[0];
-      setMapEntry(name, { plateId: v === 'null' ? null : +v, unitsPerPlate: Math.max((pl && pl.objects) || 1, 1) });
+      var pl = (plateCache[(getPart(name, key) || {}).fileId] || []).filter(function(p){ return String(p.index) === v; })[0];
+      setPart(name, key, { plateId: v === 'null' ? null : +v, unitsPerPlate: Math.max((pl && pl.objects) || 1, 1) });
       render();
     } else if (f === 'unitsPerPlate') {
-      setMapEntry(name, { unitsPerPlate: Math.max(parseInt(v, 10) || 1, 1) });
+      setPart(name, key, { unitsPerPlate: Math.max(parseInt(v, 10) || 1, 1) });
     } else if (f === 'targetModel') {
-      setMapEntry(name, { targetModel: v });
+      setPart(name, key, { targetModel: v });
+    } else if (f === 'label') {
+      setPart(name, key, { label: v.replace(/[;()]/g, '').trim().slice(0, 40) });
     }
   });
 })();
