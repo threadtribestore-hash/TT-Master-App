@@ -2835,7 +2835,7 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
 
   <div class="invoice-overlay hidden" id="invoiceOverlay">
     <div class="invoice-toolbar">
-      <button class="backup-btn" id="invoicePrintBtn">🖨 Print / Save as PDF</button>
+      <button class="backup-btn" id="invoicePrintBtn">⬇ Download PDF / Print</button>
       <button class="backup-btn" id="invoiceCloseBtn">✕ Close</button>
     </div>
     <div class="invoice-doc" id="invoiceDoc"></div>
@@ -4929,7 +4929,9 @@ function buildOrderCardHead(order, index){
     tailBtns[0].addEventListener('click', function(){ moveOrder(order.id, -1); });
     tailBtns[1].addEventListener('click', function(){ moveOrder(order.id, 1); });
     tailBtns[2].addEventListener('click', function(){ cloneOrder(order.id); });
-    tailBtns[3].addEventListener('click', function(){ generateInvoice(order.id); });
+    const isQuote = order.status === 'quoted' || order.status === 'lost';
+    if(isQuote) tailBtns[3].dataset.doc = 'quote';
+    tailBtns[3].addEventListener('click', function(){ isQuote ? generateQuotation(order.id) : generateInvoice(order.id); });
     tailBtns[4].addEventListener('click', function(){ removeOrder(order.id); });
     return head;
   }
@@ -13117,6 +13119,14 @@ function formatDateDisplay(iso){
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Quotations have their own series, so quoting never uses up an invoice number.
+function nextQuoteNumber(){
+  state.quoteCounter = (state.quoteCounter || 0) + 1;
+  return 'QT-' + String(state.quoteCounter).padStart(4, '0');
+}
+const QUOTE_VALID_DAYS = 15;
+function generateQuotation(orderId){ generateInvoice(orderId, { quote: true }); }
+
 function nextInvoiceNumber(){
   state.invoiceCounter = (state.invoiceCounter || 0) + 1;
   return 'INV-' + String(state.invoiceCounter).padStart(4, '0');
@@ -13128,14 +13138,21 @@ function nextInvoiceNumber(){
 // library or network access required. Line items use each product's own list
 // price (pre-discount) so they sum to the Subtotal row; the aggregate discount
 // across all lines is shown separately, same as before.
-function generateInvoice(orderId){
+function generateInvoice(orderId, opts){
   const order = state.orders.find(function(o){ return o.id === orderId; });
   if(!order) return;
-  if(order.status === 'quoted' || order.status === 'lost'){
-    showNoticeModal('Invoice isn\'t available until this order is won.');
+  const quote = !!(opts && opts.quote);
+  if(!quote && (order.status === 'quoted' || order.status === 'lost')){
+    showNoticeModal('Invoice isn\'t available until this order is won. Use Quotation instead.');
     return;
   }
-  if(!order.invoiceNumber){
+  let quoteDate = '', validUntil = '';
+  if(quote){
+    if(!order.quoteNumber){ order.quoteNumber = nextQuoteNumber(); scheduleSave(); }
+    quoteDate = (order.quotedDate || isoLocal()).slice(0, 10);
+    const v = new Date(quoteDate + 'T00:00:00'); v.setDate(v.getDate() + QUOTE_VALID_DAYS);
+    validUntil = order.quoteValidUntil || isoLocal(v);
+  } else if(!order.invoiceNumber){
     order.invoiceNumber = nextInvoiceNumber();
     scheduleSave();
   }
@@ -13253,7 +13270,9 @@ function generateInvoice(orderId){
   const amountDue = Math.max(0, Math.round((t.grandTotal - amountPaid) * 100) / 100);
   const modeSuffix = (order.paymentMode || '').trim() ? (' via ' + escapeHtml(order.paymentMode.trim())) : '';
   let paymentStatusLine;
-  if((order.paymentStatus || 'unpaid') === 'paid'){
+  if(quote){
+    paymentStatusLine = 'Prices valid until ' + formatDateDisplay(validUntil) + '. Production starts once the order is confirmed.';
+  } else if((order.paymentStatus || 'unpaid') === 'paid'){
     paymentStatusLine = 'Paid in full' + modeSuffix + (order.paymentClearedDate ? ' on ' + formatDateDisplay(order.paymentClearedDate) : '') + '.';
   } else if(order.paymentStatus === 'partial'){
     paymentStatusLine = 'Partially paid\u2014' + '\u20b9' + amountPaid.toFixed(2) + ' received' + modeSuffix + ', \u20b9' + amountDue.toFixed(2) + ' due.';
@@ -13262,7 +13281,7 @@ function generateInvoice(orderId){
   } else {
     paymentStatusLine = 'Payment pending' + (t.grandTotal > 0 ? ' \u2014 \u20b9' + amountDue.toFixed(2) + ' due.' : '.');
   }
-  const paymentRow = (amountDue > 0 && t.grandTotal > 0)
+  const paymentRow = (!quote && amountDue > 0 && t.grandTotal > 0)
     ? '<tr><td>Amount Due</td><td class="num">\u20b9' + amountDue.toFixed(2) + '</td></tr>'
     : '';
 
@@ -13317,20 +13336,22 @@ function generateInvoice(orderId){
         '</div>' +
       '</div>' +
       '<div class="inv-title">' +
-        '<div class="big">' + (t.gstAmount > 0 ? 'TAX INVOICE' : 'INVOICE') + '</div>' +
-        '<div class="meta">' + escapeHtml(order.invoiceNumber) + '<br>Date: ' + today +
+        '<div class="big">' + (quote ? 'QUOTATION' : t.gstAmount > 0 ? 'TAX INVOICE' : 'INVOICE') + '</div>' +
+        '<div class="meta">' + escapeHtml(quote ? order.quoteNumber : order.invoiceNumber) +
+          '<br>Date: ' + (quote ? formatDateDisplay(quoteDate) : today) +
+          (quote ? '<br>Valid until: ' + formatDateDisplay(validUntil) : '') +
         '</div>' +
       '</div>' +
     '</div>' +
     '<div class="inv-bill-to">' +
       '<div>' +
-        '<div class="inv-section-label">Bill To</div>' +
+        '<div class="inv-section-label">' + (quote ? 'Prepared For' : 'Bill To') + '</div>' +
         '<div class="inv-client-name">' + escapeHtml(order.clientName || 'Client') + '</div>' +
         '<div class="inv-client-meta">' +
           (order.clientAddress ? escapeHtml(order.clientAddress).replace(/\n/g, '<br>') + '<br>' : '') +
           (order.clientPhone ? escapeHtml(order.clientPhone) : '') +
           (order.clientGstin ? ((order.clientPhone ? '<br>' : '') + 'GSTIN: ' + escapeHtml(order.clientGstin)) : '') +
-          (order.orderedDate ? ((order.clientPhone || order.clientGstin ? '<br>' : '') + 'Ordered: ' + formatDateDisplay(order.orderedDate)) : '') +
+          (!quote && order.orderedDate ? ((order.clientPhone || order.clientGstin ? '<br>' : '') + 'Ordered: ' + formatDateDisplay(order.orderedDate)) : '') +
         '</div>' +
       '</div>' +
       paymentMethodHtml +
@@ -13359,13 +13380,21 @@ function generateInvoice(orderId){
       : '') +
     termsHtml +
     signoffHtml +
-    '<div class="inv-footer">Thank you for your business.</div>';
+    '<div class="inv-footer">' + (quote ? 'Thank you for considering Thread Tribe.' : 'Thank you for your business.') + '</div>';
 
   document.getElementById('invoiceDoc').innerHTML = html;
   document.getElementById('invoiceOverlay').classList.remove('hidden');
+  // The saved PDF is named after the page title, e.g. "Quotation QT-0007 - Ishita Pandey".
+  invoiceDocTitle = (quote ? 'Quotation ' + order.quoteNumber : 'Invoice ' + order.invoiceNumber) + ' - ' + String(order.clientName || order.name || 'Client').replace(/[\\/:*?"<>|]+/g, ' ').trim();
 }
+let invoiceDocTitle = '';
 
-document.getElementById('invoicePrintBtn').addEventListener('click', function(){ window.print(); });
+document.getElementById('invoicePrintBtn').addEventListener('click', function(){
+  const was = document.title;
+  if(invoiceDocTitle) document.title = invoiceDocTitle;
+  window.print();
+  setTimeout(function(){ document.title = was; }, 1000);
+});
 document.getElementById('invoiceCloseBtn').addEventListener('click', function(){
   document.getElementById('invoiceOverlay').classList.add('hidden');
 });
@@ -17199,7 +17228,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="daily-tasks.js?v=1"></script>
 <script src="automations.js?v=7"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=12"></script>
+<script src="ui-polish.js?v=13"></script>
 <script src="upsell.js?v=1"></script>
 <script src="marketing-admin.js?v=5"></script>
 <script src="finance-admin.js?v=1"></script>

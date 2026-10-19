@@ -162,7 +162,7 @@
 
     const actions = document.createElement('div');
     actions.className = 'om-actions';
-    if(inv){ inv.textContent = '🧾 Invoice'; actions.appendChild(inv); }
+    if(inv){ inv.textContent = inv.dataset.doc === 'quote' ? '📄 Quotation' : '🧾 Invoice'; if(inv.dataset.doc === 'quote') inv.title = 'Open quotation (download PDF / print)'; actions.appendChild(inv); }
     if(dup){ dup.textContent = '⧉ Duplicate'; actions.appendChild(dup); }
     if(up && down){
       const move = document.createElement('div');
