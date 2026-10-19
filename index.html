@@ -17471,6 +17471,17 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
     return (printers || []).filter(function(p){ return p.active !== false && (!want || modelKey(p.model) === want); });
   }
   function pickFor(orderId, lineId){ return rd(PICK_KEY, {})[orderId + ':' + lineId] || ''; }
+  // A pick is '' (any free printer of the model), one printer id, or "split:3,7": the line's
+  // plates shared out evenly between those printers.
+  function isSplit(pick){ return /^split/.test(pick || ''); }
+  function pickIds(pick){ return String(pick || '').replace(/^split:?/, '').split(',').filter(Boolean); }
+  function shares(runs, n){ var out = []; for (var i = 0; i < n; i++) out.push(Math.floor(runs / n) + (i < runs % n ? 1 : 0)); return out; }
+  function pickLabel(pick, runs){
+    var ids = pickIds(pick); if (!ids.length) return '';
+    if (!isSplit(pick)) return printerName(ids[0]) || 'chosen printer';
+    var sh = shares(runs || 0, ids.length);
+    return ids.map(function(id, k){ return (printerName(id) || 'printer ' + id) + (runs ? ' (' + sh[k] + ')' : ''); }).join(' + ');
+  }
   function printerName(id){ var p = (printers || []).filter(function(x){ return String(x.id) === String(id); })[0]; return p ? p.name : ''; }
   function linesLeft(p){ return Math.max((+p.qty || 0) - (+p.already || 0), 0); }
   function runsFor(p, m){ var u = Math.max(+((m && m.unitsPerPlate) || 1), 1); return Math.ceil(linesLeft(p) / u); }
@@ -17607,14 +17618,23 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
             library.map(function(x){ return '<option value="' + x.id + '"' + (f && x.id === f.id ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') + '</select>' +
             (f ? ' <a href="#" data-act="map" data-name="' + esc(p.name) + '" style="color:var(--dim);font-size:12px">plate / per plate</a>' : '') +
             (f ? (function(){
-              var opts = printersFor(f, pt), pick = pickFor(o.id, lid), model = pt.targetModel || f.model || '';
-              return '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)">Printer ' +
+              var opts = printersFor(f, pt), pick = pickFor(o.id, lid), model = pt.targetModel || f.model || '', split = isSplit(pick), chosen = pickIds(pick);
+              var h2 = '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)">Printer ' +
                 '<select data-pick="' + esc(o.id + ':' + lid) + '" aria-label="Printer for ' + esc(partName(p.name, pt, i, many)) + '"><option value="">Any free ' + esc(model || 'printer') + '</option>' +
-                opts.map(function(x){ return '<option value="' + esc(x.id) + '"' + (String(x.id) === String(pick) ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') +
+                opts.map(function(x){ return '<option value="' + esc(x.id) + '"' + (!split && String(x.id) === String(pick) ? ' selected' : '') + '>' + esc(x.name) + (x.model ? ' (' + esc(x.model) + ')' : '') + '</option>'; }).join('') +
+                (opts.length > 1 ? '<option value="split"' + (split ? ' selected' : '') + '>Split evenly between printers…</option>' : '') +
                 '</select></div>';
+              if (split) {
+                var runs = runsFor(p, pt), n = chosen.length, sh = shares(runs, Math.max(n, 1));
+                h2 += '<div class="ttf-split" data-split="' + esc(o.id + ':' + lid) + '" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px">' +
+                  opts.map(function(x){ var k = chosen.indexOf(String(x.id)); return '<label style="display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" value="' + esc(x.id) + '"' + (k !== -1 ? ' checked' : '') + '>' + esc(x.name) + (k !== -1 ? ' <b>' + sh[k] + '</b>' : '') + '</label>'; }).join('') + '</div>' +
+                  '<div style="font-size:12px;margin-top:4px;color:' + (n >= 2 ? 'var(--dim)' : 'var(--amber)') + '">' +
+                  (n >= 2 ? runs + ' plates shared ' + sh.join(' + ') + ' between ' + n + ' printers.' : 'Tick at least two printers.') + '</div>';
+              }
+              return h2;
             })() : '');
           else fileCell = f ? esc(f.name) : '—';
-          if (lineSt && pickFor(o.id, lid)) fileCell += '<div style="color:var(--dim);font-size:12px">On ' + esc(printerName(pickFor(o.id, lid)) || 'chosen printer') + '</div>';
+          if (lineSt && pickIds(pickFor(o.id, lid)).length) fileCell += '<div style="color:var(--dim);font-size:12px">On ' + esc(pickLabel(pickFor(o.id, lid), lineSt.target)) + '</div>';
           // Parts are added or removed only while nothing of them is on the farm for this order.
           if (library && !lineSt) {
             var links = [];
@@ -17770,9 +17790,13 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
       parts.forEach(function(pt, i){
         var lid = partLineId(p.id, pt);
         if (st[lid]) return;
-        var pick = pickFor(o.id, lid), line = { lineId: lid, name: partName(p.name, pt, i, many), units: linesLeft(p), unitsPerPlate: pt.unitsPerPlate || 1, runs: runsFor(p, pt),
+        var pick = pickFor(o.id, lid), ids = pickIds(pick), runs = runsFor(p, pt);
+        // A split with fewer than two printers ticked falls back to any free printer.
+        var split = isSplit(pick) && ids.length >= 2, single = !isSplit(pick) && ids.length === 1;
+        var line = { lineId: lid, name: partName(p.name, pt, i, many), units: linesLeft(p), unitsPerPlate: pt.unitsPerPlate || 1, runs: runs,
           fileId: pt.fileId, plateId: pt.plateId == null ? null : pt.plateId, targetModel: pt.targetModel || null,
-          printerId: pick ? +pick : null, printerName: pick ? printerName(pick) : '' };
+          printerId: single ? +ids[0] : null, printerName: split || single ? pickLabel(pick, runs) : '' };
+        if (split) line.printerIds = ids.map(Number);
         // The farm sync reads the part list from the batch notes to count whole units.
         if (many) { line.parts = keys; line.partLabel = partLabel(pt, i); }
         lines.push(line);
@@ -17856,7 +17880,20 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
   });
   body.addEventListener('change', function(e){
     if (e.target.id === 'ttf-hold') { wr(HOLD_KEY, e.target.checked); return; }
-    if (e.target.dataset.pick) { var picks = rd(PICK_KEY, {}); if (e.target.value) picks[e.target.dataset.pick] = e.target.value; else delete picks[e.target.dataset.pick]; wr(PICK_KEY, picks); return; }
+    if (e.target.dataset.pick) {
+      var picks = rd(PICK_KEY, {}), k = e.target.dataset.pick, v0 = e.target.value;
+      if (v0 === 'split') picks[k] = isSplit(picks[k]) ? picks[k] : 'split:' + (picks[k] || '');
+      else if (v0) picks[k] = v0; else delete picks[k];
+      wr(PICK_KEY, picks);
+      render();
+      return;
+    }
+    var box = e.target.closest('.ttf-split');
+    if (box) {
+      var all2 = rd(PICK_KEY, {});
+      all2[box.dataset.split] = 'split:' + [].map.call(box.querySelectorAll('input:checked'), function(c){ return c.value; }).join(',');
+      wr(PICK_KEY, all2); render(); return;
+    }
     var row = e.target.closest('tr[data-name]'), f = e.target.dataset.f; if (!row || !f) return;
     var name = row.dataset.name, key = row.dataset.part || '1', v = e.target.value;
     if (f === 'fileId') {
