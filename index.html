@@ -17722,11 +17722,12 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
           }
           else fileCell = f ? esc(f.name) : '—';
           if (lineSt && pickIds(pickFor(o.id, lid)).length) fileCell += '<div style="color:var(--dim);font-size:12px">On ' + esc(pickIds(pickFor(o.id, lid)).map(printerName).filter(Boolean).join(' + ') || 'chosen printer') + '</div>';
-          // Parts are added or removed only while nothing of them is on the farm for this order.
-          if (library && !lineSt) {
+          // A part can be added any time, even after others went to the farm (a lamp's cap first,
+          // its shade later); a part is removed only while none of it is on the farm.
+          if (library) {
             var links = [];
             if (i === parts.length - 1 && m && fileById(m.fileId)) links.push('<a href="#" data-act="addpart" data-name="' + esc(k) + '">+ Add another file (part)</a>');
-            if (pt.key !== '1') links.push('<a href="#" data-act="rmpart" data-name="' + esc(k) + '" data-part="' + esc(pt.key) + '">Remove part</a>');
+            if (pt.key !== '1' && !lineSt) links.push('<a href="#" data-act="rmpart" data-name="' + esc(k) + '" data-part="' + esc(pt.key) + '">Remove part</a>');
             if (links.length) fileCell += '<div style="margin-top:6px;font-size:12px;display:flex;gap:12px;color:var(--dim)">' + links.join('') + '</div>';
           }
           var color = String(p.color || '').trim();
