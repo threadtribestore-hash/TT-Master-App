@@ -3614,6 +3614,7 @@ function cloneOrder(orderId){
   copy.deliveryDate = '';
   copy.productionDoneDate = '';
   copy.invoiceNumber = '';
+  copy.invoiceDate = '';
   copy.wasQuoted = wasQuoteOrLost;
   copy.quotedDate = wasQuoteOrLost ? isoLocal() : '';
   copy.lostDate = '';
@@ -13087,6 +13088,22 @@ function renderRequirements(){
 
 
 // ---------- INVOICE LIST TAB ----------
+// The date an invoice was issued: saved when its number is given. Invoices numbered before that
+// was saved use the delivery date, else production done, else the order date.
+function invoiceDateOf(o){ return String(o.invoiceDate || o.deliveryDate || o.productionDoneDate || o.orderedDate || isoLocal()).slice(0, 10); }
+// Paid / partial / unpaid from the money actually received, not only the status label, so an
+// invoice with a part payment entered still shows Partial.
+function invoicePayState(o, t){
+  if(o.paymentStatus === 'refunded') return 'refunded';
+  const paid = +o.amountPaid || 0, total = (t || orderTotals(o)).grandTotal;
+  if(o.paymentStatus === 'paid' || (total > 0 && paid >= total - 0.5)) return 'paid';
+  return paid > 0 || o.paymentStatus === 'partial' ? 'partial' : 'unpaid';
+}
+// Whole rupees as they are; amounts with paise always show two decimals (₹9,737.50).
+function invoiceRupees(v){
+  const n = Math.round((+v || 0) * 100) / 100, whole = Math.abs(n % 1) < 0.005;
+  return '\u20b9' + n.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
+}
 function renderInvoiceList(){
   var summaryEl = document.getElementById('invoiceListSummary');
   var contentEl = document.getElementById('invoiceListContent');
@@ -13096,8 +13113,7 @@ function renderInvoiceList(){
   var invoiced = state.orders.filter(function(o){ return o.invoiceNumber; })
     .map(function(o){
       var t = orderTotals(o);
-      var bucketDate = o.deliveryDate || o.productionDoneDate || o.orderedDate || '';
-      return { order: o, totals: t, date: bucketDate };
+      return { order: o, totals: t, date: invoiceDateOf(o), pay: invoicePayState(o, t) };
     })
     .sort(function(a, b){
       // Sort by invoice number descending (newest first)
@@ -13115,10 +13131,10 @@ function renderInvoiceList(){
   // Summary
   var totalTaxable = 0, totalGst = 0, totalGrand = 0, paidCount = 0, unpaidCount = 0;
   invoiced.forEach(function(inv){
-    totalTaxable += inv.totals.orderValue;
+    totalTaxable += inv.totals.taxableValue;
     totalGst += inv.totals.gstAmount;
     totalGrand += inv.totals.grandTotal;
-    if(inv.order.paymentStatus === 'paid') paidCount++;
+    if(inv.pay === 'paid' || inv.pay === 'refunded') paidCount++;
     else unpaidCount++;
   });
 
@@ -13135,18 +13151,18 @@ function renderInvoiceList(){
   var rows = invoiced.map(function(inv){
     var o = inv.order;
     var t = inv.totals;
-    var statusClass = o.paymentStatus === 'paid' ? 'positive' : (o.paymentStatus === 'partial' ? 'neutral' : 'negative');
-    var statusLabel = o.paymentStatus === 'paid' ? 'Paid' : (o.paymentStatus === 'partial' ? 'Partial' : 'Unpaid');
+    var statusClass = inv.pay === 'paid' ? 'positive' : (inv.pay === 'unpaid' ? 'negative' : 'neutral');
+    var statusLabel = { paid: 'Paid', partial: 'Partial', refunded: 'Refunded', unpaid: 'Unpaid' }[inv.pay];
     var dateStr = inv.date ? formatDateDisplay(inv.date) : '\u2014';
     return '<tr style="cursor:pointer;" data-inv-order="' + o.id + '">' +
       '<td style="text-align:left; color:var(--cyan); font-weight:600;">' + escapeHtml(o.invoiceNumber) + '</td>' +
       '<td style="text-align:left;">' + escapeHtml(o.displayId || '') + '</td>' +
       '<td style="text-align:left;">' + escapeHtml(o.clientName || o.name || 'Client') + '</td>' +
       '<td>' + dateStr + '</td>' +
-      '<td>\u20b9' + t.orderValue.toLocaleString('en-IN', {maximumFractionDigits:2}) + '</td>' +
-      '<td>\u20b9' + t.gstAmount.toLocaleString('en-IN', {maximumFractionDigits:2}) + '</td>' +
-      '<td style="font-weight:600;">\u20b9' + t.grandTotal.toLocaleString('en-IN', {maximumFractionDigits:2}) + '</td>' +
-      '<td><span class="profit-badge ' + statusClass + '">' + statusLabel + '</span></td>' +
+      '<td>' + invoiceRupees(t.taxableValue) + '</td>' +
+      '<td>' + invoiceRupees(t.gstAmount) + '</td>' +
+      '<td style="font-weight:600;">' + invoiceRupees(t.grandTotal) + '</td>' +
+      '<td><span class="profit-badge ' + statusClass + '"' + (inv.pay === 'partial' ? ' title="' + escapeHtml(invoiceRupees(o.amountPaid || 0) + ' received, ' + invoiceRupees(Math.max(0, t.grandTotal - (o.amountPaid || 0))) + ' due') + '"' : '') + '>' + statusLabel + '</span></td>' +
       '</tr>';
   }).join('');
 
@@ -13205,6 +13221,7 @@ function generateInvoice(orderId, opts){
     validUntil = order.quoteValidUntil || isoLocal(v);
   } else if(!order.invoiceNumber){
     order.invoiceNumber = nextInvoiceNumber();
+    order.invoiceDate = isoLocal();
     scheduleSave();
   }
 
@@ -13389,7 +13406,7 @@ function generateInvoice(orderId, opts){
       '<div class="inv-title">' +
         '<div class="big">' + (quote ? 'QUOTATION' : t.gstAmount > 0 ? 'TAX INVOICE' : 'INVOICE') + '</div>' +
         '<div class="meta">' + escapeHtml(quote ? order.quoteNumber : order.invoiceNumber) +
-          '<br>Date: ' + (quote ? formatDateDisplay(quoteDate) : today) +
+          '<br>Date: ' + (quote ? formatDateDisplay(quoteDate) : formatDateDisplay(invoiceDateOf(order))) +
           (quote ? '<br>Valid until: ' + formatDateDisplay(validUntil) : '') +
         '</div>' +
       '</div>' +
