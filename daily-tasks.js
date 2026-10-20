@@ -28,7 +28,7 @@
   function who(o){ const c = client(o.clientId); return (c && c.name) || o.clientName || o.name || 'Walk-in'; }
   function label(o){ return (o.displayId ? o.displayId + ' · ' : '') + who(o); }
   function target(o){ return o.dispatchBy || o.dueDate || ''; }
-  function owed(o){ return o.paymentStatus === 'paid' || o.paymentStatus === 'refunded' ? 0 : Math.max(0, Math.round(orderTotals(o).grandTotal - (o.amountPaid || 0))); }
+  function owed(o){ return orderOwed(o); }
   function me(){ return ((typeof cloud !== 'undefined' && cloud.email) || '').toLowerCase(); }
 
   function store(){

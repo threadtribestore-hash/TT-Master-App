@@ -58,7 +58,7 @@
     let m = 0, t = 0; (o.products || []).forEach(function(p){ const f = ps && ps.lines && ps.lines[p.id]; t += +p.qty || 0; m += Math.min(+p.qty || 0, Math.max(+p.already || 0, f ? f.made || 0 : 0)); });
     return { made: m, total: t };
   }
-  function owed(o){ try{ return o.paymentStatus === 'paid' || o.paymentStatus === 'refunded' ? 0 : Math.max(0, Math.round(orderTotals(o).grandTotal - (o.amountPaid || 0))); }catch(e){ return 0; } }
+  function owed(o){ return orderOwed(o); }
   function urgency(q){
     if(q.kind === 'claim') return 0;
     const o = orderOf(q), tp = topic(text(q)), late = o && target(o) && target(o) < isoLocal() && !o.shippedDate && o.status !== 'delivered';

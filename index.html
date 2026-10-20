@@ -13099,6 +13099,14 @@ function invoicePayState(o, t){
   if(o.paymentStatus === 'paid' || (total > 0 && paid >= total - 0.5)) return 'paid';
   return paid > 0 || o.paymentStatus === 'partial' ? 'partial' : 'unpaid';
 }
+// What a client still owes on an order, by the same rule as the invoice list: nothing once it's
+// paid (by status or by money received) or refunded, else the total less what's been received.
+function orderOwed(o){
+  try {
+    const t = orderTotals(o), st = invoicePayState(o, t);
+    return st === 'paid' || st === 'refunded' ? 0 : Math.max(0, Math.round(t.grandTotal - (+o.amountPaid || 0)));
+  } catch(e){ return 0; }
+}
 // Whole rupees as they are; amounts with paise always show two decimals (₹9,737.50).
 function invoiceRupees(v){
   const n = Math.round((+v || 0) * 100) / 100, whole = Math.abs(n % 1) < 0.005;
@@ -17305,13 +17313,13 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
 <script src="buyers-admin.js?v=27"></script>
 <script src="partner-planning.js?v=4"></script>
-<script src="control-room.js?v=13"></script>
+<script src="control-room.js?v=14"></script>
 <script src="projects.js?v=11"></script>
 <script src="print-files.js?v=1"></script>
 <script src="sales-admin.js?v=13"></script>
 <script src="shop-admin.js?v=2"></script>
-<script src="owner-home.js?v=6"></script>
-<script src="daily-tasks.js?v=1"></script>
+<script src="owner-home.js?v=7"></script>
+<script src="daily-tasks.js?v=2"></script>
 <script src="automations.js?v=7"></script>
 <script src="app-shell.js?v=3"></script>
 <script src="ui-polish.js?v=13"></script>
@@ -17320,10 +17328,10 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="finance-admin.js?v=1"></script>
 <script src="tasks-admin.js?v=1"></script>
 <script src="product-lab.js?v=1"></script>
-<script src="support-admin.js?v=4"></script>
+<script src="support-admin.js?v=5"></script>
 <script src="ops-planning.js?v=2"></script>
 <script src="shipturtle-admin.js?v=1"></script>
-<script src="payment-ladder.js?v=2"></script>
+<script src="payment-ladder.js?v=3"></script>
 <script src="design-research.js?v=2"></script>
 <script src="print-matching.js?v=1"></script>
 <script src="notify-admin.js?v=1"></script>

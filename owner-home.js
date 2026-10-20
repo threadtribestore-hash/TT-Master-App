@@ -29,7 +29,7 @@
   function who(o){ const c = client(o.clientId); return (c && c.name) || o.clientName || o.name || 'Walk-in'; }
   function label(o){ return (o.displayId ? o.displayId + ' · ' : '') + who(o); }
   function prod(){ return (window.TTBuyers && window.TTBuyers.prod()) || {}; }
-  function owed(o){ return o.paymentStatus === 'paid' || o.paymentStatus === 'refunded' ? 0 : Math.max(0, Math.round(orderTotals(o).grandTotal - (o.amountPaid || 0))); }
+  function owed(o){ return orderOwed(o); }
 
   // Pieces made: Studio's own count, or what the farm saw finish for the line, whichever is higher.
   function made(o){
@@ -156,13 +156,19 @@
   function money(){
     const now = new Date(), start = iso(new Date(now.getFullYear(), now.getMonth(), 1)), end = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0));
     const m = typeof computeBusinessMetrics === 'function' ? computeBusinessMetrics({ start: start, end: end }) : { revenue: 0, margin: 0 };
-    let collected = 0, due = 0, unpaid = 0;
+    let collected = 0, due = 0, unpaid = 0, partial = 0, unpaidDue = 0, partialDue = 0;
     state.orders.forEach(function(o){
       const cleared = (o.paymentClearedDate || '').slice(0, 10);
       if(cleared >= start && cleared <= end) collected += +o.amountPaid || orderTotals(o).grandTotal;
-      if((o.status === 'delivered' || o.shippedDate) && owed(o) > 0){ due += owed(o); unpaid++; }
+      // Due: money owed on orders delivered or shipped (payment is on delivery, so an invoice
+      // raised before dispatch isn't due yet). Paid ones owe nothing; part-paid ones only what's left.
+      if(['quoted', 'lost', 'cancelled'].indexOf(o.status) !== -1) return;
+      if(!(o.status === 'delivered' || o.shippedDate)) return;
+      const d = owed(o); if(d <= 0) return;
+      due += d;
+      if((+o.amountPaid || 0) > 0 || o.paymentStatus === 'partial'){ partial++; partialDue += d; } else { unpaid++; unpaidDue += d; }
     });
-    return { booked: m.revenue || 0, collected: collected, due: due, unpaid: unpaid, margin: m.margin || 0 };
+    return { booked: m.revenue || 0, collected: collected, due: due, unpaid: unpaid, partial: partial, unpaidDue: unpaidDue, partialDue: partialDue, margin: m.margin || 0 };
   }
 
   // ---------- the floor today (the owner runs the printers too) ----------
@@ -274,7 +280,7 @@
     h += '<div class="oh-money">' +
       '<div class="home-kpi"><div class="kpi-label">Booked this month</div><div class="kpi-val">' + rupees(mo.booked) + '</div></div>' +
       '<div class="home-kpi"><div class="kpi-label">Collected this month</div><div class="kpi-val">' + rupees(mo.collected) + '</div></div>' +
-      '<div class="home-kpi oh-click" data-oh="tab" data-id="invoices"><div class="kpi-label">Due to you</div><div class="kpi-val" style="color:' + (mo.due ? 'var(--red)' : 'inherit') + '">' + rupees(mo.due) + '</div><div class="kpi-sub">' + mo.unpaid + ' unpaid order' + (mo.unpaid === 1 ? '' : 's') + '</div></div>' +
+      '<div class="home-kpi oh-click" data-oh="tab" data-id="invoices"><div class="kpi-label">Due to you</div><div class="kpi-val" style="color:' + (mo.due ? 'var(--red)' : 'inherit') + '">' + rupees(mo.due) + '</div><div class="kpi-sub">' + (mo.unpaid ? mo.unpaid + ' unpaid · ' + rupees(mo.unpaidDue) : '') + (mo.unpaid && mo.partial ? '<br>' : '') + (mo.partial ? mo.partial + ' part-paid · ' + rupees(mo.partialDue) + ' left' : '') + (!mo.unpaid && !mo.partial ? 'All paid' : '') + '</div></div>' +
       '<div class="home-kpi"><div class="kpi-label">Net margin this month</div><div class="kpi-val">' + Math.round(mo.margin) + '%</div></div></div>';
 
     h += '<div class="oh-grid2">' +

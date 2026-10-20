@@ -331,7 +331,7 @@
     if(d.length === 11 && d[0] === '0') d = '91' + d.slice(1);
     return d.length >= 11 ? d : '';
   }
-  function owed(o){ return o.paymentStatus === 'paid' || o.paymentStatus === 'refunded' ? 0 : Math.max(0, Math.round(orderTotals(o).grandTotal - (o.amountPaid || 0))); }
+  function owed(o){ return orderOwed(o); }
   function weekOrders(){
     const t = today(), end = addDays(t, 7), recent = addDays(t, -3);
     return state.orders.filter(function(o){

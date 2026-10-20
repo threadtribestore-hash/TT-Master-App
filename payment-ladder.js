@@ -32,7 +32,7 @@
   function isOn(id){ return !!(window.TTAutomations && window.TTAutomations.isOn(id)); }
   function client(id){ return (state.clients || []).find(function(c){ return c.id === id; }); }
   function who(o){ const c = client(o.clientId); return (c && c.name) || o.clientName || o.name || 'there'; }
-  function owed(o){ return o.paymentStatus === 'paid' || o.paymentStatus === 'refunded' ? 0 : Math.max(0, Math.round(orderTotals(o).grandTotal - (+o.amountPaid || 0))); }
+  function owed(o){ return orderOwed(o); }
   function deliveredOn(o){ return (o.status === 'delivered' || o.shippedDate) ? (o.deliveryDate || o.shippedDate || '').slice(0, 10) : ''; }
   // WhatsApp wants 91XXXXXXXXXX: accepts 98765 43210, 098765 43210, +91 98765 43210.
   function phoneOf(o){
