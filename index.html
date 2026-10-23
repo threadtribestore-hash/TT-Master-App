@@ -12468,7 +12468,9 @@ function renderSchedGantt(){
     var dueDate = o.dueDate || o.deliveryDate || '';
     var dueDays = 0;
     if(dueDate){
-      dueDays = Math.ceil((new Date(dueDate) - new Date()) / 86400000);
+      // Day index on the same scale as the bars: today = 1, tomorrow = 2 (local dates, not UTC).
+      var dp = String(dueDate).slice(0, 10).split('-'), t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      dueDays = Math.round((new Date(+dp[0], +dp[1] - 1, +dp[2]) - t0) / 86400000) + 1;
     }
     var late = dueDate && dueDays < endDay;
     return { label: label, startDay: startDay, endDay: endDay, hours: t.hours, status: o.status, late: late, dueDays: dueDays, dueDate: dueDate };
@@ -12477,12 +12479,22 @@ function renderSchedGantt(){
   maxDays = Math.max(maxDays, 7);
   var html = '<div class="sched-gantt">';
   // Header
-  html += '<div class="gantt-row" style="height:20px;">';
+  // D1 is today: label each column with its calendar date (every few days when the span is long).
+  var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function dayDate(d){ var x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + d - 1); return x; }
+  function dayText(d){ var x = dayDate(d); return DOW[x.getDay()] + ' ' + x.getDate() + ' ' + MON[x.getMonth()]; }
+  var step = maxDays <= 14 ? 1 : maxDays <= 28 ? 2 : Math.ceil(maxDays / 14);
+  html += '<div class="gantt-row" style="height:30px;">';
   html += '<div class="gantt-label" style="font-size:10px; color:var(--dim);">Order</div>';
-  html += '<div style="position:relative; height:20px;">';
+  html += '<div style="position:relative; height:30px;">';
   for(var d = 1; d <= maxDays; d++){
+    var dd = dayDate(d), wk = dd.getDay() === 0;
     var pct = ((d - 0.5) / maxDays) * 100;
-    html += '<span style="position:absolute; left:' + pct + '%; transform:translateX(-50%); font-size:9px; color:var(--dim); font-family:JetBrains Mono,monospace;">D' + d + '</span>';
+    if(wk) html += '<div style="position:absolute; left:' + ((d - 1) / maxDays * 100) + '%; width:' + (100 / maxDays) + '%; top:0; bottom:0; background:var(--amber); opacity:0.08; border-radius:4px;" title="Sunday"></div>';
+    if((d - 1) % step) continue;
+    var col = d === 1 ? 'var(--cyan)' : wk ? 'var(--amber)' : 'var(--dim)';
+    html += '<span title="' + dayText(d) + '" style="position:absolute; left:' + pct + '%; transform:translateX(-50%); text-align:center; line-height:1.25; white-space:nowrap; font-size:9px; color:' + col + '; font-family:JetBrains Mono,monospace;' + (d === 1 ? ' font-weight:700;' : '') + '">' +
+      (d === 1 ? 'TODAY' : DOW[dd.getDay()].toUpperCase()) + '<br><span style="font-size:10.5px;">' + dd.getDate() + ' ' + MON[dd.getMonth()] + '</span></span>';
   }
   html += '</div></div>';
 
@@ -12494,11 +12506,11 @@ function renderSchedGantt(){
     html += '<div class="gantt-row">';
     html += '<div class="gantt-label">' + escapeHtml(r.label) + (r.late ? ' <span style="color:var(--red); font-size:10px;">⚠</span>' : '') + '</div>';
     html += '<div class="gantt-track">';
-    html += '<div class="gantt-bar" style="left:' + startPct + '%; width:' + widthPct + '%; background:' + col + ';">' + r.hours.toFixed(0) + 'h</div>';
+    html += '<div class="gantt-bar" title="' + dayText(r.startDay) + ' → ' + dayText(r.endDay) + ' · ' + r.hours.toFixed(0) + 'h of printing" style="left:' + startPct + '%; width:' + widthPct + '%; background:' + col + ';">' + r.hours.toFixed(0) + 'h</div>';
     // Due date marker
-    if(r.dueDate && r.dueDays > 0 && r.dueDays <= maxDays){
+    if(r.dueDate && r.dueDays >= 1 && r.dueDays <= maxDays){
       var duePct = ((r.dueDays - 0.5) / maxDays) * 100;
-      html += '<div style="position:absolute; left:' + duePct + '%; top:0; bottom:0; width:2px; background:var(--amber); opacity:0.8;" title="Due date"></div>';
+      html += '<div style="position:absolute; left:' + duePct + '%; top:0; bottom:0; width:2px; background:var(--amber); opacity:0.8;" title="Due ' + dayText(r.dueDays) + '"></div>';
     }
     html += '</div></div>';
   });
