@@ -18,7 +18,7 @@
 (function(){
   if(window.TT_STOCK_MODE) return;
 
-  const TIER_DAYS = 30, HISTORY_DAYS = 365;
+  const TIER_DAYS = 30;
   // Trade price = MRP less a discount set by how many pieces of that product are ordered
   // (per product, not the order total), plus the brand partner's loyalty tier — capped.
   const DEFAULT_TERMS = { model: 'mrp', minPerProduct: 10, minOrder: 10, maxDiscount: 55,
@@ -257,12 +257,16 @@
         unitsGood: ps.units_good || 0, unitsRejected: ps.units_rejected || 0, updatedAt: ps.updated_at || '' } : null
     };
   }
+  // Every order the client has ever placed, old ones included. Orders typed before the
+  // client was saved (no clientId) count too when their Client Name or GSTIN matches exactly.
   function ordersFor(cid){
-    const cutoff = isoDaysAgo(HISTORY_DAYS);
+    const c = (state.clients || []).find(function(x){ return x.id === cid; }) || {};
+    const nm = (c.name || '').trim().toLowerCase(), gst = gstinOf(c).toUpperCase();
     return state.orders.filter(function(o){
-      if(o.clientId !== cid || o.status === 'lost') return false;
-      return ['quoted', 'booked', 'in_production', 'production_done', 'shipped'].indexOf(o.status) !== -1 || orderDate(o) >= cutoff || (o.deliveryDate || '') >= cutoff;
-    }).sort(function(a, b){ return orderDate(b).localeCompare(orderDate(a)); }).slice(0, 250).map(orderView);
+      if(o.status === 'lost') return false;
+      if(o.clientId) return o.clientId === cid;
+      return (!!nm && (o.clientName || '').trim().toLowerCase() === nm) || (!!gst && (o.clientGstin || '').trim().toUpperCase() === gst);
+    }).sort(function(a, b){ return orderDate(b).localeCompare(orderDate(a)); }).slice(0, 1000).map(orderView);
   }
   function buildPack(c){
     const tier = tierOf(c.id), biz = state.business || {};
