@@ -1,7 +1,7 @@
 // Offline support for Thread Tribe Studio.
 // Bump VERSION whenever index.html changes so phones pick up the new build.
-const VERSION = 'tt-studio-202610242100';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './brand/tt-logomark.svg', './brand/tt-lockup.svg', './config.js', './buyers-admin.js?v=28', './partner-planning.js?v=4', './control-room.js?v=15', './projects.js?v=11', './print-files.js?v=1', './sales-admin.js?v=13', './shop-admin.js?v=2', './owner-home.js?v=7', './daily-tasks.js?v=2', './sidebar.js?v=2', './notify-admin.js?v=1', './notify-app.js?v=1', './print-matching.js?v=1', './payment-ladder.js?v=3', './design-research.js?v=2', './automations.js?v=7', './app-shell.js?v=3', './ui-polish.js?v=13', './upsell.js?v=1', './marketing-admin.js?v=5', './finance-admin.js?v=1', './tasks-admin.js?v=1', './product-lab.js?v=1', './support-admin.js?v=5', './ops-planning.js?v=2', './shipturtle-admin.js?v=1', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
+const VERSION = 'tt-studio-202610242200';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './brand/tt-logomark.svg', './brand/tt-lockup.svg', './config.js', './buyers-admin.js?v=28', './partner-planning.js?v=4', './control-room.js?v=15', './projects.js?v=11', './print-files.js?v=1', './sales-admin.js?v=13', './shop-admin.js?v=2', './owner-home.js?v=7', './daily-tasks.js?v=2', './sidebar.js?v=2', './notify-admin.js?v=1', './notify-app.js?v=1', './print-matching.js?v=1', './payment-ladder.js?v=3', './design-research.js?v=2', './automations.js?v=7', './app-shell.js?v=3', './ui-polish.js?v=13', './upsell.js?v=1', './order-insights.js?v=1', './marketing-admin.js?v=5', './finance-admin.js?v=1', './tasks-admin.js?v=1', './product-lab.js?v=1', './support-admin.js?v=5', './ops-planning.js?v=2', './shipturtle-admin.js?v=1', './vendor/supabase.js', './vendor/qrcode.js', './vendor/jsQR.js'];
 const THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];
 
 self.addEventListener('install', function(e){
@@ -29,7 +29,7 @@ self.addEventListener('fetch', function(e){
 
 
   // Settings file and the Buyer app module: always try the network so edits arrive straight away.
-  if(url.origin === location.origin && /\/(config|buyers-admin|control-room|partner-planning|projects|sales-admin|shop-admin|owner-home|automations|app-shell|ui-polish|upsell|marketing-admin|finance-admin|tasks-admin|product-lab|support-admin|ops-planning|shipturtle-admin|print-files|daily-tasks|sidebar)\.js$/.test(url.pathname)){
+  if(url.origin === location.origin && /\/(config|buyers-admin|control-room|partner-planning|projects|sales-admin|shop-admin|owner-home|automations|app-shell|ui-polish|upsell|order-insights|marketing-admin|finance-admin|tasks-admin|product-lab|support-admin|ops-planning|shipturtle-admin|print-files|daily-tasks|sidebar)\.js$/.test(url.pathname)){
     // no-cache: revalidate with GitHub Pages instead of using the browser's 10-minute copy.
     e.respondWith(fetch(req.url, { cache: 'no-cache' }).then(function(res){ return putInCache(req, res); }).catch(function(){ return caches.match(req); }));
     return;
