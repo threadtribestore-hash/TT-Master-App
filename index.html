@@ -1290,6 +1290,18 @@
   .pipeline-card.pc-conversion::before{ background:var(--amber); }
   .pipeline-card.pc-queue::before{ background:var(--pink); }
   .pipeline-card.pc-aov::before{ background:var(--cyan); }
+  .pipeline-card.pc-collect::before{ background:var(--pink); }
+  .pipeline-card.pc-late::before{ background:var(--red); }
+  .pipeline-card.pc-ready::before{ background:var(--cyan); }
+  .pipeline-card.pc-works::before{ background:var(--green); }
+  .pipeline-card.pc-quotes::before{ background:var(--purple); }
+  .pipeline-card.pc-month::before{ background:var(--amber); }
+  .pipeline-card.pc-click{ cursor:pointer; transition:border-color .15s, transform .15s; }
+  .pipeline-card.pc-click:hover{ border-color:var(--cyan); }
+  .pipeline-card.pc-click:active{ transform:scale(0.99); }
+  .pc-sub b{ font-weight:600; }
+  @keyframes kbFlash{ 0%{ box-shadow:0 0 0 0 rgba(79,209,197,.0); } 30%{ box-shadow:0 0 0 3px rgba(79,209,197,.6); } 100%{ box-shadow:0 0 0 0 rgba(79,209,197,0); } }
+  .kanban-column.kb-flash{ animation:kbFlash 1.2s ease-out; }
   .pc-label{ font-size:0.68rem; color:var(--dim); text-transform:uppercase; letter-spacing:0.4px; font-family:'JetBrains Mono',monospace; margin-bottom:4px; }
   .pc-val{ font-size:1.3rem; font-weight:700; line-height:1.2; }
   .pc-sub{ font-size:0.72rem; color:var(--dim); margin-top:2px; }
@@ -11635,64 +11647,96 @@ function renderSimHistory(){
 
 // ========== ORDERS TAB: PIPELINE FORECAST & INTELLIGENCE ==========
 
+// Top of the Orders tab: six cards that each point at something to act on. Clicking one
+// jumps to its lane on the board.
 function renderPipelineForecast(){
   var strip = document.getElementById('pipelineForecastStrip');
   if(!strip) return;
-  var now = new Date();
-  var activeStatuses = ['booked','in_production','production_done'];
+  var today = isoLocal(), now = new Date();
+  function inr(n){ return '₹' + Math.round(n || 0).toLocaleString('en-IN'); }
 
-  // Pipeline value
-  var pipelineValue = 0, pipelineCount = 0;
-  var completedLast30 = 0, completedLast30Rev = 0;
-  var completedLast30Days = [];
-  var quotedCount = 0, quotedValue = 0, convertedCount = 0, lostCount = 0;
-  var allCompletedDays = []; // days from booked to completed
-  var last30Start = isoLocal(new Date(now.getTime() - 30*86400000));
+  var collect = 0, collectN = 0, collectLate = 0, collectLateAmt = 0;
+  var late = 0, dueSoon = 0, lateIn = { booked: 0, in_production: 0 };
+  var ready = 0, readyVal = 0, readyWaiting = 0, shippedN = 0;
+  var works = 0, worksVal = 0, worksHours = 0;
+  var quotes = 0, quotesVal = 0, quotesStale = 0, won = 0, lost = 0;
+  var monthRev = 0, monthN = 0, prevRev = 0;
+  var monthStart = today.slice(0, 8) + '01';
+  var pm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  var prevStart = isoLocal(pm), prevSameDay = isoLocal(new Date(pm.getFullYear(), pm.getMonth(), Math.min(now.getDate(), new Date(pm.getFullYear(), pm.getMonth() + 1, 0).getDate())));
+  var staleCut = isoLocal(new Date(now.getTime() - 7 * 86400000));
 
   state.orders.forEach(function(o){
-    if(activeStatuses.indexOf(o.status) >= 0){
-      pipelineValue += orderTotals(o).orderValue;
-      pipelineCount++;
+    var t = orderTotals(o), lane = typeof boardLane === 'function' ? boardLane(o) : o.status;
+    if(lane === 'payment'){
+      var due = orderAmountDue(o);
+      collect += due; collectN++;
+      if(orderNeedsPaymentReminder(o)){ collectLate++; collectLateAmt += due; }
     }
-    if(o.status === 'quoted'){ quotedCount++; quotedValue += orderTotals(o).orderValue; }
+    if(o.status === 'booked' || o.status === 'in_production'){
+      works++; worksVal += t.orderValue; worksHours += t.hours || 0;
+      var u = boardCardUrgency(o);
+      if(u && u.cls === 'due-overdue'){ late++; lateIn[o.status] += 2; }
+      else if(u && u.cls === 'due-soon'){ dueSoon++; lateIn[o.status] += 1; }
+    }
+    if(o.status === 'production_done'){
+      ready++; readyVal += t.orderValue;
+      if(o.shippedDate) shippedN++;
+      else if((daysSinceProductionDone(o) || 0) >= DELIVERY_OVERDUE_DAYS) readyWaiting++;
+    }
+    if(o.status === 'quoted'){
+      quotes++; quotesVal += t.orderValue;
+      if((o.quotedDate || o.orderedDate || today) < staleCut) quotesStale++;
+    }
+    if(o.status === 'lost') lost++;
     if(isOrderComplete(o.status)){
+      won++;
       var bd = orderBucketDate(o);
-      if(bd >= last30Start){
-        completedLast30++;
-        completedLast30Rev += orderTotals(o).orderValue;
-      }
-      convertedCount++;
-      // Production days (booked → complete)
-      if(o.orderedDate && (o.deliveryDate || o.productionDoneDate)){
-        var start = new Date(o.productionStartDate || o.orderedDate);
-        var end = new Date(o.deliveryDate || o.productionDoneDate);
-        var days = Math.max(1, Math.round((end - start) / 86400000));
-        allCompletedDays.push(days);
-      }
+      if(bd >= monthStart && bd <= today){ monthRev += t.orderValue; monthN++; }
+      if(bd >= prevStart && bd <= prevSameDay) prevRev += t.orderValue;
     }
-    if(o.status === 'lost') lostCount++;
   });
 
-  var avgCompletionDays = allCompletedDays.length ? Math.round(allCompletedDays.reduce(function(a,b){return a+b;},0) / allCompletedDays.length) : 0;
-  var completionRate = completedLast30 / 30 * 7; // orders per week
-  var estClearDays = avgCompletionDays > 0 && completedLast30 > 0 ? Math.round(pipelineCount * avgCompletionDays / Math.max(1, completedLast30/30)) : 0;
+  // When the printing work on hand clears, at the fleet's daily capacity.
+  var running = 0;
+  (state.printers || []).forEach(function(p){ if(p.status !== 'down') running++; });
+  if(!(state.printers || []).length) running = state.fleet.printers || 0;
+  var dailyCap = running * (state.fleet.hoursPerDay || 0);
+  var clearDays = dailyCap > 0 && worksHours > 0 ? Math.ceil(worksHours / dailyCap) : 0;
+  var clearText = clearDays ? 'printing clears ~' + (typeof schedDayText === 'function' ? schedDayText(clearDays) : clearDays + ' days') : (works ? 'set fleet capacity to forecast' : 'nothing to print');
 
-  // Predicted monthly revenue = current pipeline + run-rate from last 30 days
-  var predictedMonthly = completedLast30Rev; // baseline: what we did last 30d
-  var conversionRate = (convertedCount + lostCount) > 0 ? (convertedCount / (convertedCount + lostCount) * 100) : 0;
+  var winRate = won + lost > 0 ? Math.round(won / (won + lost) * 100) : 0;
+  var change = prevRev > 0 ? Math.round((monthRev - prevRev) / prevRev * 100) : null;
+  var prevName = pm.toLocaleString('en-IN', { month: 'short' });
 
-  // AOV
-  var aov = completedLast30 > 0 ? completedLast30Rev / completedLast30 : 0;
-
+  function card(cls, lane, label, val, sub, bad){
+    return '<div class="pipeline-card ' + cls + (lane ? ' pc-click" data-lane="' + lane + '" title="Show on the board"' : '"') + ' role="' + (lane ? 'button' : 'group') + '">' +
+      '<div class="pc-label">' + label + '</div><div class="pc-val"' + (bad ? ' style="color:var(--red)"' : '') + '>' + val + '</div><div class="pc-sub">' + sub + '</div></div>';
+  }
   strip.innerHTML =
-    '<div class="pipeline-card pc-revenue"><div class="pc-label">Pipeline Value</div><div class="pc-val" style="color:var(--cyan)">₹' + pipelineValue.toLocaleString('en-IN',{maximumFractionDigits:0}) + '</div><div class="pc-sub">' + pipelineCount + ' active orders</div></div>' +
-    '<div class="pipeline-card pc-forecast"><div class="pc-label">30-Day Revenue</div><div class="pc-val" style="color:var(--green)">₹' + completedLast30Rev.toLocaleString('en-IN',{maximumFractionDigits:0}) + '</div><div class="pc-sub">' + completedLast30 + ' orders completed</div></div>' +
-    '<div class="pipeline-card pc-velocity"><div class="pc-label">Avg Completion</div><div class="pc-val" style="color:var(--purple)">' + avgCompletionDays + ' days</div><div class="pc-sub">Est. ' + estClearDays + 'd to clear queue</div></div>' +
-    '<div class="pipeline-card pc-conversion"><div class="pc-label">Conversion Rate</div><div class="pc-val" style="color:var(--amber)">' + conversionRate.toFixed(1) + '%</div><div class="pc-sub">' + quotedCount + ' quotes open (₹' + (quotedValue/1000).toFixed(0) + 'k)</div>' +
-      '<div class="pc-bar"><div class="pc-bar-fill" style="width:' + Math.min(100,conversionRate) + '%;background:var(--amber)"></div></div></div>' +
-    '<div class="pipeline-card pc-queue"><div class="pc-label">Weekly Velocity</div><div class="pc-val" style="color:var(--pink)">' + completionRate.toFixed(1) + '</div><div class="pc-sub">orders/week (30d avg)</div></div>' +
-    '<div class="pipeline-card pc-aov"><div class="pc-label">Avg Order Value</div><div class="pc-val" style="color:var(--cyan)">₹' + aov.toLocaleString('en-IN',{maximumFractionDigits:0}) + '</div><div class="pc-sub">last 30 days</div></div>';
+    card('pc-collect', 'payment', 'To collect', inr(collect),
+      collectN ? collectN + ' delivered order' + (collectN === 1 ? '' : 's') + (collectLate ? ' · <b style="color:var(--red)">' + inr(collectLateAmt) + ' overdue</b>' : '') : 'all delivered orders paid', collectLate > 0) +
+    card('pc-late', lateIn.in_production > lateIn.booked ? 'in_production' : 'booked', 'Late or due soon', String(late + dueSoon),
+      late + dueSoon ? (late ? '<b style="color:var(--red)">' + late + ' late</b>' : '0 late') + ' · ' + dueSoon + ' due in 2 days' : 'every order on time', late > 0) +
+    card('pc-ready', 'ready', 'Ready to ship', String(ready),
+      ready ? inr(readyVal) + (readyWaiting ? ' · <b style="color:var(--amber)">' + readyWaiting + ' waiting ' + DELIVERY_OVERDUE_DAYS + 'd+</b>' : '') + (shippedN ? ' · ' + shippedN + ' shipped' : '') : 'nothing waiting', false) +
+    card('pc-works', 'in_production', 'In the works', inr(worksVal),
+      works + ' order' + (works === 1 ? '' : 's') + ' · ' + clearText, false) +
+    card('pc-quotes', 'quoted', 'Open quotes', inr(quotesVal),
+      quotes + ' quote' + (quotes === 1 ? '' : 's') + (quotesStale ? ' · <b style="color:var(--amber)">' + quotesStale + ' over a week old</b>' : '') + ' · ' + winRate + '% won', false) +
+    card('pc-month', 'delivered', 'This month', inr(monthRev),
+      monthN + ' order' + (monthN === 1 ? '' : 's') + ' done' + (change === null ? '' : ' · <b style="color:' + (change >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (change >= 0 ? '▲' : '▼') + Math.abs(change) + '%</b> vs ' + prevName + ' to date'), false);
 }
+// Clicking a card scrolls the board to that lane (switching to the board if needed).
+document.addEventListener('click', function(e){
+  var c = e.target.closest('#pipelineForecastStrip .pc-click'); if(!c) return;
+  var lane = c.getAttribute('data-lane');
+  if(ordersViewMode !== 'board'){ var b = document.querySelector('[data-view="board"]'); if(b) b.click(); }
+  var col = document.querySelector('#ordersBoardWrap .kanban-column[data-status="' + lane + '"]');
+  if(!col){ showToast('Clear the filters to see this lane.'); return; }
+  col.scrollIntoView({ block: 'nearest', inline: 'start', behavior: 'smooth' });
+  col.classList.remove('kb-flash'); void col.offsetWidth; col.classList.add('kb-flash');
+});
 
 function renderOrderVelocityChart(){
   var el = document.getElementById('orderVelocityChart');
