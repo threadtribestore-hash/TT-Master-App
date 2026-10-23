@@ -622,6 +622,9 @@
         '<div class="cr-kpi"><div class="k">Due in 7 days</div><div class="v">' + dueWeek + '</div><div class="s">to dispatch</div></div>' +
         '<div class="cr-kpi ' + (p.overdue.length + p.risk.length ? 'bad' : '') + '"><div class="k">Late or at risk</div><div class="v">' + (p.overdue.length + p.risk.length) + '</div><div class="s">' + p.overdue.length + ' overdue</div></div>' +
       '</div>' +
+      // Team flow (team-flow.js) first: where orders wait between people and why they run late.
+      (window.TTFlow ? window.TTFlow.html() : '') +
+      (window.TTTeamOps ? window.TTTeamOps.html() : '') +
       '<div class="panel"><div class="panel-title">Dispatch calendar · 2 weeks</div>' + calendarHtml() + '</div>' +
       // "Order lines on the floor" hidden for now (2026-10-24); linesHtml() is kept so it can return.
       promiseHtml() +
