@@ -1296,10 +1296,9 @@
   .pipeline-card.pc-works::before{ background:var(--green); }
   .pipeline-card.pc-quotes::before{ background:var(--purple); }
   .pipeline-card.pc-month::before{ background:var(--amber); }
-  .pipeline-card.pc-click{ cursor:pointer; transition:border-color .15s, transform .15s; }
-  .pipeline-card.pc-click:hover{ border-color:var(--cyan); }
-  .pipeline-card.pc-click:active{ transform:scale(0.99); }
   .pc-sub b{ font-weight:600; }
+  .pc-cmp{ font-weight:600; }
+  .pc-verdict{ font-size:12px; line-height:1.4; color:var(--text); margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); }
   @keyframes kbFlash{ 0%{ box-shadow:0 0 0 0 rgba(79,209,197,.0); } 30%{ box-shadow:0 0 0 3px rgba(79,209,197,.6); } 100%{ box-shadow:0 0 0 0 rgba(79,209,197,0); } }
   .kanban-column.kb-flash{ animation:kbFlash 1.2s ease-out; }
   .pc-label{ font-size:0.68rem; color:var(--dim); text-transform:uppercase; letter-spacing:0.4px; font-family:'JetBrains Mono',monospace; margin-bottom:4px; }
@@ -11647,96 +11646,140 @@ function renderSimHistory(){
 
 // ========== ORDERS TAB: PIPELINE FORECAST & INTELLIGENCE ==========
 
-// Top of the Orders tab: six cards that each point at something to act on. Clicking one
-// jumps to its lane on the board.
+// Top of the Orders tab: six decision cards. Each gives a number, how it compares, and
+// a one-line verdict on what to do. Revenue and profit are ex-GST, by completion date
+// (orderBucketDate); "to date" compares with the same day of last month.
 function renderPipelineForecast(){
   var strip = document.getElementById('pipelineForecastStrip');
   if(!strip) return;
-  var today = isoLocal(), now = new Date();
-  function inr(n){ return '₹' + Math.round(n || 0).toLocaleString('en-IN'); }
+  var now = new Date(), today = isoLocal(now);
+  function iso(y, m, d){ return isoLocal(new Date(y, m, d)); }
+  function inr(n){
+    n = Math.round(n || 0); var a = Math.abs(n), s = n < 0 ? '-' : '';
+    if(a >= 100000) return s + '₹' + (a / 100000).toFixed(a >= 1000000 ? 0 : 1).replace(/\.0$/, '') + 'L';
+    if(a >= 10000) return s + '₹' + Math.round(a / 1000) + 'k';
+    return s + '₹' + a.toLocaleString('en-IN');
+  }
+  function pct(a, b){ return b > 0 ? Math.round((a - b) / b * 100) : null; }
+  function arrow(p, goodUp){ if(p === null) return '<span class="pc-cmp">no data last month</span>';
+    var good = goodUp === false ? p <= 0 : p >= 0;
+    return '<span class="pc-cmp" style="color:' + (good ? 'var(--green)' : 'var(--red)') + '">' + (p >= 0 ? '▲' : '▼') + Math.abs(p) + '%</span>'; }
+  function who(o){ return (o.clientName || o.name || 'an order').trim(); }
 
-  var collect = 0, collectN = 0, collectLate = 0, collectLateAmt = 0;
-  var late = 0, dueSoon = 0, lateIn = { booked: 0, in_production: 0 };
-  var ready = 0, readyVal = 0, readyWaiting = 0, shippedN = 0;
-  var works = 0, worksVal = 0, worksHours = 0;
-  var quotes = 0, quotesVal = 0, quotesStale = 0, won = 0, lost = 0;
-  var monthRev = 0, monthN = 0, prevRev = 0;
-  var monthStart = today.slice(0, 8) + '01';
-  var pm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  var prevStart = isoLocal(pm), prevSameDay = isoLocal(new Date(pm.getFullYear(), pm.getMonth(), Math.min(now.getDate(), new Date(pm.getFullYear(), pm.getMonth() + 1, 0).getDate())));
-  var staleCut = isoLocal(new Date(now.getTime() - 7 * 86400000));
+  var y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+  var mStart = iso(y, m, 1), mEnd = iso(y, m + 1, 0);
+  var pStart = iso(y, m - 1, 1), pEnd = iso(y, m, 0), pSame = iso(y, m - 1, Math.min(d, new Date(y, m, 0).getDate()));
+  var q3Start = iso(y, m - 3, 1);
+  var prevName = new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'short' });
+  var d90 = isoLocal(new Date(now.getTime() - 90 * 86400000)), d30 = isoLocal(new Date(now.getTime() - 30 * 86400000));
+
+  var cur = { rev: 0, n: 0, profit: 0 }, prevTD = { rev: 0, n: 0 }, prevFull = { rev: 0 }, q3 = { rev: 0, profit: 0 };
+  var dueIn = 0, quotesVal = 0, quotesN = 0, won = 0, lost = 0;
+  var byClient = {}, byClient90 = {}, rev90 = 0, hours90 = 0, rev30 = 0;
+  var owed = [], owedTotal = 0, workHours = 0;
 
   state.orders.forEach(function(o){
-    var t = orderTotals(o), lane = typeof boardLane === 'function' ? boardLane(o) : o.status;
-    if(lane === 'payment'){
-      var due = orderAmountDue(o);
-      collect += due; collectN++;
-      if(orderNeedsPaymentReminder(o)){ collectLate++; collectLateAmt += due; }
-    }
-    if(o.status === 'booked' || o.status === 'in_production'){
-      works++; worksVal += t.orderValue; worksHours += t.hours || 0;
-      var u = boardCardUrgency(o);
-      if(u && u.cls === 'due-overdue'){ late++; lateIn[o.status] += 2; }
-      else if(u && u.cls === 'due-soon'){ dueSoon++; lateIn[o.status] += 1; }
-    }
-    if(o.status === 'production_done'){
-      ready++; readyVal += t.orderValue;
-      if(o.shippedDate) shippedN++;
-      else if((daysSinceProductionDone(o) || 0) >= DELIVERY_OVERDUE_DAYS) readyWaiting++;
-    }
-    if(o.status === 'quoted'){
-      quotes++; quotesVal += t.orderValue;
-      if((o.quotedDate || o.orderedDate || today) < staleCut) quotesStale++;
-    }
-    if(o.status === 'lost') lost++;
+    var t = orderTotals(o), bd = orderBucketDate(o);
     if(isOrderComplete(o.status)){
       won++;
-      var bd = orderBucketDate(o);
-      if(bd >= monthStart && bd <= today){ monthRev += t.orderValue; monthN++; }
-      if(bd >= prevStart && bd <= prevSameDay) prevRev += t.orderValue;
+      if(bd >= mStart && bd <= today){
+        cur.rev += t.orderValue; cur.n++; cur.profit += t.profit;
+        var k = who(o); (byClient[k] = byClient[k] || { rev: 0, profit: 0 }); byClient[k].rev += t.orderValue; byClient[k].profit += t.profit;
+      }
+      if(bd >= pStart && bd <= pSame){ prevTD.rev += t.orderValue; prevTD.n++; }
+      if(bd >= pStart && bd <= pEnd) prevFull.rev += t.orderValue;
+      if(bd >= q3Start && bd < mStart){ q3.rev += t.orderValue; q3.profit += t.profit; }
+      if(bd >= d90){ rev90 += t.orderValue; hours90 += (o.costSnapshot || computeProductionCost(o, { useFullQty: true })).hours || 0; byClient90[who(o)] = (byClient90[who(o)] || 0) + t.orderValue; }
+      if(bd >= d30) rev30 += t.orderValue;
+    }
+    if(o.status === 'lost') lost++;
+    if(o.status === 'quoted'){ quotesN++; quotesVal += t.orderValue; }
+    if(['booked', 'in_production', 'production_done'].indexOf(o.status) !== -1){
+      if(o.status === 'production_done' || (o.dueDate && o.dueDate <= mEnd)) dueIn += t.orderValue;
+      if(o.status !== 'production_done') workHours += t.hours || 0;
+    }
+    if(o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled' && (o.paymentStatus || 'unpaid') !== 'paid' && o.paymentStatus !== 'refunded' && (o.status === 'delivered' || o.status === 'production_done')){
+      var due = orderAmountDue(o);
+      if(due > 0){ owedTotal += due; owed.push({ o: o, due: due, days: daysSinceDelivery(o) }); }
     }
   });
+  var winRate = won + lost > 0 ? won / (won + lost) : 0;
 
-  // When the printing work on hand clears, at the fleet's daily capacity.
+  // 1. Month forecast
+  var fcQuotes = quotesVal * winRate, forecast = cur.rev + dueIn + fcQuotes;
+  var fcP = pct(forecast, prevFull.rev), gap = prevFull.rev - forecast;
+  var v1 = prevFull.rev <= 0 ? 'First full month on record; build the baseline.'
+    : gap <= 0 ? 'On course to beat ' + prevName + '. Keep due dates tight so it lands this month.'
+    : quotesVal >= gap ? 'Short by ' + inr(gap) + '. Close ' + inr(gap) + ' of the ' + inr(quotesVal) + ' in open quotes to match ' + prevName + '.'
+    : 'Short by ' + inr(gap) + ', more than all open quotes. Needs new orders this month.';
+
+  // 2. Growth, month to date
+  var revP = pct(cur.rev, prevTD.rev), nP = pct(cur.n, prevTD.n);
+  var aov = cur.n ? cur.rev / cur.n : 0, aovPrev = prevTD.n ? prevTD.rev / prevTD.n : 0, aovP = pct(aov, aovPrev);
+  var top = Object.keys(byClient90).sort(function(a, b){ return byClient90[b] - byClient90[a]; })[0], topShare = top && rev90 ? byClient90[top] / rev90 : 0;
+  var v2 = revP === null ? 'No orders by this date last month to compare.'
+    : revP >= 0 && nP !== null && nP <= 0 ? 'Growth is from bigger orders, not more buyers. Find new buyers.'
+    : revP >= 0 ? 'More orders and more revenue. Check capacity before pushing harder.'
+    : nP !== null && nP >= 0 ? 'Same order count, smaller orders. Push quantity slabs and bundles.'
+    : 'Fewer orders than last month. Restart outreach to past buyers.';
+  if(topShare >= 0.4) v2 += ' ' + top + ' is ' + Math.round(topShare * 100) + '% of 90-day revenue: risky.';
+
+  // 3. Gross profit
+  var margin = cur.rev > 0 ? cur.profit / cur.rev * 100 : 0, m3 = q3.rev > 0 ? q3.profit / q3.rev * 100 : null;
+  var worst = Object.keys(byClient).filter(function(k){ return byClient[k].rev > 0; }).sort(function(a, b){ return byClient[a].profit / byClient[a].rev - byClient[b].profit / byClient[b].rev; })[0];
+  var worstM = worst ? byClient[worst].profit / byClient[worst].rev * 100 : null;
+  var v3 = !cur.rev ? 'Nothing completed yet this month.'
+    : m3 !== null && margin < m3 - 3 ? 'Margin is ' + Math.round(m3 - margin) + ' pts below your 3-month average.' + (worst ? ' Lowest: ' + worst + ' at ' + Math.round(worstM) + '%. Reprice their next order.' : '')
+    : worst && worstM < 20 ? 'Healthy overall, but ' + worst + ' is at ' + Math.round(worstM) + '%. Reprice their next order.'
+    : 'Margins are holding. No pricing action needed.';
+
+  // 4. Net profit after operating expenses (capex left out)
+  var opex = 0, cats = {};
+  (state.expenses || []).forEach(function(e){
+    if((e.type || 'opex') !== 'opex' || !e.date || e.date < mStart || e.date > mEnd) return;
+    opex += +e.cost || 0; var c = e.category || e.item || 'Other'; cats[c] = (cats[c] || 0) + (+e.cost || 0);
+  });
+  var net = cur.profit - opex, bigCat = Object.keys(cats).sort(function(a, b){ return cats[b] - cats[a]; })[0];
+  var v4 = !opex ? 'No expenses entered this month, so this equals gross profit. Add them in Expenses.'
+    : net < 0 ? 'Running at a loss: expenses are ' + inr(-net) + ' above profit. Biggest: ' + bigCat + ' (' + inr(cats[bigCat]) + ').'
+    : 'Expenses take ' + Math.round(opex / Math.max(1, cur.profit) * 100) + '% of gross profit. Biggest: ' + bigCat + ' (' + inr(cats[bigCat]) + ').';
+
+  // 5. Cash tied up
+  owed.sort(function(a, b){ return (b.days || 0) * b.due - (a.days || 0) * a.due; });
+  var daysOfRev = rev30 > 0 ? Math.round(owedTotal / (rev30 / 30)) : null, first = owed[0];
+  var v5 = !owedTotal ? 'Nothing owed. Cash is clean.'
+    : 'Chase ' + who(first.o) + ' first: ' + inr(first.due) + (first.days ? ', ' + first.days + ' days' : '') + '.' + (owed.length > 1 ? ' ' + (owed.length - 1) + ' more owe ' + inr(owedTotal - first.due) + '.' : '');
+
+  // 6. Capacity, next 14 days
   var running = 0;
   (state.printers || []).forEach(function(p){ if(p.status !== 'down') running++; });
   if(!(state.printers || []).length) running = state.fleet.printers || 0;
-  var dailyCap = running * (state.fleet.hoursPerDay || 0);
-  var clearDays = dailyCap > 0 && worksHours > 0 ? Math.ceil(worksHours / dailyCap) : 0;
-  var clearText = clearDays ? 'printing clears ~' + (typeof schedDayText === 'function' ? schedDayText(clearDays) : clearDays + ' days') : (works ? 'set fleet capacity to forecast' : 'nothing to print');
+  var cap14 = running * (state.fleet.hoursPerDay || 0) * 14, load = cap14 > 0 ? Math.round(workHours / cap14 * 100) : null;
+  var perHour = hours90 > 0 ? rev90 / hours90 : 0, spare = Math.max(0, cap14 - workHours);
+  var v6 = load === null ? 'Set printers and hours per day in Settings to see this.'
+    : load > 100 ? 'Overbooked by ' + Math.round(workHours - cap14) + ' print hours. Send work to partners or move due dates.'
+    : load < 60 ? 'Room for ' + (perHour > 0 ? 'about ' + inr(spare * perHour) + ' more orders' : Math.round(spare) + ' more print hours') + ' in 2 weeks. Push sales now.'
+    : 'Healthy load. Take new orders with due dates after ' + (typeof schedDayText === 'function' ? schedDayText(Math.ceil(workHours / Math.max(1, cap14 / 14)) + 1) : 'the queue clears') + '.';
 
-  var winRate = won + lost > 0 ? Math.round(won / (won + lost) * 100) : 0;
-  var change = prevRev > 0 ? Math.round((monthRev - prevRev) / prevRev * 100) : null;
-  var prevName = pm.toLocaleString('en-IN', { month: 'short' });
-
-  function card(cls, lane, label, val, sub, bad){
-    return '<div class="pipeline-card ' + cls + (lane ? ' pc-click" data-lane="' + lane + '" title="Show on the board"' : '"') + ' role="' + (lane ? 'button' : 'group') + '">' +
-      '<div class="pc-label">' + label + '</div><div class="pc-val"' + (bad ? ' style="color:var(--red)"' : '') + '>' + val + '</div><div class="pc-sub">' + sub + '</div></div>';
+  function card(cls, label, val, cmp, verdict, tip, bad){
+    return '<div class="pipeline-card ' + cls + '" title="' + tip + '"><div class="pc-label">' + label + '</div>' +
+      '<div class="pc-val"' + (bad ? ' style="color:var(--red)"' : '') + '>' + val + '</div><div class="pc-sub">' + cmp + '</div>' +
+      '<div class="pc-verdict">' + escapeHtml(verdict) + '</div></div>';
   }
   strip.innerHTML =
-    card('pc-collect', 'payment', 'To collect', inr(collect),
-      collectN ? collectN + ' delivered order' + (collectN === 1 ? '' : 's') + (collectLate ? ' · <b style="color:var(--red)">' + inr(collectLateAmt) + ' overdue</b>' : '') : 'all delivered orders paid', collectLate > 0) +
-    card('pc-late', lateIn.in_production > lateIn.booked ? 'in_production' : 'booked', 'Late or due soon', String(late + dueSoon),
-      late + dueSoon ? (late ? '<b style="color:var(--red)">' + late + ' late</b>' : '0 late') + ' · ' + dueSoon + ' due in 2 days' : 'every order on time', late > 0) +
-    card('pc-ready', 'ready', 'Ready to ship', String(ready),
-      ready ? inr(readyVal) + (readyWaiting ? ' · <b style="color:var(--amber)">' + readyWaiting + ' waiting ' + DELIVERY_OVERDUE_DAYS + 'd+</b>' : '') + (shippedN ? ' · ' + shippedN + ' shipped' : '') : 'nothing waiting', false) +
-    card('pc-works', 'in_production', 'In the works', inr(worksVal),
-      works + ' order' + (works === 1 ? '' : 's') + ' · ' + clearText, false) +
-    card('pc-quotes', 'quoted', 'Open quotes', inr(quotesVal),
-      quotes + ' quote' + (quotes === 1 ? '' : 's') + (quotesStale ? ' · <b style="color:var(--amber)">' + quotesStale + ' over a week old</b>' : '') + ' · ' + winRate + '% won', false) +
-    card('pc-month', 'delivered', 'This month', inr(monthRev),
-      monthN + ' order' + (monthN === 1 ? '' : 's') + ' done' + (change === null ? '' : ' · <b style="color:' + (change >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (change >= 0 ? '▲' : '▼') + Math.abs(change) + '%</b> vs ' + prevName + ' to date'), false);
+    card('pc-forecast', 'Forecast · this month', inr(forecast), arrow(fcP) + ' vs ' + prevName + ' (' + inr(prevFull.rev) + ')', v1,
+      'Done so far + orders due this month or ready to ship + open quotes × your ' + Math.round(winRate * 100) + '% win rate', gap > 0 && prevFull.rev > 0) +
+    card('pc-month', 'Growth · month to date', inr(cur.rev), (revP === null ? 'nothing by this date in ' + prevName : arrow(revP) + ' revenue · ' + arrow(nP) + ' orders · ' + arrow(aovP) + ' avg order'), v2,
+      'Compared with ' + prevName + ' 1–' + d + '. Ex-GST, by completion date.', revP !== null && revP < 0) +
+    card('pc-revenue', 'Gross profit · this month', inr(cur.profit), Math.round(margin) + '% margin' + (m3 !== null ? ' · 3-mo avg ' + Math.round(m3) + '%' : ''), v3,
+      'Order value minus filament, machine, packaging, delivery and incentives', m3 !== null && margin < m3 - 3) +
+    card('pc-conversion', 'Net profit · this month', inr(net), inr(opex) + ' operating expenses', v4,
+      'Gross profit minus this month’s operating expenses. Capital spend is left out.', net < 0) +
+    card('pc-queue', 'Cash to collect', inr(owedTotal), owed.length + ' order' + (owed.length === 1 ? '' : 's') + (daysOfRev !== null ? ' · ' + daysOfRev + ' days of revenue' : ''), v5,
+      'Made or delivered orders not yet paid, incl. GST', daysOfRev !== null && daysOfRev > 30) +
+    card('pc-velocity', 'Capacity · next 14 days', load === null ? '—' : load + '%', Math.round(workHours) + 'h booked of ' + Math.round(cap14) + 'h', v6,
+      'Print hours of booked and printing orders vs printers × hours per day × 14', load !== null && load > 100);
 }
-// Clicking a card scrolls the board to that lane (switching to the board if needed).
-document.addEventListener('click', function(e){
-  var c = e.target.closest('#pipelineForecastStrip .pc-click'); if(!c) return;
-  var lane = c.getAttribute('data-lane');
-  if(ordersViewMode !== 'board'){ var b = document.querySelector('[data-view="board"]'); if(b) b.click(); }
-  var col = document.querySelector('#ordersBoardWrap .kanban-column[data-status="' + lane + '"]');
-  if(!col){ showToast('Clear the filters to see this lane.'); return; }
-  col.scrollIntoView({ block: 'nearest', inline: 'start', behavior: 'smooth' });
-  col.classList.remove('kb-flash'); void col.offsetWidth; col.classList.add('kb-flash');
-});
 
 function renderOrderVelocityChart(){
   var el = document.getElementById('orderVelocityChart');
