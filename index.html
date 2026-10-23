@@ -6578,10 +6578,10 @@ function recalcQueue(){
   html += '</div>';
   html += '<div class="gantt-daymarks">';
   const markCount = Math.min(totalDays, 40);
-  // Real dates: month shown on the first mark and on the 1st of each month, day number otherwise.
+  // Real dates: day of the month only; the full date is in the tooltip.
   for(let d = 1; d <= markCount; d++){
     const dd = schedDayDate(d);
-    html += '<div class="gantt-daymark" style="width:' + (100/markCount) + '%;" title="' + schedDayText(d) + '">' + dd.getDate() + (d === 1 || dd.getDate() === 1 ? ' ' + schedMon(dd) : '') + '</div>';
+    html += '<div class="gantt-daymark" style="width:' + (100/markCount) + '%;" title="' + schedDayText(d) + '">' + dd.getDate() + '</div>';
   }
   html += '</div></div>';
 
@@ -12425,7 +12425,7 @@ function renderSchedCapChart(){
     var pct = (d.used / dailyCap) * 100;
     var col = pct > 90 ? 'var(--red)' : pct > 60 ? 'var(--amber)' : 'var(--cyan)';
     svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + Math.max(barH, 1) + '" rx="3" fill="' + col + '" opacity="0.8"/>';
-    svg += '<text x="' + (x + barW / 2) + '" y="' + (h - pad + 14) + '" fill="var(--dim)" font-size="9" text-anchor="middle" font-family="JetBrains Mono,monospace">' + (d.day === 1 ? 'Today' : schedDayDate(d.day).getDate() + ' ' + schedMon(schedDayDate(d.day))) + '<title>' + schedDayText(d.day) + '</title></text>';
+    svg += '<text x="' + (x + barW / 2) + '" y="' + (h - pad + 14) + '" fill="var(--dim)" font-size="9" text-anchor="middle" font-family="JetBrains Mono,monospace">' + (d.day === 1 ? 'Today' : schedDayDate(d.day).getDate()) + '<title>' + schedDayText(d.day) + '</title></text>';
     if(d.used > 0) svg += '<text x="' + (x + barW / 2) + '" y="' + (y - 4) + '" fill="var(--text)" font-size="8" text-anchor="middle" font-family="JetBrains Mono,monospace">' + d.used.toFixed(0) + 'h</text>';
   });
   // Y axis label
@@ -12508,7 +12508,7 @@ function renderSchedGantt(){
     if((d - 1) % step) continue;
     var col = d === 1 ? 'var(--cyan)' : wk ? 'var(--amber)' : 'var(--dim)';
     html += '<span title="' + dayText(d) + '" style="position:absolute; left:' + pct + '%; transform:translateX(-50%); text-align:center; line-height:1.25; white-space:nowrap; font-size:9px; color:' + col + '; font-family:JetBrains Mono,monospace;' + (d === 1 ? ' font-weight:700;' : '') + '">' +
-      (d === 1 ? 'TODAY' : DOW[dd.getDay()].toUpperCase()) + '<br><span style="font-size:10.5px;">' + dd.getDate() + ' ' + MON[dd.getMonth()] + '</span></span>';
+      (d === 1 ? 'TODAY' : DOW[dd.getDay()].toUpperCase()) + '<br><span style="font-size:10.5px;">' + dd.getDate() + '</span></span>';
   }
   html += '</div></div>';
 
