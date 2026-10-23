@@ -474,6 +474,35 @@
   .kanban-card-badge{ font-family:'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.3px; padding: 3px 8px; border-radius: 20px; margin-left: 16px; width: fit-content; }
   .kanban-card-badge.soon{ color: var(--amber); border: 1px solid rgba(240,168,60,0.4); background: rgba(240,168,60,0.1); }
   .kanban-card-badge.overdue{ color: var(--red); border: 1px solid rgba(232,97,90,0.4); background: rgba(232,97,90,0.1); }
+  /* Simplified board (2026-10-24): one-line headers, 3-line cards, stage menu, folded Closed lane */
+  .kanban-column-header .kanban-col-total{ padding:0; font-size:11px; flex:none; }
+  .kanban-column.kb-folded{ flex:0 0 52px; width:52px; min-height:220px; cursor:pointer; }
+  .kanban-column.kb-folded .kanban-column-header{ flex-direction:column; border-bottom:none; padding:12px 0; gap:10px; }
+  .kanban-column.kb-folded .kanban-col-title{ writing-mode:vertical-rl; flex:none; }
+  .kanban-column.kb-folded .kanban-column-body{ padding:0; min-height:0; }
+  .kanban-column.kb-folded.drag-over{ background: rgba(79,209,197,0.08); box-shadow: inset 0 0 0 2px rgba(79,209,197,0.3); }
+  .kb-fold{ color:var(--dim); font-size:15px; line-height:1; padding:0 2px; }
+  .kanban-card .kanban-card-compact{ gap:4px; padding:10px 11px; }
+  .kanban-card .kanban-card-top{ align-items:center; }
+  .kanban-card .kanban-card-color{ margin-top:0; }
+  .kanban-card .kanban-card-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; word-break:normal; }
+  .kanban-card .kanban-card-client{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .kanban-card .kanban-card-client .kanban-card-priority{ margin-left:4px; }
+  .kanban-card .kanban-card-badge{ margin-top:2px; }
+  .kb-val{ font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--text); flex:none; }
+  .kb-stage{ flex:none; border:1px solid transparent; background:transparent; color:var(--dim); border-radius:6px; font-size:15px; line-height:1; padding:2px 6px; cursor:pointer; }
+  .kb-stage:hover, .kb-stage:focus-visible{ border-color:var(--line); color:var(--cyan); background:var(--panel2); }
+  @media (hover:hover){ .kanban-card:not(:hover) .kb-grip{ opacity:0; } }
+  #kbStageMenu{ position:fixed; z-index:3000; min-width:200px; background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,.25); padding:6px; display:flex; flex-direction:column; }
+  #kbStageMenu .kb-menu-h{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--dim); padding:6px 10px 4px; }
+  #kbStageMenu button{ text-align:left; background:none; border:none; color:var(--text); font:13px 'Space Grotesk', sans-serif; padding:9px 10px; border-radius:7px; cursor:pointer; }
+  #kbStageMenu button:hover:not([disabled]){ background:rgba(79,209,197,.12); }
+  #kbStageMenu button.on{ color:var(--cyan); cursor:default; }
+  #kbHoverTip{ position:fixed; z-index:2500; display:none; max-width:300px; background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,.22); padding:10px 12px; pointer-events:none; }
+  #kbHoverTip .kb-tip-meta{ font-size:12px; color:var(--dim); margin-bottom:6px; }
+  #kbHoverTip .order-intel{ display:flex; flex-wrap:wrap; gap:4px; }
+  .kanban-show-all-btn{ width:100%; padding:10px 8px; border:1px dashed var(--line); border-radius:8px; background:transparent; color:var(--cyan); font-size:12px; font-weight:600; cursor:pointer; margin-top:4px; flex:none; }
+  .kanban-show-all-btn:hover{ background:rgba(79,209,197,0.08); }
   .kanban-card-detail{ border-top: 1px solid var(--line); }
   .kanban-collapse-btn{
     display:block; width: 100%;
@@ -5280,6 +5309,63 @@ function boardCardUrgency(order){
   return null;
 }
 
+// Board lanes. Fewer than the stored statuses: Ready to ship holds Production Done with or
+// without a dispatch date (shipped orders carry a tag), Payment pending is a delivered order
+// that still owes money, and Cancelled + Lost share one folded Closed lane.
+const BOARD_LANES = [
+  { key: 'quoted', label: 'Quotes', color: 'var(--purple)' },
+  { key: 'booked', label: 'To make', color: 'var(--amber)' },
+  { key: 'in_production', label: 'Printing', color: 'var(--green)' },
+  { key: 'ready', label: 'Ready to ship', color: 'var(--cyan)' },
+  { key: 'payment', label: 'Payment pending', color: 'var(--pink)' },
+  { key: 'delivered', label: 'Delivered', color: 'var(--dim)' },
+  { key: 'closed', label: 'Closed', color: 'var(--red)' }
+];
+function orderOwesMoney(order){
+  const ps = order.paymentStatus || 'unpaid';
+  return ps !== 'paid' && ps !== 'refunded' && orderAmountDue(order) > 0;
+}
+function boardLane(order){
+  if(order.status === 'production_done') return 'ready';
+  if(order.status === 'delivered') return orderOwesMoney(order) ? 'payment' : 'delivered';
+  if(order.status === 'cancelled' || order.status === 'lost') return 'closed';
+  return order.status;
+}
+function boardMoney(n){
+  n = Math.round(n || 0);
+  if(n >= 100000) return '₹' + (n / 100000).toFixed(n >= 1000000 ? 0 : 1).replace(/\.0$/, '') + 'L';
+  if(n >= 1000) return '₹' + (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k';
+  return '₹' + n;
+}
+
+// The one thing worth saying on a card, most urgent first. Everything else is in the
+// hover details and the order pop-up.
+function boardCardAlert(order){
+  if(boardLane(order) === 'payment'){
+    const days = typeof daysSinceDelivery === 'function' ? daysSinceDelivery(order) : null;
+    return { badgeCls: orderNeedsPaymentReminder(order) ? 'overdue' : 'soon',
+      text: '₹' + Math.round(orderAmountDue(order)).toLocaleString('en-IN') + ' due' + (days != null && days > 0 ? ' · ' + days + 'd since delivery' : '') };
+  }
+  const u = boardCardUrgency(order);
+  if(u) return u;
+  const active = ['booked', 'in_production'].indexOf(order.status) !== -1;
+  if(active && checkOrderFilamentStock(order) === 'short') return { badgeCls: 'overdue', text: '⚠ Low filament' };
+  const t = orderTotals(order);
+  if(t.orderValue > 0 && t.margin < 15 && boardLane(order) !== 'closed') return { badgeCls: 'soon', text: '⚠ ' + t.margin.toFixed(0) + '% margin' };
+  if(active || order.status === 'production_done'){
+    const since = order.status === 'in_production' ? (order.productionStartDate || order.orderedDate) : order.status === 'production_done' ? (order.productionDoneDate || order.orderedDate) : order.orderedDate;
+    if(since){
+      const d = Math.floor((new Date() - new Date(since)) / 86400000), avg = getAvgStageDays(order.status);
+      if(avg > 0 && d > avg * 1.5) return { badgeCls: 'soon', text: '⏱ ' + d + 'd at this stage' };
+    }
+  }
+  if(order.clientId && order.status !== 'quoted' && boardLane(order) !== 'closed'){
+    const r = getClientPaymentRate(order.clientId);
+    if(r !== null && r < 80) return { badgeCls: 'soon', text: '⚠ Slow payer · ' + r.toFixed(0) + '% paid' };
+  }
+  return null;
+}
+
 // Tracks the order currently being dragged — dataTransfer alone is unreliable to read
 // from during dragover in some browsers, so this is the primary source in drop and
 // dataTransfer.getData is kept only as a fallback.
@@ -5290,31 +5376,42 @@ function buildKanbanCard(order, index){
   card.className = 'kanban-card';
   card.setAttribute('data-order-id', order.id);
 
+  const alert = boardCardAlert(order);
   const urgency = boardCardUrgency(order);
   if(urgency) card.classList.add(urgency.cls);
+  else if(alert && alert.badgeCls === 'overdue') card.classList.add('due-overdue');
 
   const compact = document.createElement('div');
   compact.className = 'kanban-card-compact';
   const t = orderTotals(order);
+  const client = (order.clientName || '').trim(), name = (order.name || '').trim();
+  const title = client || name || 'Untitled order';
+  const sub = [order.displayId || '', client && name && name.toLowerCase() !== client.toLowerCase() ? name : ''].filter(Boolean).join(' · ');
+  const loud = order.priority === 'high' || order.priority === 'urgent';
   compact.innerHTML =
     '<div class="kanban-card-top">' +
       '<div class="kanban-card-color" style="background:' + colorFor(index) + '"></div>' +
-      '<div class="kanban-card-name">' + escapeHtml(order.name || 'Untitled order') + '</div>' +
-      '<div class="kanban-card-chevron">\u25BE</div>' +
+      '<div class="kanban-card-name">' + escapeHtml(title) + '</div>' +
+      '<span class="kb-val">' + boardMoney(t.grandTotal || t.orderValue) + '</span>' +
+      '<button type="button" class="kb-stage" title="Move to another stage" aria-label="Move to another stage">⋯</button>' +
     '</div>' +
-    (order.clientName ? '<div class="kanban-card-client">' + escapeHtml(order.clientName) + '</div>' : '') +
-    (urgency ? '<div class="kanban-card-badge ' + urgency.badgeCls + '">' + urgency.text + '</div>' : '') +
-    '<div class="kanban-card-meta">' +
-      '<span class="kanban-card-value">\u20b9' + fmt(t.orderValue) + '</span>' +
-      '<span class="kanban-card-priority priority-' + (order.priority || 'normal') + '">' + priorityLabel(order.priority) + '</span>' +
-    '</div>' +
-    '<div class="order-intel" style="margin:4px 0 0">' + getOrderIntelBadges(order) + '</div>';
+    ((sub || loud) ? '<div class="kanban-card-client">' + escapeHtml(sub) +
+      (loud ? ' <span class="kanban-card-priority priority-' + order.priority + '">' + priorityLabel(order.priority) + '</span>' : '') + '</div>' : '') +
+    (alert ? '<div class="kanban-card-badge ' + alert.badgeCls + '">' + alert.text + '</div>' : '');
   card.appendChild(compact);
 
-  compact.addEventListener('click', function(){ openOrderDetailModal(order.id, index); });
+  compact.addEventListener('click', function(e){
+    if(e.target.closest('.kb-stage')){ e.stopPropagation(); openBoardStageMenu(order.id, e.target.closest('.kb-stage')); return; }
+    openOrderDetailModal(order.id, index);
+  });
+
+  // Hover details: every intel badge, as before, without crowding the card.
+  card.addEventListener('mouseenter', function(){ boardHoverShow(order, card); });
+  card.addEventListener('mouseleave', boardHoverHide);
 
   card.draggable = true;
   card.addEventListener('dragstart', function(e){
+    boardHoverHide();
     kanbanDragOrderId = order.id;
     card.classList.add('dragging');
     if(e.dataTransfer){
@@ -5328,6 +5425,117 @@ function buildKanbanCard(order, index){
   });
 
   return card;
+}
+
+let boardHoverTimer = null;
+function boardHoverHide(){
+  clearTimeout(boardHoverTimer);
+  const tip = document.getElementById('kbHoverTip'); if(tip) tip.style.display = 'none';
+}
+function boardHoverShow(order, card){
+  if(!window.matchMedia || !window.matchMedia('(hover: hover)').matches) return;
+  clearTimeout(boardHoverTimer);
+  boardHoverTimer = setTimeout(function(){
+    if(!card.isConnected || card.classList.contains('kb-dragging')) return;
+    const badges = getOrderIntelBadges(order);
+    const extra = [];
+    if(order.priority && !(order.priority === 'high' || order.priority === 'urgent')) extra.push('Priority: ' + priorityLabel(order.priority));
+    if(order.dueDate) extra.push('Due ' + order.dueDate.split('-').reverse().join('-'));
+    const ps = order.paymentStatus || 'unpaid';
+    extra.push('Payment: ' + paymentStatusLabel(ps) + (orderAmountDue(order) > 0 && ps !== 'paid' && ps !== 'refunded' ? ' · ₹' + Math.round(orderAmountDue(order)).toLocaleString('en-IN') + ' due' : ''));
+    if(!badges && !extra.length) return;
+    let tip = document.getElementById('kbHoverTip');
+    if(!tip){ tip = document.createElement('div'); tip.id = 'kbHoverTip'; document.body.appendChild(tip); }
+    tip.innerHTML = '<div class="kb-tip-meta">' + extra.map(escapeHtml).join(' · ') + '</div>' + (badges ? '<div class="order-intel">' + badges + '</div>' : '');
+    tip.style.display = 'block';
+    const r = card.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = r.right + 8, top = r.top;
+    if(left + tw > window.innerWidth - 8) left = Math.max(8, r.left - tw - 8);
+    if(top + th > window.innerHeight - 8) top = Math.max(8, window.innerHeight - th - 8);
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  }, 450);
+}
+
+// Stage menu: the same moves as dragging, for phones and for anyone who prefers a tap.
+function boardStageOptions(order){
+  const lane = boardLane(order), opts = [];
+  if(order.status === 'quoted' || order.status === 'lost') opts.push(['quoted', 'Quote']);
+  opts.push(['booked', 'To make'], ['in_production', 'Printing'], ['production_done', 'Made · not shipped'], ['shipped', 'Shipped'], ['delivered', 'Delivered']);
+  if(lane === 'payment') opts.push(['paid', 'Payment received in full']);
+  if(order.status === 'quoted' || order.status === 'lost') opts.push(['lost', 'Lost']);
+  else opts.push(['cancelled', 'Cancelled']);
+  const cur = order.status === 'production_done' ? (order.shippedDate ? 'shipped' : 'production_done') : order.status;
+  return opts.map(function(o){ return { key: o[0], label: o[1], on: o[0] === cur }; });
+}
+function closeBoardStageMenu(){ const m = document.getElementById('kbStageMenu'); if(m) m.remove(); }
+function openBoardStageMenu(orderId, btn){
+  const order = state.orders.find(function(o){ return o.id === orderId; }); if(!order) return;
+  const wasOpen = document.getElementById('kbStageMenu');
+  closeBoardStageMenu(); boardHoverHide();
+  if(wasOpen && wasOpen.getAttribute('data-for') === orderId) return;
+  const m = document.createElement('div');
+  m.id = 'kbStageMenu'; m.setAttribute('data-for', orderId);
+  m.innerHTML = '<div class="kb-menu-h">Move to</div>' + boardStageOptions(order).map(function(o){
+    return '<button type="button" data-stage="' + o.key + '"' + (o.on ? ' class="on" disabled' : '') + '>' + (o.on ? '✓ ' : '') + escapeHtml(o.label) + '</button>';
+  }).join('');
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect();
+  let left = Math.min(r.right - m.offsetWidth, window.innerWidth - m.offsetWidth - 8), top = r.bottom + 4;
+  if(top + m.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - m.offsetHeight - 4);
+  m.style.left = Math.max(8, left) + 'px'; m.style.top = top + 'px';
+  m.addEventListener('click', function(e){
+    const b = e.target.closest('[data-stage]'); if(!b || b.disabled) return;
+    closeBoardStageMenu();
+    moveOrderToStage(orderId, b.getAttribute('data-stage'));
+  });
+}
+document.addEventListener('click', function(e){ if(!e.target.closest('#kbStageMenu') && !e.target.closest('.kb-stage')) closeBoardStageMenu(); });
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeBoardStageMenu(); });
+window.addEventListener('scroll', function(){ closeBoardStageMenu(); boardHoverHide(); }, true);
+
+// Payment received in full, as the payment badge's "Paid" step does: amount paid = order
+// total, cleared date today unless already set, plus a line in the payment log.
+function markOrderPaidFromBoard(order){
+  const due = orderAmountDue(order);
+  showConfirmModal('Record ₹' + Math.round(due).toLocaleString('en-IN') + ' as received and mark ' + escapeHtml(order.clientName || order.name || 'this order') + ' paid in full? You can edit the amount or date in the order.', function(){
+    const today = isoLocal();
+    order.paymentStatus = 'paid';
+    order.amountPaid = orderTotals(order).grandTotal;
+    if(!order.paymentClearedDate) order.paymentClearedDate = today;
+    order.paymentLog = (order.paymentLog || []).concat([{ date: today, amount: due, via: 'board' }]);
+    renderOrders(); scheduleSave();
+    showToast('Marked paid');
+  }, 'Mark paid');
+}
+
+// One entry point for the stage menu and lane drops.
+function moveOrderToStage(orderId, stage){
+  const order = state.orders.find(function(o){ return o.id === orderId; }); if(!order) return;
+  if(stage === 'paid'){
+    if(order.status !== 'delivered') setOrderStatusDirect(orderId, 'delivered');
+    if(order.status === 'delivered' && orderOwesMoney(order)) markOrderPaidFromBoard(order);
+    return;
+  }
+  setOrderStatusDirect(orderId, stage);
+}
+function dropOrderOnLane(orderId, lane){
+  const order = state.orders.find(function(o){ return o.id === orderId; }); if(!order) return;
+  const from = boardLane(order);
+  if(from === lane) return;
+  if(lane === 'ready'){ setOrderStatusDirect(orderId, 'production_done'); return; }
+  if(lane === 'closed'){ setOrderStatusDirect(orderId, order.status === 'quoted' ? 'lost' : 'cancelled'); return; }
+  if(lane === 'payment'){
+    if(order.status === 'delivered'){ showToast('This order is already paid. Change its payment in the order.'); return; }
+    setOrderStatusDirect(orderId, 'delivered');
+    if(order.status === 'delivered' && !orderOwesMoney(order)) showToast('Delivered. Nothing is owed on it, so it sits in Delivered.');
+    return;
+  }
+  if(lane === 'delivered'){
+    if(order.status !== 'delivered') setOrderStatusDirect(orderId, 'delivered');
+    if(order.status === 'delivered' && orderOwesMoney(order)) markOrderPaidFromBoard(order);
+    return;
+  }
+  setOrderStatusDirect(orderId, lane);
 }
 
 // Board cards are compact-only now (see screenshot feedback: expanding a full edit
@@ -5385,57 +5593,72 @@ function refreshOpenOrderModalIfNeeded(){
 function renderOrdersBoard(visible){
   const boardWrap = document.getElementById('ordersBoardWrap');
   boardWrap.innerHTML = '';
+  closeBoardStageMenu(); boardHoverHide();
 
   const buckets = {};
   visible.forEach(function(x){
-    const st = boardStatus(x.order);
-    if(!buckets[st]) buckets[st] = [];
-    buckets[st].push(x);
+    const lane = boardLane(x.order);
+    if(!buckets[lane]) buckets[lane] = [];
+    buckets[lane].push(x);
   });
 
   const board = document.createElement('div');
   board.className = 'kanban-board';
+  let closedOpen = false;
+  try{ closedOpen = localStorage.getItem('tt-board-closed-open') === '1'; }catch(err){}
 
-  ORDER_SECTION_SEQUENCE.forEach(function(status){
+  BOARD_LANES.forEach(function(lane){
+    const status = lane.key;
     const group = buckets[status] || [];
-    const groupValue = group.reduce(function(sum, x){ return sum + orderTotals(x.order).orderValue; }, 0);
+    const groupValue = group.reduce(function(sum, x){
+      const t = orderTotals(x.order);
+      return sum + (status === 'payment' ? orderAmountDue(x.order) : (t.grandTotal || t.orderValue));
+    }, 0);
 
     const col = document.createElement('div');
     col.className = 'kanban-column';
     col.setAttribute('data-status', status);
+    const folded = status === 'closed' && !closedOpen;
+    if(folded) col.classList.add('kb-folded');
 
     const header = document.createElement('div');
     header.className = 'kanban-column-header';
     header.innerHTML =
-      '<span class="kanban-col-dot" style="background:' + orderSectionColorVar(status) + ';"></span>' +
-      '<span class="kanban-col-title">' + statusLabel(status) + '</span>' +
-      '<span class="kanban-col-count">' + group.length + '</span>';
+      '<span class="kanban-col-dot" style="background:' + lane.color + ';"></span>' +
+      '<span class="kanban-col-title">' + lane.label + '</span>' +
+      '<span class="kanban-col-count">' + group.length + '</span>' +
+      (group.length && status !== 'closed' ? '<span class="kanban-col-total" title="' + (status === 'payment' ? 'Still to collect' : 'Total value') + '">' + boardMoney(groupValue) + (status === 'payment' ? ' due' : '') + '</span>' : '') +
+      (status === 'closed' ? '<span class="kb-fold" title="' + (folded ? 'Show cancelled and lost orders' : 'Fold away') + '">' + (folded ? '›' : '‹') + '</span>' : '');
+    if(status === 'closed'){
+      header.style.cursor = 'pointer';
+      header.addEventListener('click', function(){
+        try{ localStorage.setItem('tt-board-closed-open', folded ? '1' : '0'); }catch(err){}
+        renderOrdersBoard(visible);
+      });
+    }
     col.appendChild(header);
-
-    const totalEl = document.createElement('div');
-    totalEl.className = 'kanban-col-total';
-    totalEl.textContent = group.length ? ('\u20b9' + fmt(groupValue)) : '\u2014';
-    col.appendChild(totalEl);
 
     const body = document.createElement('div');
     body.className = 'kanban-column-body';
 
-    // Sort delivered & cancelled newest-first by delivery/order date
-    if(status === 'delivered' || status === 'cancelled'){
+    // Newest first where orders pile up after the work is done.
+    if(status === 'delivered' || status === 'payment' || status === 'closed'){
       group.sort(function(a, b){
-        var dA = a.order.deliveryDate || a.order.productionDoneDate || a.order.orderedDate || '';
-        var dB = b.order.deliveryDate || b.order.productionDoneDate || b.order.orderedDate || '';
+        var dA = a.order.deliveryDate || a.order.cancelledDate || a.order.lostDate || a.order.productionDoneDate || a.order.orderedDate || '';
+        var dB = b.order.deliveryDate || b.order.cancelledDate || b.order.lostDate || b.order.productionDoneDate || b.order.orderedDate || '';
         return dB < dA ? -1 : (dB > dA ? 1 : 0);
       });
     }
 
     var COLLAPSE_LIMIT = 8;
-    var shouldCollapse = (status === 'delivered' && group.length > COLLAPSE_LIMIT);
+    var shouldCollapse = ((status === 'delivered' || status === 'closed') && group.length > COLLAPSE_LIMIT);
 
-    if(group.length === 0){
+    if(folded){
+      // Folded: still a drop target, just no cards.
+    } else if(group.length === 0){
       const empty = document.createElement('div');
       empty.className = 'kanban-column-empty';
-      empty.textContent = 'No orders';
+      empty.textContent = status === 'payment' ? 'Nothing to collect' : 'No orders';
       body.appendChild(empty);
     } else {
       group.forEach(function(x, i){
@@ -5447,37 +5670,34 @@ function renderOrdersBoard(visible){
       if(shouldCollapse){
         var toggle = document.createElement('button');
         toggle.className = 'kanban-show-all-btn';
-        toggle.textContent = 'Show all ' + group.length + ' delivered orders';
-        toggle.style.cssText = 'width:100%; padding:10px 8px; border:1px dashed var(--line); border-radius:8px; background:transparent; color:var(--cyan); font-size:12px; font-weight:600; cursor:pointer; margin-top:4px; transition:background 0.15s;';
-        toggle.addEventListener('mouseenter', function(){ toggle.style.background = 'rgba(79,209,197,0.08)'; });
-        toggle.addEventListener('mouseleave', function(){ toggle.style.background = 'transparent'; });
+        toggle.textContent = 'Show all ' + group.length;
         var expanded = false;
         toggle.addEventListener('click', function(){
           expanded = !expanded;
-          var cards = body.querySelectorAll('.kanban-card');
-          cards.forEach(function(c){
+          body.querySelectorAll('.kanban-card').forEach(function(c){
             var idx = parseInt(c.getAttribute('data-kanban-idx'), 10);
             if(idx >= COLLAPSE_LIMIT) c.style.display = expanded ? '' : 'none';
           });
-          toggle.textContent = expanded ? 'Show recent ' + COLLAPSE_LIMIT + ' only' : ('Show all ' + group.length + ' delivered orders');
+          toggle.textContent = expanded ? 'Show the latest ' + COLLAPSE_LIMIT + ' only' : ('Show all ' + group.length);
         });
         body.appendChild(toggle);
       }
     }
 
-    body.addEventListener('dragover', function(e){
+    const dropZone = folded ? col : body;
+    dropZone.addEventListener('dragover', function(e){
       e.preventDefault();
       if(e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-      body.classList.add('drag-over');
+      dropZone.classList.add('drag-over');
     });
-    body.addEventListener('dragleave', function(){
-      body.classList.remove('drag-over');
+    dropZone.addEventListener('dragleave', function(){
+      dropZone.classList.remove('drag-over');
     });
-    body.addEventListener('drop', function(e){
+    dropZone.addEventListener('drop', function(e){
       e.preventDefault();
-      body.classList.remove('drag-over');
+      dropZone.classList.remove('drag-over');
       const orderId = kanbanDragOrderId || (e.dataTransfer ? e.dataTransfer.getData('text/plain') : null);
-      if(orderId) setOrderStatusDirect(orderId, status);
+      if(orderId) dropOrderOnLane(orderId, status);
     });
 
     col.appendChild(body);
