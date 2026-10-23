@@ -623,7 +623,7 @@
         '<div class="cr-kpi ' + (p.overdue.length + p.risk.length ? 'bad' : '') + '"><div class="k">Late or at risk</div><div class="v">' + (p.overdue.length + p.risk.length) + '</div><div class="s">' + p.overdue.length + ' overdue</div></div>' +
       '</div>' +
       '<div class="panel"><div class="panel-title">Dispatch calendar · 2 weeks</div>' + calendarHtml() + '</div>' +
-      linesHtml() +
+      // "Order lines on the floor" hidden for now (2026-10-24); linesHtml() is kept so it can return.
       promiseHtml() +
       // The queue matches the height of Needs attention and scrolls inside, so the page has no gap.
       '<div class="cr-grid">' +
