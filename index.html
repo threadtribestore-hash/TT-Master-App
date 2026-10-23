@@ -6573,17 +6573,21 @@ function recalcQueue(){
   html += '<div class="gantt-wrap"><div class="gantt-bar">';
   segments.forEach(function(seg){
     const widthPct = (seg.hours / totalHours) * 100;
-    html += '<div class="gantt-seg" style="width:' + widthPct + '%; background:' + seg.color + ';" title="' + escapeHtml(seg.order.name) + ': days ' + seg.startDay + '-' + seg.endDay + '">' + (widthPct > 8 ? escapeHtml(seg.order.name) : '') + '</div>';
+    html += '<div class="gantt-seg" style="width:' + widthPct + '%; background:' + seg.color + ';" title="' + escapeHtml(seg.order.name) + ': ' + schedDayRange(seg.startDay, seg.endDay) + '">' + (widthPct > 8 ? escapeHtml(seg.order.name) : '') + '</div>';
   });
   html += '</div>';
   html += '<div class="gantt-daymarks">';
   const markCount = Math.min(totalDays, 40);
-  for(let d = 1; d <= markCount; d++){ html += '<div class="gantt-daymark" style="width:' + (100/markCount) + '%;">' + d + '</div>'; }
+  // Real dates: month shown on the first mark and on the 1st of each month, day number otherwise.
+  for(let d = 1; d <= markCount; d++){
+    const dd = schedDayDate(d);
+    html += '<div class="gantt-daymark" style="width:' + (100/markCount) + '%;" title="' + schedDayText(d) + '">' + dd.getDate() + (d === 1 || dd.getDate() === 1 ? ' ' + schedMon(dd) : '') + '</div>';
+  }
   html += '</div></div>';
 
   html += '<div class="queue-list">';
   segments.forEach(function(seg){
-    const dayRange = seg.startDay === seg.endDay ? ('Day ' + seg.startDay) : ('Days ' + seg.startDay + '\u2013' + seg.endDay);
+    const dayRange = schedDayRange(seg.startDay, seg.endDay);
     html += '<div class="queue-row"><div class="queue-dot" style="background:' + seg.color + '"></div><div class="queue-row-name">' + queueLabel(seg.order) + '</div><div class="queue-row-days">' + dayRange + '</div></div>';
   });
   html += '</div>';
@@ -12390,7 +12394,7 @@ function renderSchedCapChart(){
   // Distribute across 14 days (simple serial model)
   var days = 14;
   var dayData = [];
-  for(var d = 0; d < days; d++) dayData.push({ day: d + 1, used: 0, label: 'Day ' + (d + 1) });
+  for(var d = 0; d < days; d++) dayData.push({ day: d + 1, used: 0, label: schedDayText(d + 1) });
   var remaining = orderHours.map(function(x){ return { hours: x.hours }; });
   remaining.forEach(function(o){
     for(var d = 0; d < days && o.hours > 0; d++){
@@ -12421,13 +12425,25 @@ function renderSchedCapChart(){
     var pct = (d.used / dailyCap) * 100;
     var col = pct > 90 ? 'var(--red)' : pct > 60 ? 'var(--amber)' : 'var(--cyan)';
     svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + Math.max(barH, 1) + '" rx="3" fill="' + col + '" opacity="0.8"/>';
-    svg += '<text x="' + (x + barW / 2) + '" y="' + (h - pad + 14) + '" fill="var(--dim)" font-size="9" text-anchor="middle" font-family="JetBrains Mono,monospace">D' + d.day + '</text>';
+    svg += '<text x="' + (x + barW / 2) + '" y="' + (h - pad + 14) + '" fill="var(--dim)" font-size="9" text-anchor="middle" font-family="JetBrains Mono,monospace">' + (d.day === 1 ? 'Today' : schedDayDate(d.day).getDate() + ' ' + schedMon(schedDayDate(d.day))) + '<title>' + schedDayText(d.day) + '</title></text>';
     if(d.used > 0) svg += '<text x="' + (x + barW / 2) + '" y="' + (y - 4) + '" fill="var(--text)" font-size="8" text-anchor="middle" font-family="JetBrains Mono,monospace">' + d.used.toFixed(0) + 'h</text>';
   });
   // Y axis label
   svg += '<text x="12" y="' + (h / 2) + '" fill="var(--dim)" font-size="9" text-anchor="middle" font-family="JetBrains Mono,monospace" transform="rotate(-90,12,' + (h / 2) + ')">Print Hours</text>';
   svg += '</svg>';
   el.innerHTML = svg;
+}
+
+// Schedule day n (1 = today) as a real date, for the queue and schedule charts.
+// Function declarations, so they work even if a chart renders before this point in the script runs.
+function schedDow(x){ return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][x.getDay()]; }
+function schedMon(x){ return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getMonth()]; }
+function schedDayDate(n){ var x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + n - 1); return x; }
+function schedDayText(n){ var x = schedDayDate(n); return schedDow(x) + ' ' + x.getDate() + ' ' + schedMon(x); }
+function schedDayRange(a, b){
+  if(a === b) return schedDayText(a);
+  var x = schedDayDate(a), y = schedDayDate(b);
+  return schedDow(x) + ' ' + x.getDate() + (x.getMonth() === y.getMonth() ? '' : ' ' + schedMon(x)) + ' \u2013 ' + schedDayText(b);
 }
 
 function renderSchedGantt(){
@@ -12480,9 +12496,7 @@ function renderSchedGantt(){
   var html = '<div class="sched-gantt">';
   // Header
   // D1 is today: label each column with its calendar date (every few days when the span is long).
-  var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  function dayDate(d){ var x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + d - 1); return x; }
-  function dayText(d){ var x = dayDate(d); return DOW[x.getDay()] + ' ' + x.getDate() + ' ' + MON[x.getMonth()]; }
+  var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], dayDate = schedDayDate, dayText = schedDayText;
   var step = maxDays <= 14 ? 1 : maxDays <= 28 ? 2 : Math.ceil(maxDays / 14);
   html += '<div class="gantt-row" style="height:30px;">';
   html += '<div class="gantt-label" style="font-size:10px; color:var(--dim);">Order</div>';
