@@ -348,7 +348,7 @@
         var rs = (r.o.delays || []).map(function(x){ return window.TTFlow ? window.TTFlow.reasonLabel(x.reason) : x.reason; });
         return '<tr><td>' + link(r.o) + ' ' + esc(who(r.o)) + '</td><td>' + fmt(r.o.dueDate) + '</td><td>' + fmt(r.sent) + '</td><td class="n">' + r.late + '</td><td>' +
           (rs.length ? rs.map(function(x){ return '<span class="to-chip amber">' + esc(x) + '</span>'; }).join(' ')
-            : '<select data-to-otr="' + esc(r.o.id) + '"><option value="">Add reason…</option>' + (window.TTFlow ? window.TTFlow.reasons : []).map(function(x){ return '<option value="' + x[0] + '">' + esc(x[1]) + '</option>'; }).join('') + '</select>') + '</td></tr>'; }).join('')
+            : '<select data-to-otr="' + esc(r.o.id) + '"><option value="">Add reason…</option>' + (window.TTFlow ? [['printing', 'Production'], ['made', 'Packing & dispatch']].map(function(g){ return '<optgroup label="' + g[1] + '">' + window.TTFlow.reasonsFor(g[0]).map(function(x){ return '<option value="' + g[0] + ':' + x[0] + '">' + esc(x[1]) + '</option>'; }).join('') + '</optgroup>'; }).join('') : '') + '</select>') + '</td></tr>'; }).join('')
         : '<tr><td colspan="5" class="to-dim">No late orders.</td></tr>') + '</tbody></table>';
   }
 
@@ -397,7 +397,7 @@
     else if(g('data-to-staff') != null){ var p = cfg().staff[+g('data-to-staff')]; if(p){ p[g('data-f')] = g('data-f') === 'hours' ? Math.max(0, +t.value || 0) : t.value.trim(); scheduleSave(); rerender(); } }
     else if(g('data-to-min')){ cfg().minutes[g('data-to-min')][g('data-s')] = Math.max(0, +t.value || 0); scheduleSave(); rerender(); }
     else if(g('data-to-shelf')){ cfg().shelf[g('data-to-shelf')] = Math.max(0, parseInt(t.value, 10) || 0); scheduleSave(); rerender(); }
-    else if(g('data-to-otr')){ var o = byId(g('data-to-otr')); if(o && t.value){ o.delays = (o.delays || []).concat([{ id: newId(), stage: 'made', reason: t.value, note: 'Shipped late', at: today() }]); scheduleSave(); rerender(); } }
+    else if(g('data-to-otr')){ var o = byId(g('data-to-otr')); if(o && t.value){ var sr = t.value.split(':'); o.delays = (o.delays || []).concat([{ id: newId(), stage: sr[0], reason: sr[1], note: 'Shipped late', at: today() }]); scheduleSave(); rerender(); } }
   });
 
   var css = document.createElement('style');

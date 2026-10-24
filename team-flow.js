@@ -19,19 +19,54 @@
     { key: 'shipped', label: 'Delivery', from: 'Shipped', team: 'Dispatch', target: 4, hint: 'Shipped, not yet marked delivered' },
     { key: 'payment', label: 'Collect payment', from: 'Delivered', team: 'Accounts', target: 7, hint: 'Delivered, money still owed' }
   ];
-  var REASONS = [
-    ['client_wait', 'Waiting on client (approval, artwork, details)'],
-    ['client_change', 'Client changed the order'],
-    ['advance', 'Waiting for advance payment'],
-    ['filament', 'Filament out of stock'],
-    ['print_fail', 'Print failures or reprints'],
-    ['capacity', 'Printers fully booked'],
-    ['partner', 'Partner job late'],
-    ['setup', 'Print file or product details missing'],
-    ['packing', 'Packing backlog or short-staffed'],
-    ['courier', 'Courier pickup or transit delay'],
-    ['other', 'Other']
-  ];
+  // Reasons depend on where the order is stuck: sales reasons for quotes and payment,
+  // production reasons for printing, dispatch reasons once it is made.
+  var REASON_SETS = {
+    sales: [
+      ['client_comparing', 'Client comparing prices or quotes'],
+      ['client_wait', 'Waiting on client (approval, samples, details)'],
+      ['negotiation', 'Price or terms still being negotiated'],
+      ['on_hold', 'Client put it on hold (budget or timing)'],
+      ['no_followup', 'No follow-up from our side'],
+      ['other', 'Other']
+    ],
+    payment: [
+      ['credit_cycle', 'Client pays on a credit cycle (agreed terms)'],
+      ['client_cash', 'Client waiting for their own buyers to pay'],
+      ['invoice_issue', 'Invoice or GST details wrong or missing'],
+      ['dispute', 'Dispute: damage, shortage or quality'],
+      ['promised', 'Client promised a payment date'],
+      ['part_paid', 'Part paid, balance pending'],
+      ['unreachable', 'Client not responding'],
+      ['no_followup', 'No follow-up from our side'],
+      ['other', 'Other']
+    ],
+    production: [
+      ['client_change', 'Client changed the order'],
+      ['advance', 'Waiting for advance payment'],
+      ['filament', 'Filament out of stock'],
+      ['print_fail', 'Print failures or reprints'],
+      ['capacity', 'Printers fully booked'],
+      ['partner', 'Partner job late'],
+      ['setup', 'Print file or product details missing'],
+      ['client_wait', 'Waiting on client (approval, artwork, details)'],
+      ['other', 'Other']
+    ],
+    dispatch: [
+      ['packing', 'Packing backlog or short-staffed'],
+      ['awaiting_payment', 'Holding dispatch until payment'],
+      ['address', 'Address or contact missing'],
+      ['client_not_ready', 'Client not ready to receive'],
+      ['courier', 'Courier pickup or transit delay'],
+      ['partial', 'Waiting to ship the full order together'],
+      ['other', 'Other']
+    ]
+  };
+  var STAGE_SET = { quote: 'sales', booked: 'production', printing: 'production', made: 'dispatch', shipped: 'dispatch', payment: 'payment' };
+  function reasonsFor(stageKey){ return REASON_SETS[STAGE_SET[stageKey] || 'production']; }
+  // Every reason once, for reports and for lists not tied to one stage.
+  var REASONS = [];
+  Object.keys(REASON_SETS).forEach(function(k){ REASON_SETS[k].forEach(function(r){ if(!REASONS.some(function(x){ return x[0] === r[0]; })) REASONS.push(r); }); });
   function reasonLabel(k){ var r = REASONS.find(function(x){ return x[0] === k; }); return r ? r[1] : k; }
 
   // ---------- helpers ----------
@@ -187,7 +222,7 @@
     var s = STAGES.find(function(z){ return z.key === x.st; });
     var reason = x.reason ? '<span class="tf-chip" title="' + esc(x.reason.note || '') + '">' + esc(reasonLabel(x.reason.reason)) + '</span>' : '';
     var picker = V.reasonFor === x.o.id
-      ? '<span class="tf-pick"><select data-tf-reason="' + esc(x.o.id) + '"><option value="">Pick a reason…</option>' + REASONS.map(function(r){ return '<option value="' + r[0] + '">' + esc(r[1]) + '</option>'; }).join('') + '</select>' +
+      ? '<span class="tf-pick"><select data-tf-reason="' + esc(x.o.id) + '"><option value="">Pick a reason…</option>' + reasonsFor(x.st).map(function(r){ return '<option value="' + r[0] + '">' + esc(r[1]) + '</option>'; }).join('') + '</select>' +
         '<input data-tf-note="' + esc(x.o.id) + '" placeholder="Note (optional)"><button type="button" class="tf-btn" data-tf="save-reason" data-id="' + esc(x.o.id) + '" data-st="' + x.st + '">Save</button></span>'
       : ((x.over || x.pastDue) ? '<button type="button" class="tf-btn' + (x.reason ? '' : ' warn') + '" data-tf="why" data-id="' + esc(x.o.id) + '">' + (x.reason ? 'Change reason' : 'Why late?') + '</button>' : '');
     return '<tr class="' + (x.over ? 'tf-over' : '') + '"><td><a href="#" class="cr-ord" data-cr="open" data-id="' + esc(x.o.id) + '">' + esc(x.o.displayId || 'Order') + '</a> ' + esc(who(x.o)) + (x.pastDue ? ' <span class="tf-due">past due ' + fmt(x.o.dueDate) + '</span>' : '') + '</td>' +
@@ -308,5 +343,5 @@
   ].join('');
   document.head.appendChild(css);
 
-  window.TTFlow = { html: html, stageOf: stageOf, entered: entered, waiting: waiting, reasons: REASONS, reasonLabel: reasonLabel, record: record };
+  window.TTFlow = { html: html, stageOf: stageOf, entered: entered, waiting: waiting, reasons: REASONS, reasonsFor: reasonsFor, reasonLabel: reasonLabel, record: record };
 })();
