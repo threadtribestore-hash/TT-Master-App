@@ -289,6 +289,8 @@
 
   async function publish(){
     if(!(typeof cloudIsOn === 'function' && cloudIsOn()) || B.missing || B.publishing) return;
+    // Only owners publish brand partner packs; a team member's device would see no packs and resend all.
+    if(typeof cloudIsOwner === 'function' && !cloudIsOwner()) return;
     B.publishing = true;
     try{
       if(!B.known){

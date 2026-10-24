@@ -15359,6 +15359,9 @@ const cloud = { sb: null, email: '', userId: '', admin: false, status: 'off', er
   pushTimer: null, pullTimer: null, channel: null, lastSyncAt: 0, starting: false, otpEmail: '', paused: false };
 
 function cloudIsOn(){ return !!(cloud.sb && cloud.admin && cloud.link); }
+// Owners (app_admins) run everything; team members (studio_team) only what their role allows.
+function cloudRole(){ return cloud.role || 'owner'; }
+function cloudIsOwner(){ return cloudIsOn() && cloudRole() === 'owner'; }
 
 // ---------- hashing: key-order-independent, so data that went through Postgres jsonb compares equal ----------
 function cloudCanon(v){
@@ -15642,6 +15645,7 @@ async function cloudPull(){
 }
 
 async function cloudPullReports(){
+  if(cloudRole() !== 'owner') return;   // partner reports are applied by owners
   const L = cloud.link;
   const reps = await cloudFetchAll('pon_reports', 'job_id,partner_id,report,updated_at', cloudSince(L.rcursor));
   if(!reps.length) return;
@@ -15678,6 +15682,13 @@ async function cloudPush(){
     const i = k.indexOf(CLOUD_SEP);
     ups.push({ coll: k.slice(0, i), id: k.slice(i + 1), pos: 0, data: null, deleted: true, h: 'DEL', size: 10 });
   });
+  // A team member's device only sends what their role may change (the database refuses the
+  // rest anyway). Skipped rows are remembered so they aren't retried on every sync.
+  if(cloudRole() !== 'owner' && window.TTAccess){
+    for(let i = ups.length - 1; i >= 0; i--){
+      if(!window.TTAccess.canWrite(cloudRole(), ups[i].coll, ups[i].id)){ L.derived[cloudKeyOf(ups[i].coll, ups[i].id)] = ups[i].h; ups.splice(i, 1); }
+    }
+  }
   // Batches of up to ~1.5 MB / 200 rows.
   const batches = [];
   let cur = [], size = 0;
@@ -15714,6 +15725,7 @@ function cloudPartnerEmail(p){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em) ? em : '';
 }
 async function cloudPublishPacks(){
+  if(cloudRole() !== 'owner') return;   // partner packs are published by owners
   ensurePon();
   const L = cloud.link, want = {};
   state.pon.partners.forEach(function(p){
@@ -15775,6 +15787,7 @@ async function cloudFirstLink(){
     cloudSaveLink();
     showToast('Uploading this device’s data to the cloud…');
   }
+  if(cloudRole() !== 'owner'){ adopt(); return; }
   if(!live.length){ replaceCloud(); return; }
   if(!cloudLocalHasData()){ adopt(); return; }
   const remoteOrders = live.filter(function(r){ return r.coll === 'orders'; }).length;
@@ -15819,14 +15832,26 @@ async function cloudStartSession(session){
   try{ localStorage.setItem(CLOUD_LAST_EMAIL_KEY, email); }catch(e){}
   cloudSetStatus('connecting');
   try{
-    const res = await cloud.sb.rpc('is_admin');
-    if(res.error) throw res.error;
-    if(res.data !== true){ cloud.admin = false; cloudSetStatus('denied'); cloudRenderPanel(); return; }
-    cloud.admin = true;
+    // team_role() comes from team_access_setup.sql; before that is run, owners are app_admins only.
+    let role = '';
+    const rr = await cloud.sb.rpc('team_role');
+    if(!rr.error) role = rr.data || '';
+    else {
+      const res = await cloud.sb.rpc('is_admin');
+      if(res.error) throw res.error;
+      role = res.data === true ? 'owner' : '';
+    }
+    if(!role){ cloud.admin = false; cloud.role = ''; cloudSetStatus('denied'); cloudRenderPanel(); return; }
+    cloud.admin = true; cloud.role = role;
+    if(typeof window.ttApplyRole === 'function') window.ttApplyRole(role, email);
     cloud.link = cloudLoadLink();
+    // A different person on this device starts from the cloud copy their role can see, never
+    // from what the last person left here.
+    if(cloud.link && cloud.link.email && cloud.link.email !== email){ cloud.link = null; try{ localStorage.removeItem(CLOUD_LINK_KEY); }catch(e){} }
     cloud.busy = true;
     try{
       if(!cloud.link) await cloudFirstLink();
+      if(cloud.link && !cloud.link.email){ cloud.link.email = email; cloudSaveLink(); }
     } finally { cloud.busy = false; }
     if(!cloud.link){
       cloud.pendingSession = session;
@@ -15881,7 +15906,7 @@ async function cloudSignOut(){
   try{ if(cloud.live) await cloud.sb.removeChannel(cloud.live); }catch(e){}
   cloud.channel = null; cloud.live = null; cloud.rtDb = ''; cloud.rtLive = '';
   try{ await cloud.sb.auth.signOut(); }catch(e){}
-  cloud.admin = false; cloud.link = null; cloud.email = ''; cloud.pendingSession = null;
+  cloud.admin = false; cloud.link = null; cloud.email = ''; cloud.pendingSession = null; cloud.role = '';
   cloudSetStatus('off');
   cloudRenderPanel();
 }
@@ -17646,6 +17671,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
 <script src="buyers-admin.js?v=28"></script>
 <script src="partner-planning.js?v=4"></script>
+<script src="team-access.js?v=2"></script>
 <script src="team-flow.js?v=3"></script>
 <script src="team-ops.js?v=3"></script>
 <script src="control-room.js?v=16"></script>
