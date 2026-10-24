@@ -84,9 +84,9 @@
   function overdue(t){ return t.status !== 'done' && t.due && t.due < today(); }
   function cardHtml(t){
     const pr = t.data.priority || 'normal';
-    return '<div class="tk-card' + (overdue(t) ? ' late' : '') + '" data-tk="edit" data-id="' + t.id + '">' +
+    return '<div class="tk-card' + (overdue(t) ? ' late' : '') + '" data-tk="edit" data-id="' + t.id + '" draggable="true">' +
       '<div class="tk-card-t"><button class="tk-check' + (t.status === 'done' ? ' on' : '') + '" data-tk="toggle" data-id="' + t.id + '" title="Mark done">' + (t.status === 'done' ? '✓' : '') + '</button><b>' + esc(t.data.title || 'Untitled') + '</b></div>' +
-      '<div class="tk-meta"><span class="tk-av" title="' + esc(personName(t)) + '">' + esc(initials(personName(t))) + '</span>' +
+      '<div class="tk-meta">' + (personKey(t) ? '<span class="tk-av" title="' + esc(personName(t)) + '">' + esc(initials(personName(t))) + '</span>' : '<span class="tk-unas">Unassigned</span>') +
         (t.due ? '<span class="' + (overdue(t) ? 'tk-bad' : '') + '">' + (overdue(t) ? 'Late · ' : '') + fmt(t.due) + '</span>' : '') +
         (pr !== 'normal' ? '<span class="tk-pr ' + pr + '">' + esc(label(PRIO, pr)) + '</span>' : '') +
         (t.data.link ? '<span class="tk-link" data-tk="link" data-id="' + t.id + '">' + esc(linkLabel(t.data.link)) + '</span>' : '') + '</div></div>';
@@ -95,7 +95,7 @@
     const q = V.q.trim().toLowerCase();
     return X.rows.filter(function(t){
       if(V.who === 'me' && t.assignee_email !== me()) return false;
-      if(V.who !== 'all' && V.who !== 'me' && personKey(t) !== V.who) return false;
+      if(V.who !== 'all' && V.who !== 'me' && personKey(t) !== V.who) return false;  // '' = unassigned
       if(V.overdue && !overdue(t)) return false;
       return !q || [t.data.title, t.data.notes, personName(t), linkLabel(t.data.link)].join(' ').toLowerCase().indexOf(q) !== -1;
     });
@@ -112,21 +112,47 @@
       '<select data-tk-new="who"><option value="">Unassigned</option>' + ps.map(function(p){ return '<option value="' + esc(p.email || 'name:' + p.name.toLowerCase()) + '">' + esc(p.name) + ' (' + p.role + ')</option>'; }).join('') + '</select>' +
       '<input type="date" data-tk-new="due" value="' + today() + '"><select data-tk-new="prio">' + PRIO.map(function(p){ return '<option value="' + p[0] + '"' + (p[0] === 'normal' ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select>' +
       '<select data-tk-new="link"><option value="">Link to…</option>' + linkOptions('') + '</select><button class="tk-btn primary" data-tk="add">Add</button></div>';
-    h += '<div class="tk-bar"><div class="tk-chips"><button class="' + (V.who === 'all' ? 'on' : '') + '" data-tk-who="all">Everyone</button>' + (me() ? '<button class="' + (V.who === 'me' ? 'on' : '') + '" data-tk-who="me">Mine</button>' : '') +
-      ps.filter(function(p){ return !p.email || p.email !== me(); }).map(function(p){ const k = p.email || 'name:' + p.name.toLowerCase(); return '<button class="' + (V.who === k ? 'on' : '') + '" data-tk-who="' + esc(k) + '">' + esc(p.name) + '</button>'; }).join('') + '</div>' +
-      '<button class="tk-btn' + (V.overdue ? ' primary' : '') + '" data-tk="overdue">Late only</button><input class="tk-q" data-tk-q placeholder="Search tasks" value="' + esc(V.q) + '"></div>';
-    h += '<div class="tk-board">' + STATUS.map(function(st){
+    // Open tasks per person on the filter chips, so the load is visible at a glance.
+    const open = X.rows.filter(function(t){ return t.status !== 'done'; });
+    const n = function(fn){ const c = open.filter(fn).length; return c ? ' <span class="tk-n">' + c + '</span>' : ''; };
+    const lateN = open.filter(overdue).length;
+    h += '<div class="tk-bar"><div class="tk-chips"><button class="' + (V.who === 'all' ? 'on' : '') + '" data-tk-who="all">Everyone' + n(function(){ return true; }) + '</button>' + (me() ? '<button class="' + (V.who === 'me' ? 'on' : '') + '" data-tk-who="me">Mine' + n(function(t){ return t.assignee_email === me(); }) + '</button>' : '') +
+      ps.filter(function(p){ return !p.email || p.email !== me(); }).map(function(p){ const k = p.email || 'name:' + p.name.toLowerCase(); return '<button class="' + (V.who === k ? 'on' : '') + '" data-tk-who="' + esc(k) + '">' + esc(p.name) + n(function(t){ return personKey(t) === k; }) + '</button>'; }).join('') +
+      (open.some(function(t){ return !personKey(t); }) ? '<button class="' + (V.who === '' ? 'on' : '') + '" data-tk-who="">Unassigned' + n(function(t){ return !personKey(t); }) + '</button>' : '') + '</div>' +
+      '<button class="tk-btn' + (V.overdue ? ' primary' : '') + '" data-tk="overdue">Late only' + (lateN ? ' · ' + lateN : '') + '</button><input class="tk-q" data-tk-q placeholder="Search tasks" value="' + esc(V.q) + '"></div>';
+    const work = orderWork(), hint = { todo: 'Nothing to do. Add a task above.', doing: 'Drag a card here when someone starts on it.', done: 'Tick a card or drag it here when it’s finished.' };
+    h += '<div class="tk-board' + (work ? ' four' : '') + '">' + (work || '') + STATUS.map(function(st){
       let col = list.filter(function(t){ return t.status === st[0]; });
       if(st[0] === 'done') col = col.filter(function(t){ return (t.data.done_at || t.updated_at || '') >= addDays(today(), -14); }).sort(function(a, b){ return (b.data.done_at || '').localeCompare(a.data.done_at || ''); });
       else col.sort(sort);
-      return '<div class="tk-col" data-tk-drop="' + st[0] + '"><div class="tk-col-h">' + st[1] + ' <b>' + col.length + '</b>' + (st[0] === 'done' ? '<i>last 14 days</i>' : '') + '</div>' + col.map(cardHtml).join('') + '</div>';
+      return '<div class="tk-col" data-tk-drop="' + st[0] + '"><div class="tk-col-h">' + st[1] + ' <b>' + col.length + '</b>' + (st[0] === 'done' ? '<i>last 14 days</i>' : '') + '</div>' + (col.length ? col.map(cardHtml).join('') : '<div class="tk-empty">' + hint[st[0]] + '</div>') + '</div>';
     }).join('') + '</div>';
     h += '<details class="tk-floor"><summary>Floor staff without a login</summary><p class="tk-dim">Give tasks to people who don’t sign in (print-farm staff, packers) by name.</p><div class="tk-chips">' +
       (state.taskPeople || []).map(function(n){ return '<button data-tk="rm-person" data-n="' + esc(n) + '">' + esc(n) + ' ✕</button>'; }).join('') + '</div><div class="tk-add"><input data-tk-person placeholder="Name"><button class="tk-btn" data-tk="add-person">Add person</button></div></details>';
     root.innerHTML = h;
   }
+  // Today's order work from Studio (the same list as Today's tasks on Home): ticking it here
+  // ticks it there, and "Give to…" turns one into a team task linked to the order.
+  function orderWork(){
+    if(!window.TTDaily || !(state.orders || []).length) return '';
+    const d = window.TTDaily.day(false), items = (d.items || []).filter(function(x){ return !x.done && !x.taskId; });
+    const q = V.q.trim().toLowerCase(), shown = q ? items.filter(function(x){ return (x.text + ' ' + x.detail).toLowerCase().indexOf(q) !== -1; }) : items;
+    return '<div class="tk-col tk-work"><div class="tk-col-h">From orders today <b>' + shown.length + '</b><i>auto</i></div>' +
+      (shown.length ? shown.map(function(x){
+        return '<div class="tk-card tk-wcard"><div class="tk-card-t"><input type="checkbox" class="tk-wtick" data-dt="tick" data-id="' + esc(x.id) + '" title="Mark done"><b>' + esc(x.text) + '</b></div>' +
+          '<div class="tk-meta"><span class="dt-dept dt-' + x.dept + '">' + (x.dept === 'sales' ? 'Sales' : 'Production') + '</span>' + (x.detail ? '<span>' + esc(x.detail) + '</span>' : '') + '</div>' +
+          '<div class="tk-wact"><button class="tk-mini" data-dt="open" data-id="' + esc(x.orderId) + '">Open order</button><button class="tk-mini" data-tk="give" data-wid="' + esc(x.id) + '">Give to…</button></div></div>';
+      }).join('') : '<div class="tk-empty">All of today’s order work is done.</div>') + '</div>';
+  }
+  function giveWork(wid){
+    const d = window.TTDaily && window.TTDaily.day(false), x = d && d.items.find(function(i){ return i.id === wid; }); if(!x) return;
+    const t = newTask(x.text, '', today(), x.rank === 0 ? 'high' : 'normal', { type: 'order', id: x.orderId });
+    t.data.notes = x.detail || ''; t.data.source = 'daily:' + x.id;
+    edit(t, function(saved){ if(saved){ x.taskId = saved.id; scheduleSave(); } });
+  }
   function linkOptions(cur){
-    const os = state.orders.filter(function(o){ return ['quoted', 'lost', 'cancelled', 'delivered'].indexOf(o.status) === -1; }).slice(0, 60).map(function(o){ return ['order:' + o.id, (o.displayId || 'Order') + ' · ' + (o.clientName || o.name || '')]; });
+    // Open orders, plus the order already linked (it may be delivered, e.g. a payment to chase).
+    const os = state.orders.filter(function(o){ return 'order:' + o.id === cur || ['quoted', 'lost', 'cancelled', 'delivered'].indexOf(o.status) === -1; }).slice(0, 60).map(function(o){ return ['order:' + o.id, (o.displayId || 'Order') + ' · ' + (o.clientName || o.name || '')]; });
     const cs = (state.clients || []).slice(0, 80).map(function(c){ return ['client:' + c.id, 'Client · ' + c.name]; });
     const ms = ((window.TTMarketing && window.TTMarketing.campaigns()) || []).map(function(c){ return ['campaign:' + c.id, 'Campaign · ' + c.name]; });
     const group = function(name, l){ return l.length ? '<optgroup label="' + name + '">' + l.map(function(x){ return '<option value="' + esc(x[0]) + '"' + (cur === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '</optgroup>' : ''; };
@@ -165,7 +191,7 @@
 
   // ---------- task editor ----------
   let modal = null;
-  function edit(t){
+  function edit(t, after){
     if(!modal){ modal = document.createElement('div'); modal.className = 'tk-modal'; document.body.appendChild(modal); }
     const ps = people(), cur = t.data.link ? t.data.link.type + ':' + t.data.link.id : '';
     modal.innerHTML = '<div class="tk-box"><div class="tk-box-h"><b>Task</b><button class="tk-x" data-tkm="close">✕</button></div><div class="tk-box-b">' +
@@ -192,7 +218,7 @@
       t.data.link = parseLink(f('link'));
       if(t.status !== f('status')) t.data.done_at = f('status') === 'done' ? new Date().toISOString() : '';
       t.status = f('status');
-      if(await save(t)){ modal.classList.remove('on'); refreshAll(); showToast('Task saved'); }
+      if(await save(t)){ modal.classList.remove('on'); if(after) after(t); refreshAll(); showToast('Task saved'); }
     };
   }
   function refreshAll(){ render(); const h = document.getElementById('tabHome'); if(h && h.style.display !== 'none') drawMyDay(); }
@@ -241,6 +267,7 @@
       else { const tab = { client: 'clients', campaign: 'marketing', product: 'products' }[l.type]; const tb = tab && document.querySelector('.tab-btn[data-tab="' + tab + '"]'); if(tb) tb.click(); }
     }
     else if(a === 'edit' && t) edit(t);
+    else if(a === 'give'){ e.stopPropagation(); giveWork(b.getAttribute('data-wid')); }
     else if(a === 'overdue'){ V.overdue = !V.overdue; render(); }
     else if(a === 'add'){
       const root = document.getElementById('tasksRoot'), g = function(k){ const el = root.querySelector('[data-tk-new="' + k + '"]'); return el ? el.value.trim() : ''; };
@@ -264,6 +291,26 @@
     if(e.target.matches('[data-tk-new="title"]')){ const b = document.querySelector('#tasksRoot [data-tk="add"]'); if(b) b.click(); }
     if(e.target.matches('[data-md-new]')){ const b = document.querySelector('#myDay [data-tk="md-add"]'); if(b) b.click(); }
   });
+  // Drag cards between To do, Doing and Done.
+  let dragId = null;
+  document.addEventListener('dragstart', function(e){
+    const c = e.target.closest && e.target.closest('#tasksRoot .tk-card[data-id]'); if(!c) return;
+    dragId = c.getAttribute('data-id'); c.classList.add('drag');
+    try{ e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; }catch(err){}
+  });
+  document.addEventListener('dragend', function(){ dragId = null; document.querySelectorAll('#tasksRoot .drag, #tasksRoot .over').forEach(function(el){ el.classList.remove('drag', 'over'); }); });
+  document.addEventListener('dragover', function(e){
+    const col = dragId && e.target.closest && e.target.closest('#tasksRoot [data-tk-drop]'); if(!col) return;
+    e.preventDefault(); document.querySelectorAll('#tasksRoot .over').forEach(function(el){ if(el !== col) el.classList.remove('over'); }); col.classList.add('over');
+  });
+  document.addEventListener('drop', async function(e){
+    const col = dragId && e.target.closest && e.target.closest('#tasksRoot [data-tk-drop]'); if(!col) return;
+    e.preventDefault();
+    const t = X.rows.find(function(x){ return x.id === dragId; }), st = col.getAttribute('data-tk-drop'); dragId = null;
+    if(t && t.status !== st){ await setStatus(t, st); refreshAll(); }
+  });
+  // A tick on today's order work is saved by Today's tasks; redraw the board after it.
+  document.addEventListener('change', function(e){ if(e.target.matches && e.target.matches('#tasksRoot .tk-wtick')) setTimeout(render, 0); });
   document.addEventListener('change', async function(e){
     if(!inScope(e) || !e.target.hasAttribute('data-tk-file')) return;
     const f = e.target.files && e.target.files[0]; if(!f) return;
@@ -291,7 +338,21 @@
     '.tk-btn.primary{background:var(--cyan);border-color:var(--cyan);color:#06201d;font-weight:600} .tk-btn.danger{color:var(--red);background:transparent;border-color:rgba(232,97,90,.45)}',
     '.tk-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
     '.tk-add input,.tk-add select{min-height:38px;border-radius:9px;font-family:"Space Grotesk",sans-serif}',
-    '.tk-add [data-tk-new="title"]{flex:1 1 260px}',
+    '.tk-add [data-tk-new="title"]{flex:1 1 260px;min-width:0}',
+    '.panel.tk-add{padding:12px}',
+    '.tk-add select,.tk-add input[type=date]{width:auto;flex:0 1 auto;max-width:220px}',
+    '.tk-add input[type=date]{flex:0 0 150px}',
+    '.tk-n{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:var(--input-bg);color:var(--dim);font-size:11.5px;line-height:18px;text-align:center}',
+    '.tk-chips button.on .tk-n{background:var(--cyan);color:#06201d}',
+    '.tk-q{flex:0 1 260px!important}',
+    '.tk-board.four{grid-template-columns:repeat(4,minmax(0,1fr))}',
+    '.tk-col{transition:background .12s}.tk-col.over{background:rgba(79,209,197,.14);outline:2px dashed var(--cyan);outline-offset:-2px}',
+    '.tk-card.drag{opacity:.45}',
+    '.tk-empty{border:1.5px dashed var(--line);border-radius:10px;padding:18px 12px;text-align:center;color:var(--dim);font-size:12.5px}',
+    '.tk-unas{font-size:11.5px;color:var(--dim);border:1px dashed var(--line);border-radius:999px;padding:1px 8px}',
+    '.tk-work{background:rgba(79,209,197,.06);border:1px solid rgba(79,209,197,.25)}',
+    '.tk-wcard{cursor:default}.tk-wcard .tk-card-t input{width:18px;height:18px;flex:none;margin:1px 0 0;accent-color:var(--cyan)}',
+    '.tk-wact{display:flex;gap:6px}.tk-mini{background:transparent;border:1px solid var(--line);border-radius:7px;padding:3px 9px;font:12px "Space Grotesk",sans-serif;color:var(--text);cursor:pointer}.tk-mini:hover{border-color:var(--cyan)}',
     '.tk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 12px}',
     '.tk-chips{display:flex;gap:4px;flex-wrap:wrap}',
     '.tk-chips button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:5px 12px;font:13px "Space Grotesk",sans-serif;color:var(--text);cursor:pointer}',
@@ -330,7 +391,8 @@
     '#myDay .md-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}',
     '#myDay .md-tile{text-align:left;background:var(--input-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;font:inherit;color:var(--dim)}',
     '#myDay .md-tile b{display:block;font-size:22px;color:var(--text)} #myDay .md-tile span{font-size:12px} #myDay .md-tile.on{border-color:var(--cyan)}',
-    '@media (max-width:760px){.tk-board{grid-template-columns:1fr}#myDay .md-grid{grid-template-columns:1fr}}'
+    '@media (max-width:1100px){.tk-board.four{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+    '@media (max-width:760px){.tk-board,.tk-board.four{grid-template-columns:1fr}#myDay .md-grid{grid-template-columns:1fr}.tk-q{flex:1 1 100%!important}}'
   ].join('');
   document.head.appendChild(css);
 })();
