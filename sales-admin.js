@@ -34,7 +34,7 @@
     return 'toys';
   }
   function channelOf(c){ return c.salesChannel || inferChannel(c); }
-  function counts(o){ return ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }
+  function counts(o){ return ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1; }
   function orderDate(o){ return o.orderedDate || o.productionStartDate || o.quotedDate || o.dueDate || ''; }
 
   // ---------- data ----------

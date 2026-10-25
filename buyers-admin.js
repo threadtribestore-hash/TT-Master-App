@@ -71,7 +71,7 @@
   // ---------- tiers ----------
   function isoDaysAgo(n){ const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d); }
   function orderDate(o){ return o.orderedDate || o.productionStartDate || o.quotedDate || o.dueDate || ''; }
-  function counts(o){ return ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }
+  function counts(o){ return ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1; }
   function spend30(cid){
     const cutoff = isoDaysAgo(TIER_DAYS);
     return state.orders.reduce(function(sum, o){
@@ -231,7 +231,7 @@
   function orderView(o){
     const t = orderTotals(o), ps = B.prod[o.id];
     const open = o.status === 'booked' || o.status === 'in_production';
-    const noDue = o.status === 'quoted' || o.status === 'cancelled' || o.paymentStatus === 'paid' || o.paymentStatus === 'refunded';
+    const noDue = o.status === 'quoted' || o.status === 'cancelled' || o.status === 'returned' || o.paymentStatus === 'paid' || o.paymentStatus === 'refunded';
     return {
       // Studio has no "shipped" status; a made order with a dispatch date reads as shipped to the buyer.
       id: o.id, displayId: o.displayId || '', name: o.name || '', status: o.status === 'production_done' && o.shippedDate ? 'shipped' : o.status, orderedDate: orderDate(o), dueDate: o.dueDate || '',

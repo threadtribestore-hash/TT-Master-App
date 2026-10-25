@@ -243,7 +243,7 @@
   function problems(){
     const t = today(), fc = forecast(), out = { overdue: [], risk: [], unpaid: [] };
     state.orders.forEach(function(o){
-      if(['quoted', 'lost', 'cancelled'].indexOf(o.status) !== -1) return;
+      if(['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) !== -1) return;
       const due = target(o), done = o.status === 'delivered' || !!o.shippedDate;
       if(!done && due && due < t) out.overdue.push({ o: o, late: dayDiff(t, due) });
       else if(!done && due && OPEN.indexOf(o.status) !== -1 && fc.finish[o.id] && fc.finish[o.id] > due) out.risk.push({ o: o, finish: fc.finish[o.id], by: dayDiff(fc.finish[o.id], due) });
@@ -368,7 +368,7 @@
   function weekOrders(){
     const t = today(), end = addDays(t, 7), recent = addDays(t, -3);
     return state.orders.filter(function(o){
-      if(['quoted', 'lost', 'cancelled', 'delivered'].indexOf(o.status) !== -1) return false;
+      if(['quoted', 'lost', 'cancelled', 'returned', 'delivered'].indexOf(o.status) !== -1) return false;
       if(o.shippedDate) return o.shippedDate >= recent;
       if(['booked', 'in_production', 'production_done'].indexOf(o.status) === -1) return false;
       const d = target(o);
@@ -567,7 +567,7 @@
     for(let i = 0; i < 14; i++) days.push(addDays(start, i));
     const by = {};
     state.orders.forEach(function(o){
-      if(['quoted', 'lost', 'cancelled'].indexOf(o.status) !== -1) return;
+      if(['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) !== -1) return;
       const d = o.shippedDate || (o.status === 'delivered' ? '' : target(o));
       if(d && d >= days[0] && d <= days[13]) (by[d] = by[d] || []).push(o);
     });
@@ -644,7 +644,7 @@
     if(!root) return;
     const fc = forecast(), p = problems();
     const weekEnd = addDays(today(), 7);
-    const dueWeek = state.orders.filter(function(o){ const d = target(o); return d && d >= today() && d <= weekEnd && o.status !== 'delivered' && !o.shippedDate && ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }).length;
+    const dueWeek = state.orders.filter(function(o){ const d = target(o); return d && d >= today() && d <= weekEnd && o.status !== 'delivered' && !o.shippedDate && ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1; }).length;
     root.innerHTML =
       '<div class="cr-kpis">' +
         '<div class="cr-kpi"><div class="k">In production</div><div class="v">' + state.orders.filter(function(o){ return o.status === 'in_production'; }).length + '</div><div class="s">' + state.orders.filter(function(o){ return o.status === 'booked'; }).length + ' booked next</div></div>' +

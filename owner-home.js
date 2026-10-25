@@ -162,7 +162,7 @@
       if(cleared >= start && cleared <= end) collected += +o.amountPaid || orderTotals(o).grandTotal;
       // Due: money owed on orders delivered or shipped (payment is on delivery, so an invoice
       // raised before dispatch isn't due yet). Paid ones owe nothing; part-paid ones only what's left.
-      if(['quoted', 'lost', 'cancelled'].indexOf(o.status) !== -1) return;
+      if(['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) !== -1) return;
       if(!(o.status === 'delivered' || o.shippedDate)) return;
       const d = owed(o); if(d <= 0) return;
       due += d;

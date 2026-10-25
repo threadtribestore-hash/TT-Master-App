@@ -152,7 +152,7 @@
   }
   function linkOptions(cur){
     // Open orders, plus the order already linked (it may be delivered, e.g. a payment to chase).
-    const os = state.orders.filter(function(o){ return 'order:' + o.id === cur || ['quoted', 'lost', 'cancelled', 'delivered'].indexOf(o.status) === -1; }).slice(0, 60).map(function(o){ return ['order:' + o.id, (o.displayId || 'Order') + ' · ' + (o.clientName || o.name || '')]; });
+    const os = state.orders.filter(function(o){ return 'order:' + o.id === cur || ['quoted', 'lost', 'cancelled', 'returned', 'delivered'].indexOf(o.status) === -1; }).slice(0, 60).map(function(o){ return ['order:' + o.id, (o.displayId || 'Order') + ' · ' + (o.clientName || o.name || '')]; });
     const cs = (state.clients || []).slice(0, 80).map(function(c){ return ['client:' + c.id, 'Client · ' + c.name]; });
     const ms = ((window.TTMarketing && window.TTMarketing.campaigns()) || []).map(function(c){ return ['campaign:' + c.id, 'Campaign · ' + c.name]; });
     const group = function(name, l){ return l.length ? '<optgroup label="' + name + '">' + l.map(function(x){ return '<option value="' + esc(x[0]) + '"' + (cur === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '</optgroup>' : ''; };

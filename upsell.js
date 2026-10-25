@@ -15,7 +15,7 @@
   if(!tab) return;
 
   const DAY = 86400000;
-  const DONE = ['quoted', 'lost', 'cancelled'];
+  const DONE = ['quoted', 'lost', 'cancelled', 'returned'];
   const TYPES = [
     { id: 'reorder', name: 'Reorder due' },
     { id: 'cross', name: 'Cross-sell' },

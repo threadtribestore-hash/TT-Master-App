@@ -43,7 +43,7 @@
   }
   function squash(s){ return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
   function hash(s){ let h = 2166136261; for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
-  function counts(o){ return ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }
+  function counts(o){ return ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1; }
   function total(o){ try{ return orderTotals(o).grandTotal || 0; }catch(e){ return 0; } }
   function due(o){ return Math.max(0, Math.round(total(o) - (o.amountPaid || 0))); }
   function who(o){ const c = (state.clients || []).find(function(x){ return x.id === o.clientId; }); return (c && c.name) || o.clientName || o.name || 'Order'; }

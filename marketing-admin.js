@@ -129,7 +129,7 @@
     return { logged: logged, leads: leads, n: logged.length + leads.length };
   }
   function isTrade(c){ return c && !/\bd2c\b|consumer|individual/i.test((c.type || '') + ' ' + (c.notes || '')); }
-  function counts(o){ return ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }
+  function counts(o){ return ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1; }
   function orderDay(o){ return o.orderedDate || o.productionStartDate || o.dueDate || ''; }
   function fromInstagram(o){
     if(o.campaignId || o.orderSource === 'insta_dm') return true;

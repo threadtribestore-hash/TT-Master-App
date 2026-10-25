@@ -25,7 +25,7 @@
   function daysAgo(n){ return iso(new Date(Date.now() - n * DAY)); }
   function key(s){ return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
   function lab(){ if(!state.lab || typeof state.lab !== 'object') state.lab = {}; if(!Array.isArray(state.lab.ideas)) state.lab.ideas = []; return state.lab; }
-  function counts(o){ return ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }
+  function counts(o){ return ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1; }
   function orderDay(o){ return o.orderedDate || o.productionStartDate || o.dueDate || ''; }
   function buf(){ return typeof bufferMult === 'function' ? bufferMult() : 1; }
   function median(a){ if(!a.length) return 0; const s = a.slice().sort(function(x, y){ return x - y; }); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }

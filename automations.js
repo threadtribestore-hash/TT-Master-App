@@ -272,7 +272,7 @@
   function metricsFor(start, end){
     let booked = 0, collected = 0, delivered = 0, onTime = 0;
     state.orders.forEach(function(o){
-      if(['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1){
+      if(['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1){
         const od = (o.orderedDate || '').slice(0, 10);
         if(od >= start && od <= end) booked += orderTotals(o).grandTotal;
       }
@@ -396,7 +396,7 @@
       const end = today(), start = addDays(end, -6), m = metricsFor(start, end);
       const fails = state.orders.map(function(o){ return { o: o, f: (prod()[o.id] || {}).plates_failed || 0, d: (prod()[o.id] || {}).plates_done || 0 }; }).filter(function(x){ return x.f > 0; }).sort(function(a, b){ return b.f - a.f; }).slice(0, 5);
       const byClient = {};
-      state.orders.forEach(function(o){ const od = (o.orderedDate || '').slice(0, 10); if(od >= start && od <= end && ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1){ const k = who(o); byClient[k] = (byClient[k] || 0) + orderTotals(o).grandTotal; } });
+      state.orders.forEach(function(o){ const od = (o.orderedDate || '').slice(0, 10); if(od >= start && od <= end && ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1){ const k = who(o); byClient[k] = (byClient[k] || 0) + orderTotals(o).grandTotal; } });
       const top = Object.keys(byClient).sort(function(a, b){ return byClient[b] - byClient[a]; }).slice(0, 5);
       const pj = ((state.pon && state.pon.jobs) || []).filter(function(j){ const d = (j.deliveredAt || j.deliveredDate || '').slice(0, 10); return j.status === 'delivered' && d >= start && d <= end; });
       const lines = ['Week ' + fmt(start) + ' – ' + fmt(end), '',

@@ -114,7 +114,7 @@
     const now = Date.now(), d90 = isoLocal(new Date(now - 90 * 86400000)), d180 = isoLocal(new Date(now - 180 * 86400000));
     const units = {};
     state.orders.forEach(function(o){
-      if(['quoted', 'lost', 'cancelled'].indexOf(o.status) !== -1) return;
+      if(['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) !== -1) return;
       const d = (o.orderedDate || o.productionStartDate || '').slice(0, 10);
       const bucket = d >= d90 ? 'now' : d >= d180 ? 'prev' : null;
       if(!bucket) return;

@@ -545,6 +545,7 @@
   .status-toggle.quoted{ color: var(--purple); border-color: rgba(180,140,240,0.4); background: rgba(180,140,240,0.08); }
   .status-toggle.lost{ color: var(--dim); border-color: var(--line); background: transparent; text-decoration: line-through; }
   .status-toggle.cancelled{ color: var(--red); border-color: rgba(232,97,90,0.4); background: rgba(232,97,90,0.08); text-decoration: line-through; }
+  .status-toggle.returned{ color: var(--amber); border-color: rgba(240,168,60,0.45); background: rgba(240,168,60,0.1); }
   .status-toggle.booked{ color: var(--amber); border-color: rgba(240,168,60,0.4); background: rgba(240,168,60,0.08); }
   .status-toggle.done{ color: var(--dim); border-color: var(--line); background: transparent; }
   .status-toggle.in_production{ color: var(--green); border-color: rgba(126,208,138,0.4); background: rgba(126,208,138,0.08); }
@@ -1256,6 +1257,7 @@
   .status-pill.delivered{ background:rgba(126,208,138,0.2); color:var(--green); }
   .status-pill.lost{ background:rgba(91,107,125,0.15); color:var(--dim); }
   .status-pill.cancelled{ background:rgba(232,97,90,0.12); color:var(--red); }
+  .status-pill.returned{ background:rgba(240,168,60,0.14); color:var(--amber); }
   .status-pill.unpaid{ background:rgba(232,97,90,0.12); color:var(--red); }
   .status-pill.partial{ background:rgba(240,168,60,0.15); color:var(--amber); }
   .status-pill.paid{ background:rgba(126,208,138,0.15); color:var(--green); }
@@ -2183,6 +2185,7 @@
           <button class="filter-chip" data-value="production_done">Production Done</button>
           <button class="filter-chip" data-value="shipped">Shipped</button>
           <button class="filter-chip" data-value="delivered">Delivered</button>
+          <button class="filter-chip" data-value="returned">Returned</button>
           <button class="filter-chip" data-value="lost">Lost</button>
           <button class="filter-chip" data-value="cancelled">Cancelled</button>
         </div>
@@ -3014,7 +3017,7 @@ let collapsedOrderSections = { lost: true, cancelled: true };
 let expandedBoardOrders = {};
 // Same pipeline order used by the Table view's status sort, reused here so both
 // views agree on where each status sits.
-const ORDER_SECTION_SEQUENCE = ['quoted', 'booked', 'in_production', 'production_done', 'shipped', 'delivered', 'cancelled', 'lost'];
+const ORDER_SECTION_SEQUENCE = ['quoted', 'booked', 'in_production', 'production_done', 'shipped', 'delivered', 'returned', 'cancelled', 'lost'];
 // "Shipped" is a board column, not a stored status: an order that is Production Done and
 // has a dispatch date (shippedDate) sits there, as the Buyer app and Control Room read it.
 function boardStatus(order){ return order.status === 'production_done' && order.shippedDate ? 'shipped' : order.status; }
@@ -3026,6 +3029,7 @@ function orderSectionColorVar(status){
   if(status === 'shipped') return 'var(--pink)';
   if(status === 'delivered') return 'var(--purple)';
   if(status === 'cancelled') return 'var(--red)';
+  if(status === 'returned') return 'var(--amber)';
   return 'var(--dim)'; // lost
 }
 
@@ -3530,7 +3534,7 @@ function ensureOrderDefaults(o){
   // to the customer can advance it to Delivered with one more click.
   if(o.status === 'active') o.status = 'in_production';
   else if(o.status === 'done') o.status = 'production_done';
-  else if(o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled' && STATUS_SEQUENCE.indexOf(o.status) === -1) o.status = 'booked';
+  else if(o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled' && o.status !== 'returned' && STATUS_SEQUENCE.indexOf(o.status) === -1) o.status = 'booked';
   if(o.wasQuoted == null) o.wasQuoted = (o.status === 'quoted' || o.status === 'lost');
   if(o.quotedDate == null) o.quotedDate = '';
   if(o.lostDate == null) o.lostDate = '';
@@ -3923,6 +3927,7 @@ function statusLabel(status){
   if(status === 'quoted') return 'Quoted';
   if(status === 'lost') return 'Lost';
   if(status === 'cancelled') return 'Cancelled';
+  if(status === 'returned') return 'Returned';
   if(status === 'booked') return 'Booked';
   if(status === 'in_production') return 'In Production';
   if(status === 'production_done') return 'Production Done';
@@ -4003,6 +4008,7 @@ function cycleStatus(orderId){
   if(order.status === 'quoted'){ convertQuoteToOrder(orderId); return; }
   if(order.status === 'lost'){ reopenQuote(orderId); return; }
   if(order.status === 'cancelled'){ reopenCancelledOrder(orderId); return; }
+  if(order.status === 'returned'){ setOrderStatusDirect(orderId, order.statusBeforeReturn || 'delivered'); return; }
   const idx = STATUS_SEQUENCE.indexOf(order.status);
   const next = STATUS_SEQUENCE[(idx + 1) % STATUS_SEQUENCE.length];
   const wasComplete = isOrderComplete(order.status);
@@ -4620,7 +4626,7 @@ function orderAmountDue(order){
 // on a quote's card (e.g. to note when the client wants it *if* won), but a deal that
 // was never actually booked has nothing to chase a payment on.
 function orderNeedsPaymentReminder(order){
-  if(order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled') return false;
+  if(order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled' || order.status === 'returned') return false;
   if((order.paymentStatus || 'unpaid') === 'refunded') return false;
   const days = daysSinceDelivery(order);
   if(days == null || days < 0) return false;
@@ -5371,7 +5377,7 @@ function boardCardUrgency(order){
       text: isOverdue ? ('\uD83D\uDCE6 Ready \u00b7 ' + days + 'd') : '\uD83D\uDCE6 Ready to deliver'
     };
   }
-  if(isOrderComplete(order.status) || order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled' || !order.dueDate){
+  if(isOrderComplete(order.status) || order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled' || order.status === 'returned' || !order.dueDate){
     return null;
   }
   const today = new Date(); today.setHours(0,0,0,0);
@@ -5405,7 +5411,7 @@ function orderOwesMoney(order){
 function boardLane(order){
   if(order.status === 'production_done') return 'ready';
   if(order.status === 'delivered') return orderOwesMoney(order) ? 'payment' : 'delivered';
-  if(order.status === 'cancelled' || order.status === 'lost') return 'closed';
+  if(order.status === 'cancelled' || order.status === 'lost' || order.status === 'returned') return 'closed';
   return order.status;
 }
 function boardMoney(n){
@@ -5540,7 +5546,11 @@ function boardStageOptions(order){
   opts.push(['booked', 'To make'], ['in_production', 'Printing'], ['production_done', 'Made · not shipped'], ['shipped', 'Shipped'], ['delivered', 'Delivered']);
   if(lane === 'payment') opts.push(['paid', 'Payment received in full']);
   if(order.status === 'quoted' || order.status === 'lost') opts.push(['lost', 'Lost']);
-  else opts.push(['cancelled', 'Cancelled']);
+  else {
+    // Returned: the goods came back after dispatch. Before dispatch it's a cancellation.
+    if(order.shippedDate || order.status === 'delivered' || order.status === 'returned') opts.push(['returned', 'Returned']);
+    opts.push(['cancelled', 'Cancelled']);
+  }
   const cur = order.status === 'production_done' ? (order.shippedDate ? 'shipped' : 'production_done') : order.status;
   return opts.map(function(o){ return { key: o[0], label: o[1], on: o[0] === cur }; });
 }
@@ -5600,7 +5610,7 @@ function dropOrderOnLane(orderId, lane){
   const from = boardLane(order);
   if(from === lane) return;
   if(lane === 'ready'){ setOrderStatusDirect(orderId, 'production_done'); return; }
-  if(lane === 'closed'){ setOrderStatusDirect(orderId, order.status === 'quoted' ? 'lost' : 'cancelled'); return; }
+  if(lane === 'closed'){ setOrderStatusDirect(orderId, order.status === 'quoted' ? 'lost' : (order.status === 'delivered' || order.shippedDate) ? 'returned' : 'cancelled'); return; }
   if(lane === 'payment'){
     if(order.status === 'delivered'){ showToast('This order is already paid. Change its payment in the order.'); return; }
     setOrderStatusDirect(orderId, 'delivered');
@@ -5705,7 +5715,7 @@ function renderOrdersBoard(visible){
       '<span class="kanban-col-title">' + lane.label + '</span>' +
       '<span class="kanban-col-count">' + group.length + '</span>' +
       (group.length && status !== 'closed' ? '<span class="kanban-col-total" title="' + (status === 'payment' ? 'Still to collect' : 'Total value') + '">' + boardMoney(groupValue) + (status === 'payment' ? ' due' : '') + '</span>' : '') +
-      (status === 'closed' ? '<span class="kb-fold" title="' + (folded ? 'Show cancelled and lost orders' : 'Fold away') + '">' + (folded ? '›' : '‹') + '</span>' : '');
+      (status === 'closed' ? '<span class="kb-fold" title="' + (folded ? 'Show cancelled, returned and lost orders' : 'Fold away') + '">' + (folded ? '›' : '‹') + '</span>' : '');
     if(status === 'closed'){
       header.style.cursor = 'pointer';
       header.addEventListener('click', function(){
@@ -5813,10 +5823,14 @@ function setOrderStatusDirect(orderId, newStatus){
   const prevStatus = order.status;
 
   function apply(){
-    const wasComplete = isOrderComplete(prevStatus);
-    const willBeComplete = isOrderComplete(newStatus);
+    // A returned order was made and shipped: its filament stays used, both when it's marked
+    // returned and when it's brought back (so nothing is deducted twice or given back).
+    const viaReturn = newStatus === 'returned' || prevStatus === 'returned';
+    const wasComplete = isOrderComplete(prevStatus) || prevStatus === 'returned';
+    const willBeComplete = isOrderComplete(newStatus) || newStatus === 'returned';
 
-    if(willBeComplete && !wasComplete){
+    if(viaReturn){ /* filament unchanged */ }
+    else if(willBeComplete && !wasComplete){
       enterCompleteState(order, newStatus);
     } else if(wasComplete && !willBeComplete){
       exitCompleteState(order);
@@ -5839,6 +5853,13 @@ function setOrderStatusDirect(orderId, newStatus){
       delete order.statusBeforeCancel;
       delete order.cancelledDate;
     }
+    if(newStatus === 'returned'){
+      order.statusBeforeReturn = prevStatus;
+      order.returnedDate = isoLocal();
+    } else if(prevStatus === 'returned'){
+      delete order.statusBeforeReturn;
+      delete order.returnedDate;
+    }
     if(newStatus === 'delivered' && !order.deliveryDate){
       order.deliveryDate = isoLocal();
     }
@@ -5854,6 +5875,10 @@ function setOrderStatusDirect(orderId, newStatus){
   // Same confirmations the card's own status pill / action buttons would ask for.
   if(newStatus === 'lost' && prevStatus === 'quoted'){
     showConfirmModal('Mark this quote as lost? It\'ll stop counting toward open quotes and count as a lost conversion instead. You can drag it back later to reopen it.', apply, 'Mark Lost');
+    return;
+  }
+  if(newStatus === 'returned'){
+    showConfirmModal('Mark this order as returned? It stops counting as revenue and no payment will be chased for it. If the client had paid, record the refund under Payment. You can move it back later.', apply, 'Mark Returned');
     return;
   }
   if(newStatus === 'cancelled' && ['booked', 'in_production', 'production_done'].indexOf(prevStatus) !== -1){
@@ -5936,7 +5961,7 @@ function buildOrdersTableRows(visible){
 // they sit outside that cycle, but the table still needs a sensible place to put them
 // when sorted: Quoted before the real pipeline (it's the earliest stage of all), Lost
 // at the very end (a dead branch, not a live stage to sort in among the rest).
-const STATUS_TABLE_SORT_SEQUENCE = ['quoted', 'booked', 'in_production', 'production_done', 'delivered', 'cancelled', 'lost'];
+const STATUS_TABLE_SORT_SEQUENCE = ['quoted', 'booked', 'in_production', 'production_done', 'delivered', 'returned', 'cancelled', 'lost'];
 
 function sortOrdersTableRows(rows){
   if(!ordersTableSort.key) return rows;
@@ -6010,7 +6035,7 @@ function renderOrdersTable(){
   rows.forEach(function(r){
     footQty += r.qty;
     if(r.status === 'quoted') footQuoted += r.lineValue;
-    else if(r.status !== 'lost' && r.status !== 'cancelled') footConfirmed += r.lineValue;
+    else if(r.status !== 'lost' && r.status !== 'cancelled' && r.status !== 'returned') footConfirmed += r.lineValue;
   });
   const orderCount = visible.length;
 
@@ -6120,7 +6145,7 @@ function exportOrdersTable(){
   tableRows.forEach(function(r){
     sumQty += r.qty;
     if(r.status === 'quoted') sumQuoted += r.lineValue;
-    else if(r.status !== 'lost' && r.status !== 'cancelled') sumConfirmed += r.lineValue;
+    else if(r.status !== 'lost' && r.status !== 'cancelled' && r.status !== 'returned') sumConfirmed += r.lineValue;
   });
   const summaryAoa = [
     [],
@@ -6916,7 +6941,7 @@ function updateDueSoonHighlight(orderId){
   badge.style.display = 'none';
   badge.textContent = '';
 
-  if(isOrderComplete(order.status) || order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled' || !order.dueDate) return;
+  if(isOrderComplete(order.status) || order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled' || order.status === 'returned' || !order.dueDate) return;
 
   const today = new Date(); today.setHours(0,0,0,0);
   const due = new Date(order.dueDate + 'T00:00:00');
@@ -6985,6 +7010,7 @@ function updateDueFlag(orderId){
   if(order.status === 'quoted'){ flagEl.textContent = 'Quoted \u00b7 not yet booked'; return; }
   if(order.status === 'lost'){ flagEl.textContent = 'Lost \u00b7 quote didn\u2019t convert'; return; }
   if(order.status === 'cancelled'){ flagEl.textContent = 'Cancelled \u00b7 was ' + statusLabel(order.statusBeforeCancel || 'booked'); return; }
+  if(order.status === 'returned'){ flagEl.textContent = 'Returned' + (order.returnedDate ? ' ' + formatDateDisplay(order.returnedDate) : '') + ' \u00b7 was ' + statusLabel(order.statusBeforeReturn || 'delivered'); return; }
   if(order.status === 'booked'){ flagEl.textContent = 'Booked \u00b7 not yet in production'; return; }
   const range = lastQueueMap[orderId];
   if(!range){ flagEl.textContent = 'Not queued yet'; return; }
@@ -7445,13 +7471,13 @@ function removeClient(clientId){
 // quote). Lifetime Revenue only counts orders marked Complete (money actually earned).
 function clientStats(clientId){
   const linked = (state.orders || []).filter(function(o){ return o.clientId === clientId; });
-  const orders = linked.filter(function(o){ return o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled'; }).length;
+  const orders = linked.filter(function(o){ return o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled' && o.status !== 'returned'; }).length;
   const quotes = linked.filter(function(o){ return o.status === 'quoted'; }).length;
   const revenue = linked
     .filter(function(o){ return isOrderComplete(o.status); })
     .reduce(function(sum, o){ return sum + orderTotals(o).orderValue; }, 0);
   const orderDates = linked
-    .filter(function(o){ return o.status !== 'lost' && o.status !== 'cancelled'; })
+    .filter(function(o){ return o.status !== 'lost' && o.status !== 'cancelled' && o.status !== 'returned'; })
     .map(function(o){ return o.orderedDate; })
     .filter(function(dt){ return !!dt; })
     .sort();
@@ -9969,7 +9995,7 @@ function renderDealerPerformanceBoard(){
 // elsewhere, since this is meant as a plain, at-a-glance operational check.
 function isOrderOverdue(order){
   if(isOrderComplete(order.status)) return false;
-  if(order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled') return false;
+  if(order.status === 'quoted' || order.status === 'lost' || order.status === 'cancelled' || order.status === 'returned') return false;
   const todayKey = isoLocal();
   return order.dueDate < todayKey;
 }
@@ -10455,7 +10481,7 @@ function renderDashboardPipeline(){
   // Quotes and lost leads aren't confirmed orders yet — they get their own Quote
   // Pipeline panel below, so this stays a read of committed work only. Cancelled orders
   // get their own tile below instead of counting toward the active total.
-  const orders = (state.orders || []).filter(function(o){ return o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled'; });
+  const orders = (state.orders || []).filter(function(o){ return o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled' && o.status !== 'returned'; });
   const cancelledCount = (state.orders || []).filter(function(o){ return o.status === 'cancelled'; }).length;
   if(subtitle) subtitle.textContent = orders.length > 0 ? ('(' + orders.length + ' total)') : '';
 
@@ -11764,7 +11790,7 @@ function renderPipelineForecast(){
       if(o.status === 'production_done' || (o.dueDate && o.dueDate <= mEnd)) dueIn += t.orderValue;
       if(o.status !== 'production_done') workHours += t.hours || 0;
     }
-    if(o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled' && (o.paymentStatus || 'unpaid') !== 'paid' && o.paymentStatus !== 'refunded' && (o.status === 'delivered' || o.status === 'production_done')){
+    if(o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled' && o.status !== 'returned' && (o.paymentStatus || 'unpaid') !== 'paid' && o.paymentStatus !== 'refunded' && (o.status === 'delivered' || o.status === 'production_done')){
       var due = orderAmountDue(o);
       if(due > 0){ owedTotal += due; owed.push({ o: o, due: due, days: daysSinceDelivery(o) }); }
     }
@@ -13362,7 +13388,7 @@ function computeNeededByColor(){
     // reserve filament against orders that are actually on the books. Cancelled orders
     // are the same: whatever's left to print on them isn't happening anymore, so they
     // shouldn't hold a place in filament requirement planning either.
-    if(o.status === 'quoted' || o.status === 'lost' || o.status === 'cancelled') return;
+    if(o.status === 'quoted' || o.status === 'lost' || o.status === 'cancelled' || o.status === 'returned') return;
     o.products.forEach(function(p){
       const c = colorKey(p.color);
       const grams = remainingQty(p) * (p.fil || 0) * buf;
@@ -13501,6 +13527,7 @@ function invoicePayState(o, t){
 // What a client still owes on an order, by the same rule as the invoice list: nothing once it's
 // paid (by status or by money received) or refunded, else the total less what's been received.
 function orderOwed(o){
+  if(o && (o.status === 'returned' || o.status === 'cancelled' || o.status === 'lost')) return 0;
   try {
     const t = orderTotals(o), st = invoicePayState(o, t);
     return st === 'paid' || st === 'refunded' ? 0 : Math.max(0, Math.round(t.grandTotal - (+o.amountPaid || 0)));
@@ -14636,7 +14663,7 @@ function ponNewJobDraft(partnerId){
 
 function ponEligibleOrders(currentOrderId){
   return state.orders.filter(function(o){
-    return o.id === currentOrderId || ['lost', 'cancelled'].indexOf(o.status) === -1;
+    return o.id === currentOrderId || ['lost', 'cancelled', 'returned'].indexOf(o.status) === -1;
   }).sort(function(a, b){ return (b.displayId || '').localeCompare(a.displayId || '', undefined, { numeric: true }); });
 }
 
@@ -17735,32 +17762,32 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
-<script src="buyers-admin.js?v=28"></script>
+<script src="buyers-admin.js?v=29"></script>
 <script src="partner-planning.js?v=4"></script>
 <script src="team-access.js?v=2"></script>
 <script src="team-flow.js?v=3"></script>
 <script src="team-ops.js?v=3"></script>
-<script src="control-room.js?v=17"></script>
+<script src="control-room.js?v=18"></script>
 <script src="projects.js?v=11"></script>
 <script src="print-files.js?v=1"></script>
-<script src="sales-admin.js?v=13"></script>
+<script src="sales-admin.js?v=14"></script>
 <script src="shop-admin.js?v=2"></script>
-<script src="owner-home.js?v=7"></script>
+<script src="owner-home.js?v=8"></script>
 <script src="daily-tasks.js?v=2"></script>
-<script src="automations.js?v=7"></script>
+<script src="automations.js?v=8"></script>
 <script src="app-shell.js?v=3"></script>
 <script src="ui-polish.js?v=13"></script>
-<script src="upsell.js?v=1"></script>
+<script src="upsell.js?v=2"></script>
 <script src="order-insights.js?v=1"></script>
-<script src="marketing-admin.js?v=5"></script>
-<script src="finance-admin.js?v=1"></script>
-<script src="tasks-admin.js?v=2"></script>
-<script src="product-lab.js?v=1"></script>
+<script src="marketing-admin.js?v=6"></script>
+<script src="finance-admin.js?v=2"></script>
+<script src="tasks-admin.js?v=3"></script>
+<script src="product-lab.js?v=2"></script>
 <script src="support-admin.js?v=5"></script>
-<script src="ops-planning.js?v=2"></script>
+<script src="ops-planning.js?v=3"></script>
 <script src="shipturtle-admin.js?v=1"></script>
 <script src="payment-ladder.js?v=3"></script>
-<script src="design-research.js?v=2"></script>
+<script src="design-research.js?v=3"></script>
 <script src="print-matching.js?v=1"></script>
 <script src="notify-admin.js?v=1"></script>
 <script src="notify-app.js?v=1"></script>

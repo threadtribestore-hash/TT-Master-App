@@ -43,7 +43,7 @@
   function iso(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function today(){ return iso(new Date()); }
   function monday(d){ const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
-  function counts(o){ return ['quoted', 'lost', 'cancelled'].indexOf(o.status) === -1; }
+  function counts(o){ return ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1; }
   function orderDay(o){ return o.orderedDate || o.productionStartDate || o.dueDate || ''; }
   function hours(o){ try{ return orderTotals(o).hours || 0; }catch(e){ return 0; } }
 
