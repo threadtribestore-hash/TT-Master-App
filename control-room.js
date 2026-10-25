@@ -66,14 +66,35 @@
   // + packing days = dispatch → + transit days = delivery. The safe date adds a
   // margin on print time for failures, downtime and changeovers.
   const P = { lines: [{ id: '', qty: 0 }], hours: '', need: '', rush: 0, customer: '', partners: false };
-  function pset(){ return Object.assign({ packDays: 1, transitDays: 3, safetyPct: 15 }, state.promiseSettings || {}); }
+  // Assumptions, saved for the calculator only. printers / hoursPerDay left at 0 use Settings;
+  // ignoreReserved treats printers reserved by queued orders as free for a rush.
+  function pset(){ return Object.assign({ packDays: 1, transitDays: 3, safetyPct: 15, printers: 0, hoursPerDay: 0, ignoreReserved: false }, state.promiseSettings || {}); }
+  function settingsPrinters(){ return (state.printers || []).filter(function(p){ return p.status !== 'down'; }).length || (state.fleet && state.fleet.printers) || 0; }
+  function settingsHpd(){ return (state.fleet && state.fleet.hoursPerDay) || 0; }
   function fleet(){
-    const running = (state.printers || []).filter(function(p){ return p.status !== 'down'; }).length || (state.fleet && state.fleet.printers) || 0;
-    const hpd = (state.fleet && state.fleet.hoursPerDay) || 0;
-    const reserved = queue().reduce(function(t, o){ return t + (o.reservedPrinters || 0); }, 0);
+    const S = pset();
+    const running = +S.printers > 0 ? Math.round(+S.printers) : settingsPrinters();
+    const hpd = +S.hoursPerDay > 0 ? Math.min(24, +S.hoursPerDay) : settingsHpd();
+    const holders = queue().filter(function(o){ return (o.reservedPrinters || 0) > 0; });
+    const reserved = S.ignoreReserved ? 0 : Math.min(running, holders.reduce(function(t, o){ return t + (o.reservedPrinters || 0); }, 0));
     // Optionally add the partner network's free printer-hours (partner-planning.js).
     const extra = P.partners && window.TTPartners && window.TTPartners.ready() ? window.TTPartners.freePerDay(14) : 0;
-    return { running: running, hpd: hpd, own: running * hpd, extra: extra, cap: running * hpd + extra, free: Math.max(0, running - reserved) };
+    return { running: running, hpd: hpd, own: running * hpd, extra: extra, cap: running * hpd + extra, free: Math.max(0, running - reserved), reserved: reserved, holders: S.ignoreReserved ? [] : holders };
+  }
+  // Rush choices: every running printer. Ones past the free count are taken from orders
+  // that have printers reserved, and the queue table shows what that does to them.
+  function rushOptions(){
+    const F = fleet();
+    return '<option value="0">No — join the queue</option>' + Array.from({ length: F.running }, function(_, i){
+      const n = i + 1, borrow = n - F.free;
+      return '<option value="' + n + '"' + (P.rush === n ? ' selected' : '') + '>' + n + ' printer' + (n === 1 ? '' : 's') + (borrow > 0 ? ' · takes ' + borrow + ' reserved' : '') + '</option>';
+    }).join('');
+  }
+  function reservedNote(){
+    const F = fleet();
+    if(!F.holders.length) return '';
+    return '<div class="cr-dim cr-resv">' + F.free + ' of ' + F.running + ' printers free · reserved by ' + F.holders.map(function(o){ return orderLink(o) + ' ' + esc(who(o)) + ' (' + o.reservedPrinters + ')'; }).join(', ') +
+      '. Rushing past the free ones takes printers from those orders.</div>';
   }
   function lineHours(){
     let hours = 0, pcs = 0, missing = [];
@@ -94,7 +115,7 @@
     if(!(L.hours > 0) || !F.cap) return { L: L, F: F, empty: true };
     const queued = fc.hours, safety = 1 + (+S.safetyPct || 0) / 100;
     let earliestDays, safeDays, delay = 0;
-    const k = Math.min(P.rush, F.free);
+    const k = Math.min(P.rush, F.running);
     if(k > 0){
       earliestDays = L.hours / (k * F.hpd);
       safeDays = earliestDays * safety;
@@ -116,7 +137,8 @@
       r.verdict = r.delivery <= P.need ? 'yes' : addDays(r.earliestDispatch, +S.transitDays || 0) <= P.need ? 'tight' : 'no';
       if(daysAvail > 0){
         const needK = Math.ceil(L.hours * safety / (daysAvail * F.hpd));
-        r.needPrinters = needK <= F.free ? needK : null;
+        r.needK = needK;
+        r.needPrinters = needK <= F.running ? needK : null;
         const hoursByThen = k > 0 ? daysAvail * k * F.hpd / safety : Math.max(0, daysAvail * F.cap - queued) / safety;
         r.partialPcs = L.pcs && L.hours ? Math.min(L.pcs, Math.floor(L.pcs * hoursByThen / L.hours)) : 0;
       }
@@ -152,14 +174,19 @@
       }).join('') + '<button class="cr-btn" data-cr="pl-add">+ Add product</button></div>' +
       '<div class="cr-pf"><label>or extra print hours<input type="number" min="0" step="0.5" data-pp="hours" value="' + esc(P.hours) + '" placeholder="0"></label>' +
       '<label>Customer needs it by<input type="date" data-pp="need" value="' + esc(P.need) + '"></label>' +
-      '<label>Rush on dedicated printers<select data-pp="rush"><option value="0">No — join the queue</option>' +
-        Array.from({ length: fleet().free }, function(_, i){ return '<option value="' + (i + 1) + '"' + (P.rush === i + 1 ? ' selected' : '') + '>' + (i + 1) + ' printer' + (i ? 's' : '') + '</option>'; }).join('') + '</select></label>' +
+      '<label>Rush on dedicated printers<select data-pp="rush" id="crRush">' + rushOptions() + '</select></label>' +
       '<label>Customer (for the message)<input data-pp="customer" value="' + esc(P.customer) + '" placeholder="e.g. Anand"></label>' +
       (window.TTPartners && window.TTPartners.ready() ? '<label class="cr-chk"><input type="checkbox" data-pp="partners"' + (P.partners ? ' checked' : '') + '> Count partner farms (+' + Math.round(window.TTPartners.freePerDay(14)) + ' h/day free)</label>' : '') + '</div>' +
+      '<div id="crResv">' + reservedNote() + '</div>' +
       '<div id="crPromiseOut">' + promiseOut() + '</div>' +
-      '<details class="cr-pset"><summary class="cr-dim">Assumptions: ' + S.packDays + ' day packing · ' + S.transitDays + ' days transit · ' + S.safetyPct + '% safety margin</summary>' +
-      '<div class="cr-pf"><label>Packing days<input type="number" min="0" data-ps="packDays" value="' + S.packDays + '"></label><label>Transit days<input type="number" min="0" data-ps="transitDays" value="' + S.transitDays + '"></label>' +
-      '<label>Safety margin %<input type="number" min="0" max="100" data-ps="safetyPct" value="' + S.safetyPct + '"></label></div></details></div>';
+      '<div class="cr-pset"><div class="cr-pset-h"><b>Assumptions</b><span class="cr-dim">Change these to try another plan. Blank printers / hours use Settings.</span><button class="cr-btn" data-cr="ps-reset">Reset</button></div>' +
+      '<div class="cr-pf">' +
+      '<label>Printers running<input type="number" min="1" data-ps="printers" value="' + (+S.printers > 0 ? S.printers : '') + '" placeholder="' + settingsPrinters() + ' (Settings)"></label>' +
+      '<label>Print hours per printer a day<input type="number" min="1" max="24" step="0.5" data-ps="hoursPerDay" value="' + (+S.hoursPerDay > 0 ? S.hoursPerDay : '') + '" placeholder="' + settingsHpd() + ' (Settings)"></label>' +
+      '<label>Packing days<input type="number" min="0" data-ps="packDays" value="' + S.packDays + '"></label><label>Transit days<input type="number" min="0" data-ps="transitDays" value="' + S.transitDays + '"></label>' +
+      '<label>Safety margin %<input type="number" min="0" max="100" data-ps="safetyPct" value="' + S.safetyPct + '"></label>' +
+      '<label class="cr-chk"><input type="checkbox" data-ps="ignoreReserved"' + (S.ignoreReserved ? ' checked' : '') + '> Treat reserved printers as free</label></div>' +
+      '<div class="cr-dim" style="margin-top:4px">Print times also carry the ' + ((state.fleet && state.fleet.failureBufferPct) || 0) + '% failure buffer from Settings.</div></div></div>';
   }
   function promiseOut(){
     const r = promise();
@@ -177,8 +204,10 @@
       const tips = [];
       if(r.daysAvail <= 0) tips.push('That date is too soon even to pack and ship (' + r.S.packDays + ' + ' + r.S.transitDays + ' days).');
       else {
-        if(!r.k && r.needPrinters) tips.push('Dedicate <b>' + r.needPrinters + ' printer' + (r.needPrinters === 1 ? '' : 's') + '</b> to make it — pick it under “Rush”.');
-        if(!r.needPrinters) tips.push('Even all ' + r.F.free + ' free printers can’t make it in time.');
+        if(!r.k && r.needPrinters && r.needPrinters <= r.F.free) tips.push('Dedicate <b>' + r.needPrinters + ' printer' + (r.needPrinters === 1 ? '' : 's') + '</b> to make it — pick it under “Rush”.');
+        else if(!r.k && r.needPrinters) tips.push('Needs <b>' + r.needPrinters + ' printers</b> on it; only ' + r.F.free + ' are free, so ' + (r.needPrinters - r.F.free) + ' would come from reserved orders — pick it under “Rush” to see who slips.');
+        if(r.k && r.needK > r.k && r.needPrinters) tips.push('With ' + r.k + ' printer' + (r.k === 1 ? '' : 's') + ' it’s short — it needs <b>' + r.needK + '</b>.');
+        if(!r.needPrinters) tips.push('Even all ' + r.F.running + ' printers on it can’t make it in time.');
         if(r.partialPcs && r.partialPcs < r.L.pcs) tips.push('About <b>' + r.partialPcs.toLocaleString('en-IN') + ' of ' + r.L.pcs.toLocaleString('en-IN') + ' pcs</b> could ship in time — offer a part delivery.');
       }
       if(tips.length) html += '<ul class="cr-tips">' + tips.map(function(t){ return '<li>' + t + '</li>'; }).join('') + '</ul>';
@@ -204,7 +233,11 @@
     return 'Hi' + (P.customer ? ' ' + P.customer : '') + ', ' + (items.length ? 'for ' + items.join(', ') + ' — ' : '') +
       'we can dispatch by ' + fmtLong(r.dispatch) + ', so you should receive it by ' + fmtLong(r.delivery) + '. Production starts as soon as you confirm. — Thread Tribe';
   }
-  function refreshPromise(){ const o = document.getElementById('crPromiseOut'); if(o) o.innerHTML = promiseOut(); }
+  function refreshPromise(){
+    const o = document.getElementById('crPromiseOut'); if(o) o.innerHTML = promiseOut();
+    const rs = document.getElementById('crRush'); if(rs && document.activeElement !== rs) rs.innerHTML = rushOptions();
+    const rv = document.getElementById('crResv'); if(rv) rv.innerHTML = reservedNote();
+  }
 
   // ---------- delivery problems ----------
   function problems(){
@@ -650,6 +683,7 @@
     const act = b.getAttribute('data-cr'), id = b.getAttribute('data-id');
     if(b.tagName === 'A') e.preventDefault();
     if(act === 'pl-add'){ P.lines.push({ id: '', qty: 0 }); render(); return; }
+    if(act === 'ps-reset'){ const st = pset(); st.printers = 0; st.hoursPerDay = 0; st.ignoreReserved = false; st.packDays = 1; st.transitDays = 3; st.safetyPct = 15; state.promiseSettings = st; scheduleSave(); render(); return; }
     if(act === 'pl-del'){ P.lines.splice(+b.getAttribute('data-i'), 1); render(); return; }
     if(act === 'p-copy' || act === 'p-wa'){
       const msg = (document.getElementById('crPromiseMsg') || {}).value || '';
@@ -686,8 +720,11 @@
       refreshPromise(); return true;
     }
     if(t.hasAttribute('data-ps')){
-      const st = pset(); st[t.getAttribute('data-ps')] = Math.max(0, +t.value || 0);
-      state.promiseSettings = st; scheduleSave(); refreshPromise(); return true;
+      const st = pset(), k = t.getAttribute('data-ps');
+      st[k] = t.type === 'checkbox' ? t.checked : Math.max(0, +t.value || 0);
+      state.promiseSettings = st;
+      if(P.rush > fleet().running) P.rush = fleet().running;
+      scheduleSave(); refreshPromise(); return true;
     }
     return false;
   }
@@ -835,7 +872,9 @@
     '#tabControl .cr-dates div:first-child b{color:var(--cyan)}' +
     '#tabControl .cr-tips{margin:8px 0 0 18px;font-size:13px}' +
     '#tabControl .cr-msgbox{margin-top:10px;display:flex;flex-direction:column;gap:6px} #tabControl .cr-msgbox textarea{width:100%;resize:vertical}' +
-    '#tabControl .cr-pset{margin-top:8px}' +
+    '#tabControl .cr-pset{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}' +
+    '#tabControl .cr-pset-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px}#tabControl .cr-pset-h .cr-btn{margin-left:auto}' +
+    '#tabControl .cr-resv{margin:6px 0 2px}' +
     '#tabControl .cr-ev.pk{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}' +
     '#tabControl .cr-chk{flex-direction:row!important;align-items:center;gap:6px!important;color:var(--text)!important;font-size:12.5px!important}' +
     '#tabControl .cr-impact{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}' +
