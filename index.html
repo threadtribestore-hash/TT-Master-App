@@ -5053,6 +5053,7 @@ function buildOrderCardHead(order, index){
       '<div class="status-toggle priority-pill priority-' + (order.priority || 'normal') + '" title="Click to change priority">' + priorityLabel(order.priority) + '</div>' +
       (order.status === 'quoted' ? '<button class="icon-btn danger" title="Mark this quote as lost">\u2298 Lost</button>' : '') +
       (['booked', 'in_production', 'production_done'].indexOf(order.status) !== -1 ? '<button class="icon-btn danger" title="Cancel this order">\u2298 Cancel</button>' : '') +
+      (order.status === 'delivered' || (order.status === 'production_done' && order.shippedDate) ? '<button class="icon-btn danger" title="Mark as returned">\u21a9 Returned</button>' : '') +
       '<button class="icon-btn" title="Move up">\u2191</button>' +
       '<button class="icon-btn" title="Move down">\u2193</button>' +
       '<button class="icon-btn" title="Duplicate order">\u29C9</button>' +
@@ -5076,6 +5077,11 @@ function buildOrderCardHead(order, index){
     } else if(['booked', 'in_production', 'production_done'].indexOf(order.status) !== -1){
       iconBtns[0].addEventListener('click', function(){ cancelOrder(order.id); });
       leadBtnCount = 1;
+    }
+    // Shipped or delivered orders also get "Returned" (after Cancel, when both show).
+    if(order.status === 'delivered' || (order.status === 'production_done' && order.shippedDate)){
+      iconBtns[leadBtnCount].addEventListener('click', function(){ setOrderStatusDirect(order.id, 'returned'); });
+      leadBtnCount += 1;
     }
     const tailBtns = Array.prototype.slice.call(iconBtns, leadBtnCount);
     tailBtns[0].addEventListener('click', function(){ moveOrder(order.id, -1); });
@@ -17776,7 +17782,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="daily-tasks.js?v=2"></script>
 <script src="automations.js?v=8"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=13"></script>
+<script src="ui-polish.js?v=14"></script>
 <script src="upsell.js?v=2"></script>
 <script src="order-insights.js?v=1"></script>
 <script src="marketing-admin.js?v=6"></script>

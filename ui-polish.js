@@ -156,6 +156,7 @@
     const dup = byTitle(head, 'Duplicate order'), inv = byTitle(head, 'Open invoice (print / save as PDF)');
     const del = byTitle(head, 'Delete order');
     const cancel = byTitle(head, 'Cancel this order') || byTitle(head, 'Mark this quote as lost');
+    const returned = byTitle(head, 'Mark as returned');
 
     const name = head.querySelector('.order-name-input');
     if(name){ const br = document.createElement('div'); br.className = 'om-break'; name.after(br); }
@@ -174,12 +175,13 @@
     }
     head.appendChild(actions);
 
-    if(cancel || del){
+    if(cancel || del || returned){
       const foot = document.createElement('div');
       foot.className = 'om-danger';
-      foot.innerHTML = '<div class="om-danger-note">' + (cancel ? 'Cancelling keeps the order on record. Deleting removes it.' : 'Deleting removes this order for good.') + '</div><div class="om-danger-btns"></div>';
+      foot.innerHTML = '<div class="om-danger-note">' + (returned ? 'Came back from the client? Mark it returned: it stays on record but stops counting as revenue or money due. Deleting removes it.' : cancel ? 'Cancelling keeps the order on record. Deleting removes it.' : 'Deleting removes this order for good.') + '</div><div class="om-danger-btns"></div>';
       const btns = foot.querySelector('.om-danger-btns');
       if(cancel){ cancel.textContent = cancel.title === 'Cancel this order' ? '⊘ Cancel order' : '⊘ Mark as lost'; btns.appendChild(cancel); }
+      if(returned){ returned.textContent = '↩ Mark as returned'; btns.appendChild(returned); }
       if(del){ del.textContent = 'Delete order'; btns.appendChild(del); }
       body.appendChild(foot);
     }
