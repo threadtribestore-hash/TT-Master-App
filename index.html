@@ -2906,9 +2906,75 @@ function colorFor(index){ return `var(${PALETTE[index % PALETTE.length]})`; }
 // CSS alpha suffixes (e.g. #4fd1c566) don't work on var() custom-property values.
 const PALETTE_HEX = ['#4fd1c5', '#f0a83c', '#b48cf0', '#7ed08a', '#f08cc4', '#e8615a'];
 function tierColorHex(index){ return PALETTE_HEX[index % PALETTE_HEX.length]; }
+// More filament colour names than the core list above, for typing a colour and seeing its shade.
+const COLOR_HEX_MORE = {
+  ivory:'#f3eedb', cream:'#efe4c8', 'off white':'#ece8df', offwhite:'#ece8df', nude:'#e3bc9a', peach:'#f6b993', coral:'#f2786a',
+  salmon:'#f29a86', maroon:'#7a2430', wine:'#6e1f33', burgundy:'#7c2236', rose:'#e8909f', 'rose gold':'#d4a08f', blush:'#f2c4c9',
+  lavender:'#c6b3ec', lilac:'#c8a2d6', violet:'#8a5cd6', mauve:'#b38aa6', navy:'#24365e', 'navy blue':'#24365e', 'sky blue':'#7cc4ec',
+  'baby blue':'#a9d3f2', 'royal blue':'#3f63c9', teal:'#2a9d8f', turquoise:'#3cc6c0', aqua:'#5ad8de', mint:'#a6e3c3', 'mint green':'#a6e3c3',
+  olive:'#7b7d3a', 'olive green':'#7b7d3a', sage:'#a3b49a', 'army green':'#4b5a32', 'dark green':'#2f6b3f', 'lime':'#a6d84a', mustard:'#d4a72c',
+  lemon:'#f5e66a', amber:'#f0a83c', copper:'#b8703f', bronze:'#9c6b3a', charcoal:'#3a3f46', 'dark grey':'#4c5560', 'dark gray':'#4c5560',
+  'light grey':'#c4cbd3', 'light gray':'#c4cbd3', ash:'#b6bcc2', 'space grey':'#5b6168', wood:'#a87b4f', walnut:'#6e4b33', oak:'#c49a6c',
+  sand:'#d8c39a', khaki:'#c3b38a', tan:'#c9a27a', caramel:'#b9794a', chocolate:'#5c3a28', coffee:'#6f4e37', terracotta:'#c96a48',
+  marble:'#e4e2de', glow:'#d4f5b0', natural:'#ede3cf', clear:'#e6eef5', 'matte black':'#25282d', 'matte white':'#eeeeec', 'jet black':'#16181c'
+};
+// The shade for a colour name: the lists above, a colour already saved under that name in
+// inventory, filament rates or spools, light/dark/pastel versions of a known colour, then any
+// colour name the browser knows (ivory, navy, teal…). Unknown names get a neutral slate.
+function shadeLookup(key){
+  if(COLOR_HEX[key]) return COLOR_HEX[key];
+  if(COLOR_HEX_MORE[key]) return COLOR_HEX_MORE[key];
+  try {
+    const lists = [state.inventory, state.filamentRates, state.spools];
+    for(let i = 0; i < lists.length; i++){
+      const hit = (lists[i] || []).find(function(x){ return x && (x.color || '').trim().toLowerCase() === key && /^#[0-9a-fA-F]{6}$/.test(x.colorHex || ''); });
+      if(hit) return hit.colorHex;
+    }
+  } catch(e){}
+  return '';
+}
+function mixHex(hex, to, amt){
+  const a = parseInt(hex.slice(1), 16), b = parseInt(to.slice(1), 16);
+  const ch = function(sh){ const x = (a >> sh) & 255, y = (b >> sh) & 255; return Math.round(x + (y - x) * amt); };
+  return '#' + [16, 8, 0].map(function(sh){ return ch(sh).toString(16).padStart(2, '0'); }).join('');
+}
+let colorProbe = null;
+const shadeCache = {};
 function swatchHex(colorName){
-  const key = (colorName || '').trim().toLowerCase();
-  return COLOR_HEX[key] || '#5a6b80';
+  const key = (colorName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if(!key) return '#5a6b80';
+  if(shadeCache[key]) return shadeCache[key];
+  let hex = shadeLookup(key);
+  if(!hex){
+    // "Pastel pink", "Dark blue", "Light grey matte": find the colour word, then tint it.
+    const words = key.replace(/[^a-z ]/g, ' ').split(' ').filter(Boolean);
+    const mods = { pastel: ['#ffffff', 0.45], light: ['#ffffff', 0.35], baby: ['#ffffff', 0.4], pale: ['#ffffff', 0.45], dark: ['#000000', 0.35], deep: ['#000000', 0.3], neon: null, matte: null, silk: null, glossy: null };
+    let base = '', mod = null;
+    for(let n = Math.min(2, words.length); n >= 1 && !base; n--){
+      for(let i = 0; i + n <= words.length; i++){ const w = words.slice(i, i + n).join(' '); const h = shadeLookup(w); if(h){ base = h; break; } }
+    }
+    words.forEach(function(w){ if(mods[w]) mod = mods[w]; });
+    if(!base && typeof document !== 'undefined'){
+      // Any CSS colour name the browser understands.
+      try {
+        if(!colorProbe) colorProbe = document.createElement('canvas').getContext('2d');
+        const name = words.filter(function(w){ return !(w in mods); }).join('');
+        colorProbe.fillStyle = '#010203'; colorProbe.fillStyle = name;
+        if(name && colorProbe.fillStyle !== '#010203' && /^#[0-9a-f]{6}$/.test(colorProbe.fillStyle)) base = colorProbe.fillStyle;
+      } catch(e){}
+    }
+    if(base) hex = mod ? mixHex(base, mod[0], mod[1]) : base;
+  }
+  hex = hex || '#5a6b80';
+  shadeCache[key] = hex;
+  return hex;
+}
+// Colour name box + shade picker pair: typing a name sets the shade from it (and drops any
+// custom shade); picking a shade keeps it as this item's own custom colour.
+function syncColorPair(e, item, colorEl, hexEl){
+  if(!e || !e.target) return;
+  if(e.target === hexEl){ item.colorHex = hexEl.value; return; }
+  if(e.target === colorEl){ item.colorHex = ''; for(const k in shadeCache) delete shadeCache[k]; hexEl.value = swatchHex(item.color); }
 }
 // resolveHex: an item's own custom hex (from the color picker) always wins over the name-based lookup,
 // so colors are never limited to the preset list below.
@@ -6584,7 +6650,7 @@ function buildProductRow(orderId, product){
   }
   updatePriceHint();
 
-  function onEdit(){
+  function onEdit(ev){
     product.name = nameEl.value;
     product.qty = posNum(qtyEl.value);
     product.already = posNum(alreadyEl.value);
@@ -6593,7 +6659,7 @@ function buildProductRow(orderId, product){
     product.fil = posNum(filEl.value);
     product.material = materialEl.value;
     product.color = colorEl.value;
-    product.colorHex = colorHexEl.value;
+    syncColorPair(ev, product, colorEl, colorHexEl);
     product.listPrice = posNum(listPriceEl.value);
     product.actualPrice = posNum(actualPriceEl.value);
     if(document.activeElement !== discountEl) discountEl.value = lineDiscountPct(product);
@@ -7006,9 +7072,9 @@ function renderFilamentRates(){
     const vendorEl = row.querySelector('.fr-vendor');
     const rmBtn = row.querySelector('.rm-btn');
 
-    function onEdit(){
+    function onEdit(ev){
       rate.color = colorEl.value;
-      rate.colorHex = colorHexEl.value;
+      syncColorPair(ev, rate, colorEl, colorHexEl);
       rate.material = materialEl.value;
       rate.price = posNum(priceEl.value);
       rate.vendor = vendorEl.value;
@@ -13333,9 +13399,9 @@ function renderInventory(){
       const parEl = row.querySelector('.inv-par');
       const hintEl = row.querySelector('.inv-grams-hint');
       const rmBtn = row.querySelector('.rm-btn');
-      function onEdit(){
+      function onEdit(ev){
         item.color = colorEl.value;
-        item.colorHex = colorHexEl.value;
+        syncColorPair(ev, item, colorEl, colorHexEl);
         item.spools = posNum(spoolsEl.value);
         item.parSpools = posNum(parEl.value);
         delete item.grams;
