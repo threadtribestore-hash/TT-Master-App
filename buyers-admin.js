@@ -94,7 +94,7 @@
 
   // ---------- packs ----------
   // The Buyer app is for trade clients only; D2C (consumer) clients never get a pack.
-  function isTrade(c){ return !/\bd2c\b|consumer|individual/i.test((c && c.type) || ''); }
+  function isTrade(c){ return !/\bd2c\b|consumer|individual|marketplace/i.test((c && c.type) || ''); }  // a marketplace (e.g. Ikiru) sells for us; it isn't a trade buyer
   function emailOf(c){
     const em = String((c && c.email) || '').trim().toLowerCase();
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em) ? em : '';

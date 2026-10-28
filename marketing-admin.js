@@ -128,7 +128,7 @@
     const leads = X.leads.filter(function(l){ const d = dayOf((l.data || {}).createdAt || l.updated_at); return d >= a && d < b; });
     return { logged: logged, leads: leads, n: logged.length + leads.length };
   }
-  function isTrade(c){ return c && !/\bd2c\b|consumer|individual/i.test((c.type || '') + ' ' + (c.notes || '')); }
+  function isTrade(c){ return c && !/\bd2c\b|consumer|individual|marketplace/i.test((c.type || '') + ' ' + (c.notes || '')); }  // a marketplace (e.g. Ikiru) sells for us; it isn't a trade buyer
   function counts(o){ return ['quoted', 'lost', 'cancelled', 'returned'].indexOf(o.status) === -1; }
   function orderDay(o){ return o.orderedDate || o.productionStartDate || o.dueDate || ''; }
   function fromInstagram(o){

@@ -1443,6 +1443,7 @@
   .client-type-badge.distributor{ background:rgba(240,168,60,0.15); color:var(--amber); }
   .client-type-badge.retailers,.client-type-badge.retailer{ background:rgba(126,208,138,0.15); color:var(--green); }
   .client-type-badge.reseller{ background:rgba(240,140,196,0.15); color:var(--pink); }
+  .client-type-badge.marketplace{ background:rgba(79,127,214,0.15); color:#4f7fd6; }
   .client-type-badge.d2c{ background:rgba(91,107,125,0.18); color:var(--dim); }
   .client-card-meta{ display:flex; gap:14px; flex-wrap:wrap; align-items:center; font-size:12px; color:var(--dim); font-family:'JetBrains Mono', monospace; margin-bottom:10px; }
   .client-card-meta .meta-icon{ opacity:0.6; }
@@ -2752,7 +2753,7 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
   <datalist id="clientTypeSuggestions">
     <option value="Reseller"></option><option value="D2C"></option><option value="Corporate">
     </option><option value="Retailers"></option><option value="Dealer"></option><option value="Distributor">
-    </option><option value="Designers &amp; Studio"></option><option value="Stall">
+    </option><option value="Designers &amp; Studio"></option><option value="Marketplace"></option><option value="Stall">
   </option></datalist>
 
   <datalist id="paymentModeSuggestions">
@@ -17797,7 +17798,7 @@ setInterval(renderBackupReminder, 30 * 60 * 1000);
 setInterval(renderPaymentReminderBanner, 30 * 60 * 1000);
 setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 </script>
-<script src="buyers-admin.js?v=29"></script>
+<script src="buyers-admin.js?v=30"></script>
 <script src="partner-planning.js?v=4"></script>
 <script src="team-access.js?v=2"></script>
 <script src="team-flow.js?v=3"></script>
@@ -17814,7 +17815,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="ui-polish.js?v=14"></script>
 <script src="upsell.js?v=2"></script>
 <script src="order-insights.js?v=1"></script>
-<script src="marketing-admin.js?v=6"></script>
+<script src="marketing-admin.js?v=7"></script>
 <script src="finance-admin.js?v=2"></script>
 <script src="tasks-admin.js?v=3"></script>
 <script src="product-lab.js?v=2"></script>
