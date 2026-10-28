@@ -4296,6 +4296,13 @@ function incentiveRate(email){
 // What the % applies to: 'profit' = the order's net profit before the incentive (value before GST
 // minus filament, machine, packaging and delivery cost; nothing on a loss), 'pct' = order value.
 function incentiveBasis(order){ const t = (order.incentive || {}).type; return t === 'fixed' || t === 'pct' || t === 'profit' ? t : ((state.salesIncentive || {}).basis || 'profit'); }
+// Platform commission %: set on the order, else the client's (e.g. 20 on the Ikiru client).
+function orderCommissionPct(order){
+  if(!order) return 0;
+  if(order.commissionPct != null && order.commissionPct !== '') return Math.max(0, Math.min(100, +order.commissionPct || 0));
+  const c = order.clientId && typeof getClientById === 'function' ? getClientById(order.clientId) : null;
+  return c && +c.commissionPct > 0 ? Math.min(100, +c.commissionPct) : 0;
+}
 function orderIncentive(order, value, cost){
   if(!order || !order.salesRep) return 0;
   const inc = order.incentive || {}, basis = incentiveBasis(order);
@@ -4413,7 +4420,11 @@ function orderTotals(order){
   const grossPricePerUnit = totalQty > 0 ? grossValue / totalQty : 0;
   // A salesperson's incentive on this order is a cost of the sale, so it comes out of profit.
   const incentive = orderIncentive(order, orderValue, baseCost);
-  const allInCost = baseCost + incentive;
+  // A selling platform's commission (e.g. Ikiru) is charged on the price excluding GST: what
+  // the order is billed before tax, goods plus any delivery charge. It's a cost of the sale.
+  const commissionPct = orderCommissionPct(order);
+  const commission = commissionPct > 0 ? Math.round((orderValue + deliveryCharge) * commissionPct) / 100 : 0;
+  const allInCost = baseCost + incentive + commission;
   const profit = orderValue + deliveryCharge - allInCost;
   // Margin is judged against what the order was actually quoted at (preRefundValue),
   // not the post-refund revenue — so a fully refunded order shows a clear, meaningful
@@ -4429,7 +4440,7 @@ function orderTotals(order){
   const gstAmount = Math.round(taxableValue * gstRate) / 100;
   const grandTotal = Math.round((taxableValue + gstAmount) * 100) / 100;
   const gst = gstSplit(order, gstRate, gstAmount);
-  return { hours: hours, filament: filament, days: days, cost: filamentCost, machineCost: machineCost, totalCost: totalCost, piecesLeft: piecesLeft, packagingCost: packagingCost, deliveryCost: deliveryCost, deliveryCharge: deliveryCharge, deliveryChargeGross: deliveryChargeGross, taxableValue: taxableValue, allInCost: allInCost, sellingPrice: orderValue, orderValue: orderValue, preRefundValue: preRefundValue, refundAmount: refundAmount, grossValue: grossValue, discount: discount, lineDiscount: lineDiscount, overallDiscountPct: overallDiscountPct, overallDiscountAmt: overallDiscountAmt, pricePerUnit: pricePerUnit, preRefundPricePerUnit: preRefundPricePerUnit, grossPricePerUnit: grossPricePerUnit, totalQty: totalQty, profit: profit, margin: margin, gstRate: gstRate, gstAmount: gstAmount, grandTotal: grandTotal, gst: gst, incentive: incentive };
+  return { hours: hours, filament: filament, days: days, cost: filamentCost, machineCost: machineCost, totalCost: totalCost, piecesLeft: piecesLeft, packagingCost: packagingCost, deliveryCost: deliveryCost, deliveryCharge: deliveryCharge, deliveryChargeGross: deliveryChargeGross, taxableValue: taxableValue, commissionPct: commissionPct, commission: commission, allInCost: allInCost, sellingPrice: orderValue, orderValue: orderValue, preRefundValue: preRefundValue, refundAmount: refundAmount, grossValue: grossValue, discount: discount, lineDiscount: lineDiscount, overallDiscountPct: overallDiscountPct, overallDiscountAmt: overallDiscountAmt, pricePerUnit: pricePerUnit, preRefundPricePerUnit: preRefundPricePerUnit, grossPricePerUnit: grossPricePerUnit, totalQty: totalQty, profit: profit, margin: margin, gstRate: gstRate, gstAmount: gstAmount, grandTotal: grandTotal, gst: gst, incentive: incentive };
 }
 
 // Piece-completion progress across all products in an order: "already made" out of total "qty" ordered.
@@ -4471,7 +4482,10 @@ function updateOrderStatsDOM(orderId){
   fillEl.style.background = isOrderComplete(order.status) ? 'var(--green)' : 'var(--cyan)';
 
   // Profit visibility: all-in cost (filament + machine + packaging + delivery) vs. order value.
-  card.querySelector('.stat-allin').textContent = '\u20b9' + t.allInCost.toFixed(2);
+  const allinEl = card.querySelector('.stat-allin');
+  allinEl.textContent = '\u20b9' + t.allInCost.toFixed(2);
+  allinEl.title = 'Production \u20b9' + t.totalCost.toFixed(2) + ' + packaging \u20b9' + (t.packagingCost || 0).toFixed(2) + ' + delivery \u20b9' + (t.deliveryCost || 0).toFixed(2) +
+    (t.incentive ? ' + sales incentive \u20b9' + t.incentive.toFixed(2) : '') + (t.commission ? ' + platform commission \u20b9' + t.commission.toFixed(2) + ' (' + fmt(t.commissionPct) + '% of the price before GST)' : '');
   card.querySelector('.stat-selling').textContent = '\u20b9' + t.orderValue.toFixed(2);
   // Whether a price was ever actually set on this order — judged against preRefundValue,
   // not orderValue, so a refunded order (orderValue netted down to near-0) still reads
@@ -4544,6 +4558,7 @@ function updateOrderStatsDOM(orderId){
       }
       parts.push('= \u20b9' + fmt(Math.round(t.preRefundValue * 100) / 100) + ' for ' + fmt(t.totalQty) + ' pc' + (t.totalQty === 1 ? '' : 's'));
       if(t.deliveryCharge > 0) parts.push('+ \u20b9' + fmt(t.deliveryCharge) + ' delivery');
+      if(t.commission > 0) parts.push('(platform keeps \u20b9' + fmt(t.commission) + ' at ' + fmt(t.commissionPct) + '%)');
       if(t.gstAmount > 0) parts.push('+ ' + gstText(t) + ' = \u20b9' + fmt(t.grandTotal) + ' with GST');
       else if(t.deliveryCharge > 0) parts.push('= \u20b9' + fmt(t.grandTotal) + ' (no GST)');
       else parts.push('(no GST)');
@@ -5222,6 +5237,8 @@ function buildOrderCardBody(order, index){
         '<div><label>Packaging cost (\u20b9)</label><input type="number" class="p-packaging-cost" min="0" step="1" value="' + (order.packagingCost || 0) + '"></div>' +
         '<div><label>Delivery cost (\u20b9)</label><input type="number" class="p-delivery-cost" min="0" step="1" value="' + (order.deliveryCost || 0) + '" title="What delivery costs us. Not shown to the client."></div>' +
         '<div><label>Delivery charge to client (\u20b9)</label><input type="number" class="p-delivery-charge" min="0" step="1" value="' + (order.deliveryCharge || 0) + '" title="Added to the invoice and quotation as its own line, with GST at the order\u2019s rate."></div>' +
+        (function(){ const c = order.clientId ? getClientById(order.clientId) : null, cp = c && +c.commissionPct > 0 ? +c.commissionPct : 0;
+          return '<div><label>Platform commission (%)</label><input type="number" class="p-commission" min="0" max="100" step="0.5" value="' + (order.commissionPct != null && order.commissionPct !== '' ? order.commissionPct : '') + '" placeholder="' + (cp ? cp + ' (from ' + escapeHtml(c.name) + ')' : '0') + '" title="What a selling platform such as Ikiru keeps, as % of the price before GST. Taken off profit. Blank uses the client\u2019s rate."></div>'; })() +
         '<div><label>GST</label><select class="p-gst-rate">' + gstRateOptions(order) + '</select></div>' +
         '<div><label>Tax type</label><select class="p-gst-supply">' + [['auto', 'By client\u2019s state'], ['intra', 'Same state: CGST + SGST'], ['inter', 'Other state: IGST']].map(function(o){ return '<option value="' + o[0] + '"' + ((order.gstSupply || 'auto') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
         '<div><label>Client\u2019s state</label><input type="text" class="p-client-state" list="indianStatesList" placeholder="' + escapeHtml(orderBuyerState(Object.assign({}, order, { clientState: '' })) || 'e.g. Delhi') + '" value="' + escapeHtml(order.clientState || '') + '"></div>' +
@@ -5296,6 +5313,11 @@ function buildOrderCardBody(order, index){
     });
     clientBlock.querySelector('.p-delivery-cost').addEventListener('input', function(e){
       order.deliveryCost = posNum(e.target.value); updateOrderStatsDOM(order.id); scheduleSave();
+    });
+    clientBlock.querySelector('.p-commission').addEventListener('input', function(e){
+      const v = e.target.value.trim();
+      if(v === '') delete order.commissionPct; else order.commissionPct = Math.max(0, Math.min(100, parseFloat(v) || 0));
+      updateOrderStatsDOM(order.id); scheduleSave();
     });
     clientBlock.querySelector('.p-delivery-charge').addEventListener('input', function(e){
       order.deliveryCharge = posNum(e.target.value); updateOrderStatsDOM(order.id); updatePaymentHint(order.id); updateGstLine(order.id); scheduleSave();
@@ -7745,6 +7767,7 @@ function renderClients(){
           '<div class="client-detail-field"><label>Email</label><input type="text" class="cc-email" value="' + escapeHtml(d.email || '') + '" placeholder="e.g. abc@gmail.com"></div>' +
           '<div class="client-detail-field"><label>Instagram</label><input type="text" class="cc-instagram" value="' + escapeHtml(d.instagram || '') + '" placeholder="e.g. @abcinteriors"></div>' +
           '<div class="client-detail-field"><label>GSTIN</label><input type="text" class="cc-gstin" value="' + escapeHtml(d.gstin || '') + '" placeholder="e.g. 09ABCDE1234F1Z5"></div>' +
+          '<div class="client-detail-field"><label>Platform commission %</label><input type="number" class="cc-commission" min="0" max="100" step="0.5" value="' + (+d.commissionPct > 0 ? d.commissionPct : '') + '" placeholder="e.g. 20 for Ikiru" title="For selling platforms: the % they keep of the price before GST. Taken off the profit of every order for this client."></div>' +
           '<div class="client-detail-field full-width"><label>Notes</label><input type="text" class="cc-notes" value="' + escapeHtml(d.notes || '') + '" placeholder="e.g. High potential dealer"></div>' +
         '</div>' +
         '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; font-size:11px; color:var(--dim); font-family:JetBrains Mono, monospace; margin-bottom:8px;">' +
@@ -7772,7 +7795,13 @@ function renderClients(){
     var instagramEl = card.querySelector('.cc-instagram');
     var gstinEl = card.querySelector('.cc-gstin');
     var notesEl = card.querySelector('.cc-notes');
+    var commissionEl = card.querySelector('.cc-commission');
     var rmBtn = card.querySelector('.client-card-rm');
+    commissionEl.addEventListener('input', function(){
+      var v = parseFloat(commissionEl.value);
+      if(isFinite(v) && v > 0) d.commissionPct = Math.min(100, v); else delete d.commissionPct;
+      scheduleSave();
+    });
 
     function onEdit(){
       var linkedFieldsChanged = d.name !== nameEl.value || d.phone !== phoneEl.value ||
