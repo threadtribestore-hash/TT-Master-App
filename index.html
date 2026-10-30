@@ -5421,14 +5421,15 @@ function boardCardUrgency(order){
   return null;
 }
 
-// Board lanes. Fewer than the stored statuses: Ready to ship holds Production Done with or
-// without a dispatch date (shipped orders carry a tag), Payment pending is a delivered order
+// Board lanes. Fewer than the stored statuses: Ready to ship is Production Done with no
+// dispatch date, Shipped is Production Done with one, Payment pending is a delivered order
 // that still owes money, and Cancelled + Lost share one folded Closed lane.
 const BOARD_LANES = [
   { key: 'quoted', label: 'Quotes', color: 'var(--purple)' },
   { key: 'booked', label: 'To make', color: 'var(--amber)' },
   { key: 'in_production', label: 'Printing', color: 'var(--green)' },
   { key: 'ready', label: 'Ready to ship', color: 'var(--cyan)' },
+  { key: 'shipped', label: 'Shipped', color: 'var(--amber)' },
   { key: 'payment', label: 'Payment pending', color: 'var(--pink)' },
   { key: 'delivered', label: 'Delivered', color: 'var(--dim)' },
   { key: 'closed', label: 'Closed', color: 'var(--red)' }
@@ -5438,7 +5439,7 @@ function orderOwesMoney(order){
   return ps !== 'paid' && ps !== 'refunded' && orderAmountDue(order) > 0;
 }
 function boardLane(order){
-  if(order.status === 'production_done') return 'ready';
+  if(order.status === 'production_done') return order.shippedDate ? 'shipped' : 'ready';
   if(order.status === 'delivered') return orderOwesMoney(order) ? 'payment' : 'delivered';
   if(order.status === 'cancelled' || order.status === 'lost' || order.status === 'returned') return 'closed';
   return order.status;
