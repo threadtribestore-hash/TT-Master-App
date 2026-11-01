@@ -490,6 +490,8 @@
     '.op-bar .sort-controls{display:flex;align-items:center;gap:6px}',
     '.op-bar .sort-controls label{display:none}',
     '.op-bar .sort-controls select{min-height:42px;border-radius:10px;font-family:' + SANS + ';font-size:13px}',
+    '.op-bar #ordersDateCustom input{min-height:42px;box-sizing:border-box;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);padding:0 10px;font-family:' + SANS + ';font-size:13px}',
+    '.op-bar #ordersDateRange.date-filter-on{border-color:var(--cyan);color:var(--cyan);background:rgba(79,209,197,.1)}',
     '.op-bar #ordersViewToggle{flex-wrap:nowrap;background:var(--input-bg);border-radius:10px;padding:3px;gap:2px}',
     '.op-bar #ordersViewToggle .filter-chip{border:none;border-radius:8px;padding:8px 12px}',
     '.op-bar #ordersViewToggle .filter-chip.active{background:var(--panel);box-shadow:0 1px 3px rgba(0,0,0,.12)}',
@@ -516,6 +518,11 @@
       '#tabOrders .pipeline-strip{grid-template-columns:1fr 1fr;gap:10px}' +
       '#tabOrders .pc-val{font-size:20px}' +
       '.op-bar .sort-controls{flex:1}.op-bar .sort-controls select{width:100%}' +
+      '.op-bar .op-search{flex:1 1 100%}' +
+      '.op-bar .sort-controls{flex:1 1 140px;min-width:0}' +
+      '.op-bar #ordersDateControls{flex-wrap:wrap}' +
+      '.op-bar #ordersDateControls.is-custom{flex:1 1 100%}' +
+      '.op-bar #ordersDateCustom{flex:1 1 100%}.op-bar #ordersDateCustom input{flex:1;min-width:0}' +
     '}'
   ].join('');
   document.head.appendChild(css);
@@ -614,7 +621,10 @@
   [].slice.call(statusChips.querySelectorAll('.filter-chip')).forEach(function(c){ LABELS[c.getAttribute('data-value')] = c.textContent.trim(); });
   function statusOf(o){ return typeof boardStatus === 'function' ? boardStatus(o) : o.status; }
   function refresh(){
-    const orders = (typeof state !== 'undefined' && state.orders) || [];
+    // Status counts follow the Date filter, so "Delivered 12" means delivered in that range.
+    const orders = ((typeof state !== 'undefined' && state.orders) || []).filter(function(o){
+      return typeof orderMatchesDate === 'function' ? orderMatchesDate(o) : true;
+    });
     const n = {};
     orders.forEach(function(o){ const s = statusOf(o); n[s] = (n[s] || 0) + 1; });
     [].slice.call(statusChips.querySelectorAll('.filter-chip')).forEach(function(c){

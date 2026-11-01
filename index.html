@@ -2241,6 +2241,24 @@
           <option value="days_in_stage">Days in Stage ↓</option>
         </select>
       </span>
+      <span class="sort-controls" id="ordersDateControls">
+        <label>Date</label>
+        <select id="ordersDateRange" title="Filter orders by order date">
+          <option value="all">📅 All dates</option>
+          <option value="today">Today</option>
+          <option value="last7">Last 7 days</option>
+          <option value="last30">Last 30 days</option>
+          <option value="this_month">This month</option>
+          <option value="last_month">Last month</option>
+          <option value="this_year">This year</option>
+          <option value="custom">Custom range…</option>
+        </select>
+        <span id="ordersDateCustom" style="display:none; align-items:center; gap:6px;">
+          <input type="date" id="ordersDateFrom" title="From">
+          <span style="color:var(--dim);">→</span>
+          <input type="date" id="ordersDateTo" title="To">
+        </span>
+      </span>
       <span class="filter-chips" id="ordersViewToggle">
         <button class="filter-chip" data-view="cards">Cards</button>
         <button class="filter-chip active" data-view="board">Board</button>
@@ -4867,9 +4885,45 @@ document.getElementById('deliveryReminderViewBtn').addEventListener('click', fun
 });
 
 // ---------- ORDER FILTERING ----------
-let orderFilter = { search: '', status: 'all', priority: 'all', payment: 'all', source: 'all' };
+let orderFilter = { search: '', status: 'all', priority: 'all', payment: 'all', source: 'all', dateRange: 'all', dateFrom: '', dateTo: '' };
+
+// The date an order "belongs" to for date filtering. Many older/imported orders have no
+// orderedDate, so fall back to the next earliest date we know about.
+function orderEffectiveDate(order){
+  const first = (order.stageLog && order.stageLog[0] && order.stageLog[0].t) || '';
+  return String(order.orderedDate || order.quotedDate || order.invoiceDate || order.productionStartDate ||
+    first || order.shippedDate || order.deliveryDate || '').slice(0, 10);
+}
+
+// Turns the Date dropdown choice into a from/to pair of YYYY-MM-DD strings (inclusive).
+function orderDateBounds(range){
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+  switch(range){
+    case 'today':      return [isoLocal(now), isoLocal(now)];
+    case 'last7':      return [isoLocal(new Date(y, m, d - 6)), isoLocal(now)];
+    case 'last30':     return [isoLocal(new Date(y, m, d - 29)), isoLocal(now)];
+    case 'this_month': return [isoLocal(new Date(y, m, 1)), isoLocal(new Date(y, m + 1, 0))];
+    case 'last_month': return [isoLocal(new Date(y, m - 1, 1)), isoLocal(new Date(y, m, 0))];
+    case 'this_year':  return [y + '-01-01', y + '-12-31'];
+    case 'custom':     return [orderFilter.dateFrom || '', orderFilter.dateTo || ''];
+    default:           return ['', ''];
+  }
+}
+
+function orderMatchesDate(order){
+  if(!orderFilter.dateRange || orderFilter.dateRange === 'all') return true;
+  const b = orderDateBounds(orderFilter.dateRange);
+  if(!b[0] && !b[1]) return true;
+  const dt = orderEffectiveDate(order);
+  if(!dt) return false;
+  if(b[0] && dt < b[0]) return false;
+  if(b[1] && dt > b[1]) return false;
+  return true;
+}
 
 function orderMatchesFilter(order){
+  if(!orderMatchesDate(order)) return false;
   if(orderFilter.status !== 'all' && boardStatus(order) !== orderFilter.status) return false;
   if(orderFilter.priority !== 'all' && (order.priority || 'normal') !== orderFilter.priority) return false;
   if(orderFilter.payment !== 'all' && (order.paymentStatus || 'unpaid') !== orderFilter.payment) return false;
@@ -4912,6 +4966,53 @@ document.getElementById('orderSearchInput').addEventListener('input', function(e
   orderFilter.search = e.target.value;
   renderOrders();
 });
+
+// Date filter: preset ranges plus a custom from/to. The choice is remembered on this device.
+(function(){
+  const sel = document.getElementById('ordersDateRange');
+  const custom = document.getElementById('ordersDateCustom');
+  const from = document.getElementById('ordersDateFrom');
+  const to = document.getElementById('ordersDateTo');
+  if(!sel) return;
+  const KEY = 'tt-orders-date-v1';
+  try{
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if(saved && saved.range){
+      orderFilter.dateRange = saved.range;
+      orderFilter.dateFrom = saved.from || '';
+      orderFilter.dateTo = saved.to || '';
+    }
+  }catch(e){}
+  function sync(){
+    sel.value = orderFilter.dateRange;
+    if(sel.value !== orderFilter.dateRange){ orderFilter.dateRange = 'all'; sel.value = 'all'; }
+    from.value = orderFilter.dateFrom;
+    to.value = orderFilter.dateTo;
+    custom.style.display = orderFilter.dateRange === 'custom' ? 'inline-flex' : 'none';
+    sel.classList.toggle('date-filter-on', orderFilter.dateRange !== 'all');
+    const wrap = document.getElementById('ordersDateControls');
+    if(wrap) wrap.classList.toggle('is-custom', orderFilter.dateRange === 'custom');
+  }
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify({ range: orderFilter.dateRange, from: orderFilter.dateFrom, to: orderFilter.dateTo })); }catch(e){}
+  }
+  sel.addEventListener('change', function(){
+    orderFilter.dateRange = sel.value;
+    if(sel.value === 'custom' && !orderFilter.dateFrom && !orderFilter.dateTo){
+      const b = orderDateBounds('this_month');
+      orderFilter.dateFrom = b[0]; orderFilter.dateTo = b[1];
+    }
+    sync(); save(); renderOrders();
+  });
+  [from, to].forEach(function(inp){
+    inp.addEventListener('change', function(){
+      orderFilter.dateFrom = from.value;
+      orderFilter.dateTo = to.value;
+      save(); renderOrders();
+    });
+  });
+  sync();
+})();
 
 // Color is tied to an order's actual position in state.orders, not its position in the
 // filtered view, so an order's color tag/queue dot never shifts just because a filter
@@ -17813,7 +17914,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="daily-tasks.js?v=2"></script>
 <script src="automations.js?v=8"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=14"></script>
+<script src="ui-polish.js?v=15"></script>
 <script src="upsell.js?v=2"></script>
 <script src="order-insights.js?v=1"></script>
 <script src="marketing-admin.js?v=7"></script>
