@@ -1327,6 +1327,16 @@
 
   /* ========== ORDER VELOCITY CHART ========== */
   .velocity-panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin-bottom:14px; }
+  .om-strip{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin:0 0 12px; }
+  .om-card{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; min-width:0; }
+  .om-label{ font-size:0.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); }
+  .om-val{ font-family:'JetBrains Mono',monospace; font-size:1.35rem; font-weight:600; margin:4px 0 2px; }
+  .om-sub{ font-size:0.72rem; color:var(--dim); line-height:1.35; }
+  .om-bars{ display:flex; align-items:flex-end; gap:6px; height:46px; margin-top:6px; }
+  .om-bar{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; min-width:0; }
+  .om-bar i{ display:block; width:100%; background:var(--cyan); opacity:.55; border-radius:3px 3px 0 0; min-height:2px; }
+  .om-bar.cur i{ opacity:1; }
+  .om-bar span{ font-size:0.6rem; color:var(--dim); margin-top:3px; }
   .velocity-title{ font-size:0.8rem; font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
   .velocity-legend{ display:flex; gap:14px; align-items:center; margin-bottom:10px; }
   .velocity-legend-item{ display:flex; align-items:center; gap:5px; font-size:0.68rem; color:var(--dim); font-family:'JetBrains Mono',monospace; }
@@ -2267,6 +2277,7 @@
       <button class="backup-btn" id="exportOrdersTableBtn" style="display: none;">⬇ Export table (.xlsx)</button>
     </span>
   </div>
+  <div class="om-strip" id="ordersMetricsStrip"></div>
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
     <button class="add-order-btn" id="addOrderBtn">+ ADD ORDER</button>
     <button class="add-order-btn" id="addQuoteBtn" style="background:transparent; color:var(--purple); border:1px solid rgba(180,140,240,0.4);">+ NEW QUOTE</button>
@@ -2797,30 +2808,31 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
   </div>
 
   <div class="order-detail-modal-overlay hidden" id="addExpenseModalOverlay">
-    <div class="order-detail-modal-box" style="max-width:480px;">
+    <div class="order-detail-modal-box" style="max-width:460px;">
       <button class="order-detail-modal-close" id="addExpenseModalClose">✕ Close</button>
-      <div style="padding:22px;">
-        <div class="panel-title" style="margin-bottom:16px; padding:0;">Add Expense</div>
-        <div class="row2">
-          <div><label>Date of purchase</label><input type="date" id="newExpDate"></div>
-          <div><label>Cost (₹)</label><input type="number" id="newExpCost" min="0" step="1" placeholder="0"></div>
-        </div>
-        <div style="margin-top:14px;"><label>Item</label><input type="text" id="newExpItem" placeholder="e.g. Filament Amazon"></div>
-        <div class="row2" style="margin-top:14px;">
-          <div><label>Category</label><input type="text" id="newExpCategory" list="expenseCategorySuggestions" placeholder="e.g. Raw Materials"></div>
-          <div><label>Vendor</label><input type="text" id="newExpVendor" placeholder="e.g. Amazon"></div>
-        </div>
-        <div style="margin-top:14px;">
-          <label>Type</label>
-          <div class="filter-chips" id="newExpTypeChips">
-            <button type="button" class="filter-chip active" data-value="opex">Opex</button>
-            <button type="button" class="filter-chip" data-value="capex">Capex</button>
-            <button type="button" class="filter-chip" data-value="raw_materials">Raw Materials</button>
-          </div>
-        </div>
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:22px;">
+      <div style="padding:20px 22px 22px;">
+        <div class="panel-title" style="margin-bottom:14px; padding:0;">New expense</div>
+        <div class="qa-amount"><span>₹</span><input type="number" id="newExpCost" inputmode="decimal" min="0" step="1" placeholder="0"></div>
+        <div style="display:flex; justify-content:center; margin-top:8px;"><input type="date" id="newExpDate" style="max-width:170px;"></div>
+        <label class="qa-label">Vendor · recent first</label>
+        <div class="qa-chips" id="newExpVendorChips"></div>
+        <input type="text" id="newExpVendor" list="expenseVendorSuggestions" placeholder="Or type a vendor">
+        <datalist id="expenseVendorSuggestions"></datalist>
+        <label class="qa-label">Category <span class="qa-auto" id="newExpCatHint"></span></label>
+        <select id="newExpCategory"></select>
+        <div class="qa-type" id="newExpTypeNote"></div>
+        <div id="newExpKgWrap" style="display:none;"><label class="qa-label">Quantity (kg)</label><input type="number" id="newExpKg" min="0" step="0.1" placeholder="e.g. 10 — tracks real ₹/kg"></div>
+        <label class="qa-label">What was it? (optional)</label>
+        <input type="text" id="newExpItem" placeholder="e.g. Bubble wrap">
+        <label class="qa-label">Paid via</label>
+        <div class="qa-chips" id="newExpPaidChips"><button type="button" data-paid="upi" class="on">UPI</button><button type="button" data-paid="cash">Cash</button><button type="button" data-paid="card">Card</button><button type="button" data-paid="bank">Bank</button></div>
+        <label class="qa-label">For an order? (optional)</label>
+        <select id="newExpOrder"></select>
+        <label class="qa-label">Bill no. / UPI ref (optional)</label>
+        <input type="text" id="newExpRef" placeholder="Helps match the bank statement">
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
           <button class="backup-btn" id="addExpenseCancelBtn">Cancel</button>
-          <button class="backup-btn" id="addExpenseSaveBtn" style="border-color: var(--cyan); color: var(--cyan);">Save Expense</button>
+          <button class="backup-btn" id="addExpenseSaveBtn" style="border-color: var(--cyan); color: var(--cyan);">Save · goes to weekly review</button>
         </div>
       </div>
     </div>
@@ -5056,8 +5068,61 @@ function getVisibleOrders(){
   return result;
 }
 
+// Orders tab metrics row: monthly revenue (orders booked, by order date, excl. GST,
+// net of discounts and refunds) and every payment still pending on a booked order.
+function orderCountsAsSale(o){
+  return o.status !== 'quoted' && o.status !== 'lost' && o.status !== 'cancelled' && o.status !== 'returned';
+}
+function renderOrderMetrics(){
+  var el = document.getElementById('ordersMetricsStrip');
+  if(!el) return;
+  function inr(n){ n = Math.round(n || 0); var a = Math.abs(n), sg = n < 0 ? '-' : '';
+    if(a >= 100000) return sg + '₹' + (a / 100000).toFixed(2).replace(/\.?0+$/, '') + 'L';
+    return sg + '₹' + a.toLocaleString('en-IN'); }
+  var now = new Date(), y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+  var months = [];
+  for(var i = 5; i >= 0; i--){
+    var ms = new Date(y, m - i, 1);
+    months.push({ start: isoLocal(ms), end: isoLocal(new Date(y, m - i + 1, 0)), label: ms.toLocaleString('en-IN', { month: 'short' }), rev: 0, n: 0 });
+  }
+  var cur = months[5], prev = months[4];
+  var prevSame = isoLocal(new Date(y, m - 1, Math.min(d, new Date(y, m, 0).getDate())));
+  var prevTD = 0, pending = 0, pendingN = 0, pendingDelivered = 0, pendingDeliveredN = 0;
+  state.orders.forEach(function(o){
+    if(!orderCountsAsSale(o)) return;
+    var t = orderTotals(o), dt = orderEffectiveDate(o);
+    if(dt){
+      months.forEach(function(mo){ if(dt >= mo.start && dt <= mo.end){ mo.rev += t.orderValue; mo.n++; } });
+      if(dt >= prev.start && dt <= prevSame) prevTD += t.orderValue;
+    }
+    if((o.paymentStatus || 'unpaid') === 'refunded') return;
+    var due = orderAmountDue(o);
+    if(due > 0){
+      pending += due; pendingN++;
+      if(o.status === 'delivered' || o.status === 'shipped'){ pendingDelivered += due; pendingDeliveredN++; }
+    }
+  });
+  var cmp = prevTD > 0 ? Math.round((cur.rev - prevTD) / prevTD * 100) : null;
+  var cmpHtml = cmp === null ? 'no orders by this date last month'
+    : '<span style="color:' + (cmp >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (cmp >= 0 ? '▲' : '▼') + Math.abs(cmp) + '%</span> vs same days of ' + prev.label;
+  var max = Math.max.apply(null, months.map(function(mo){ return mo.rev; }).concat([1]));
+  var bars = months.map(function(mo, i){
+    return '<div class="om-bar' + (i === 5 ? ' cur' : '') + '" title="' + mo.label + ': ' + inr(mo.rev) + ' · ' + mo.n + ' order' + (mo.n === 1 ? '' : 's') + '">' +
+      '<i style="height:' + Math.max(2, Math.round(mo.rev / max * 100)) + '%"></i><span>' + mo.label + '</span></div>';
+  }).join('');
+  el.innerHTML =
+    '<div class="om-card"><div class="om-label">Revenue · ' + cur.label + '</div><div class="om-val" style="color:var(--green)">' + inr(cur.rev) + '</div>' +
+      '<div class="om-sub">' + cur.n + ' order' + (cur.n === 1 ? '' : 's') + ' booked · ' + cmpHtml + '</div></div>' +
+    '<div class="om-card"><div class="om-label">Revenue · ' + prev.label + '</div><div class="om-val" style="color:var(--cyan)">' + inr(prev.rev) + '</div>' +
+      '<div class="om-sub">' + prev.n + ' order' + (prev.n === 1 ? '' : 's') + ' booked (full month)</div></div>' +
+    '<div class="om-card"><div class="om-label">Payment pending</div><div class="om-val" style="color:var(--pink)">' + inr(pending) + '</div>' +
+      '<div class="om-sub">' + pendingN + ' order' + (pendingN === 1 ? '' : 's') + ' · ' + inr(pendingDelivered) + ' from ' + pendingDeliveredN + ' shipped/delivered</div></div>' +
+    '<div class="om-card"><div class="om-label">Monthly revenue · 6 months</div><div class="om-bars">' + bars + '</div></div>';
+}
+
 function renderOrders(){
   // Render pipeline intelligence
+  renderOrderMetrics();
   renderPipelineForecast();
   renderOrderVelocityChart();
 
@@ -8208,52 +8273,35 @@ function addExpense(){
 // still used by nothing now but kept around in case something needs a bare row) was
 // easy to lose track of among 60+ existing rows. The popup collects a complete expense
 // before it ever hits the table, then it's appended as one already-filled row.
-let newExpenseType = 'opex';
 
 function openAddExpenseModal(){
   document.getElementById('newExpDate').value = isoLocal();
   document.getElementById('newExpCost').value = '';
   document.getElementById('newExpItem').value = '';
-  document.getElementById('newExpCategory').value = '';
   document.getElementById('newExpVendor').value = '';
-  newExpenseType = 'opex';
-  document.querySelectorAll('#newExpTypeChips .filter-chip').forEach(function(chip){
-    chip.classList.toggle('active', chip.getAttribute('data-value') === 'opex');
-  });
-  refreshExpenseCategoryOptions();
+  if(window.EXP) EXP.resetQuickAdd();
   document.getElementById('addExpenseModalOverlay').classList.remove('hidden');
-  document.getElementById('newExpDate').focus();
+  document.getElementById('newExpCost').focus();
 }
 
 function closeAddExpenseModal(){
   document.getElementById('addExpenseModalOverlay').classList.add('hidden');
 }
 
+// New entries carry status 'review' until approved on the Review view.
 function saveNewExpenseFromModal(){
   if(!state.expenses) state.expenses = [];
-  const expense = {
-    id: newId(),
-    date: document.getElementById('newExpDate').value || '',
-    item: document.getElementById('newExpItem').value || '',
-    category: document.getElementById('newExpCategory').value || '',
-    cost: posNum(document.getElementById('newExpCost').value),
-    type: newExpenseType,
+  const expense = window.EXP ? EXP.readQuickAdd() : {
+    id: newId(), date: document.getElementById('newExpDate').value || '', item: document.getElementById('newExpItem').value || '',
+    category: document.getElementById('newExpCategory').value || '', cost: posNum(document.getElementById('newExpCost').value), type: 'opex',
     vendor: document.getElementById('newExpVendor').value || ''
   };
+  if(!(expense.cost > 0)){ showNoticeModal('Enter the amount first.'); return; }
   state.expenses.push(expense);
   renderExpenses();
   scheduleSave();
   closeAddExpenseModal();
 }
-
-document.querySelectorAll('#newExpTypeChips .filter-chip').forEach(function(chip){
-  chip.addEventListener('click', function(){
-    newExpenseType = chip.getAttribute('data-value');
-    document.querySelectorAll('#newExpTypeChips .filter-chip').forEach(function(c){
-      c.classList.toggle('active', c === chip);
-    });
-  });
-});
 
 document.getElementById('addExpenseTopBtn').addEventListener('click', openAddExpenseModal);
 document.getElementById('addExpenseBtn').addEventListener('click', openAddExpenseModal);
@@ -8310,6 +8358,22 @@ function expenseMonthLabel(dateStr){
   return d.toLocaleDateString('en-GB', { month: 'short' });
 }
 
+// Category picker for the Entries table: the fixed list from expense-health.js, plus the
+// entry's old free-typed category (if any) so nothing is silently changed.
+function expenseCategorySelect(cur){
+  const list = (window.EXP && EXP.CAT_NAMES) || [];
+  const c = (cur || '').trim();
+  let html = '<select class="ex-category"><option value="">Pick…</option>';
+  if(c && list.indexOf(c) === -1) html += '<option value="' + escapeHtml(c) + '" selected>' + escapeHtml(c) + ' (old)</option>';
+  list.forEach(function(n){ html += '<option' + (n === c ? ' selected' : '') + '>' + escapeHtml(n) + '</option>'; });
+  return html + '</select>';
+}
+function expenseOrderLabel(orderId){
+  if(!orderId) return '';
+  const o = (state.orders || []).find(function(x){ return x.id === orderId; });
+  return o ? (o.displayId || '') : '';
+}
+
 function renderExpenses(){
   if(!state.expenses) state.expenses = [];
   renderExpenseSummary();
@@ -8336,6 +8400,8 @@ function renderExpenses(){
       '<th class="pc-th-cost">Cost (\u20b9)</th>' +
       '<th class="pc-th-type">Type</th>' +
       '<th class="pc-th-vendor">Vendor</th>' +
+      '<th>Paid via</th>' +
+      '<th title="Link a cost to the order it was for, so that order\'s profit is right">Order</th>' +
       '<th class="pc-th-rm">&nbsp;</th>' +
     '</tr></thead>';
 
@@ -8347,13 +8413,15 @@ function renderExpenses(){
   rows.forEach(function(exp){
     const tr = document.createElement('tr');
     tr.innerHTML =
-      '<td><input type="date" class="ex-date" value="' + (exp.date || '') + '"></td>' +
+      '<td><input type="date" class="ex-date" value="' + (exp.date || '') + '">' + (exp.status === 'review' ? '<span class="ex-review-badge" title="Waiting for weekly review">Review</span>' : '') + '</td>' +
       '<td class="dl-computed-cell ex-month-cell">' + expenseMonthLabel(exp.date) + '</td>' +
       '<td><input type="text" class="ex-item" placeholder="e.g. Filament Amazon" value="' + escapeHtml(exp.item || '') + '"></td>' +
-      '<td><input type="text" class="ex-category" list="expenseCategorySuggestions" placeholder="e.g. Raw Materials" value="' + escapeHtml(exp.category || '') + '"></td>' +
+      '<td>' + expenseCategorySelect(exp.category) + '</td>' +
       '<td><input type="number" class="ex-cost" min="0" step="1" value="' + (exp.cost || 0) + '"></td>' +
       '<td><div class="status-toggle exp-status exp-' + (exp.type || 'opex') + '" title="Click to cycle: Opex → Raw Materials → Capex" style="display:inline-block;">' + (exp.type === 'capex' ? 'Capex' : (exp.type === 'raw_materials' ? 'Raw Mat.' : 'Opex')) + '</div></td>' +
-      '<td><input type="text" class="ex-vendor" placeholder="e.g. Amazon" value="' + escapeHtml(exp.vendor || '') + '"></td>' +
+      '<td><input type="text" class="ex-vendor" list="expenseVendorSuggestions" placeholder="e.g. Amazon" value="' + escapeHtml(exp.vendor || '') + '"></td>' +
+      '<td><select class="ex-paid"><option value="">—</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="card">Card</option><option value="bank">Bank</option></select></td>' +
+      '<td><input type="text" class="ex-order" list="expenseOrderSuggestions" placeholder="TT-…" style="min-width:80px" value="' + escapeHtml(expenseOrderLabel(exp.orderId)) + '"></td>' +
       '<td><button class="rm-btn">\u2715</button></td>';
 
     const dateEl = tr.querySelector('.ex-date');
@@ -8372,10 +8440,21 @@ function renderExpenses(){
       scheduleSave();
     });
     itemEl.addEventListener('input', function(){ exp.item = itemEl.value; scheduleSave(); });
-    categoryEl.addEventListener('input', function(){
+    categoryEl.addEventListener('change', function(){
       exp.category = categoryEl.value;
-      renderExpenseSummary();
-      refreshExpenseCategoryOptions();
+      if(window.EXP && exp.category) exp.type = EXP.typeFor(exp.category);
+      renderExpenses();
+      scheduleSave();
+    });
+    const paidEl = tr.querySelector('.ex-paid');
+    paidEl.value = exp.paidVia || '';
+    paidEl.addEventListener('change', function(){ exp.paidVia = paidEl.value; scheduleSave(); });
+    const orderEl = tr.querySelector('.ex-order');
+    orderEl.addEventListener('change', function(){
+      const v = orderEl.value.trim().toLowerCase();
+      const o = v ? (state.orders || []).find(function(x){ return (x.displayId || '').toLowerCase() === v; }) : null;
+      if(v && !o){ showNoticeModal('No order ' + orderEl.value + ' found.'); orderEl.value = expenseOrderLabel(exp.orderId); return; }
+      exp.orderId = o ? o.id : '';
       scheduleSave();
     });
     costEl.addEventListener('input', function(){
@@ -8393,6 +8472,10 @@ function renderExpenses(){
   table.appendChild(tbody);
   scrollWrap.appendChild(table);
   list.appendChild(scrollWrap);
+  const orderDl = document.createElement('datalist');
+  orderDl.id = 'expenseOrderSuggestions';
+  orderDl.innerHTML = (state.orders || []).slice(-120).reverse().map(function(o){ return '<option value="' + escapeHtml(o.displayId || '') + '">' + escapeHtml((o.clientName || o.name || '').trim()) + '</option>'; }).join('');
+  list.appendChild(orderDl);
 
   refreshExpenseCategoryOptions();
 }
@@ -17919,6 +18002,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="order-insights.js?v=1"></script>
 <script src="marketing-admin.js?v=7"></script>
 <script src="finance-admin.js?v=2"></script>
+<script src="expense-health.js?v=1"></script>
 <script src="tasks-admin.js?v=3"></script>
 <script src="product-lab.js?v=2"></script>
 <script src="support-admin.js?v=5"></script>
