@@ -51,6 +51,7 @@
     if(!Array.isArray(C.recurring)) C.recurring = [];
     if(!C.plans) C.plans = {};
     if(!C.cash) C.cash = { amount: null, date: '' };
+    if(!C.vendors || typeof C.vendors !== 'object' || Array.isArray(C.vendors)) C.vendors = {};
     return C;
   }
   function ceilingOf(cat){ const v = cfg().ceilings[cat]; return v != null && v !== '' ? +v : CEILINGS[cat]; }
@@ -88,6 +89,15 @@
       const c = canonCat(e.category); if(c) v.cats[c] = (v.cats[c] || 0) + 1;
     });
     Object.keys(idx).forEach(function(k){ const v = idx[k]; v.category = Object.keys(v.cats).sort(function(a, b){ return v.cats[b] - v.cats[a]; })[0] || ''; });
+    // Saved vendor details (added from the quick-add popup) win over what history suggests.
+    const saved = cfg().vendors;
+    Object.keys(saved).forEach(function(k){
+      const d = saved[k]; if(!d || !d.name) return;
+      const v = idx[k] = idx[k] || { name: d.name, cats: {}, last: d.addedAt ? d.addedAt.slice(0, 10) : '', n: 0, lastItem: '', paidVia: '', category: '' };
+      v.details = d;
+      if(d.category) v.category = d.category;
+      if(d.paidVia && !v.paidVia) v.paidVia = d.paidVia;
+    });
     return idx;
   }
   function recentVendors(n){
@@ -248,6 +258,14 @@
     '.qa-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}',
     '.qa-chips button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:18px;padding:6px 12px;font:600 12.5px "Space Grotesk",sans-serif;cursor:pointer}',
     '.qa-chips button.on{border-color:var(--cyan);background:rgba(79,209,197,.14);color:#17877b}',
+    '.qa-chips button.qa-new{border-style:dashed;color:#17877b}',
+    '.qa-vinfo{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:12px;color:var(--dim);margin-top:6px}.qa-vinfo:empty{display:none}',
+    '.qa-vform{border:1px dashed var(--cyan);border-radius:10px;padding:12px;margin-top:10px;background:rgba(79,209,197,.06)}',
+    '.qa-vform-title{font:700 12.5px "Space Grotesk",sans-serif;color:#17877b;margin-bottom:8px}.qa-vform input{width:100%;box-sizing:border-box}',
+    '.qa-vform-note{font-size:11.5px;color:var(--dim);margin-top:8px}',
+    '@media(max-width:520px){.qa-vform .row2{grid-template-columns:1fr !important;gap:10px}}',
+    // On phones the bottom nav sits above popups; keep this one on top so Save is always reachable.
+    '@media(max-width:760px){#addExpenseModalOverlay{z-index:1070}#addExpenseModalOverlay .order-detail-modal-box{padding-bottom:calc(16px + env(safe-area-inset-bottom))}}',
     '.qa-auto{font:600 11px "Space Grotesk",sans-serif;color:#17877b;text-transform:none;letter-spacing:0;margin-left:6px}',
     '.qa-type{font-size:12px;color:var(--dim);margin-top:5px}',
     '#addExpenseModalOverlay select,#addExpenseModalOverlay input[type=text],#addExpenseModalOverlay input#newExpKg{width:100%;box-sizing:border-box}',
@@ -619,7 +637,8 @@
   // ---------- quick-add popup support (used by index.html) ----------
   function fillQuickAdd(){
     const vs = recentVendors(8), wrap = document.getElementById('newExpVendorChips'), dl = document.getElementById('expenseVendorSuggestions');
-    if(wrap) wrap.innerHTML = vs.map(function(v){ return '<button type="button" data-vendor="' + esc(v.name) + '">' + esc(v.name) + '</button>'; }).join('');
+    if(wrap) wrap.innerHTML = vs.map(function(v){ return '<button type="button" data-vendor="' + esc(v.name) + '">' + esc(v.name) + '</button>'; }).join('') +
+      '<button type="button" class="qa-new" data-newvendor="1">+ New vendor</button>';
     if(dl){ const idx = vendorIndex(); dl.innerHTML = Object.keys(idx).map(function(k){ return '<option value="' + esc(idx[k].name) + '">'; }).join(''); }
     const sel = document.getElementById('newExpCategory');
     if(sel) sel.innerHTML = '<option value="">Pick a category…</option>' + CATS.map(function(c){ return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>'; }).join('');
@@ -640,11 +659,49 @@
     if(v && v.category){ sel.value = v.category; if(hint) hint.textContent = 'auto from ' + v.name; if(v.paidVia) setPaid(v.paidVia); }
     else if(hint) hint.textContent = '';
     onCategory();
+    vendorPanel(name, v);
+  }
+  // Below the vendor field: a one-line summary for a known vendor (with Edit), or the
+  // details form for a vendor Studio hasn't seen before.
+  const VD = ['phone', 'upi', 'gstin', 'city', 'notes'];
+  const VD_ID = { phone: 'vdPhone', upi: 'vdUpi', gstin: 'vdGstin', city: 'vdCity', notes: 'vdNotes' };
+  function vendorPanel(name, v, forceForm){
+    const info = document.getElementById('newExpVendorInfo'), form = document.getElementById('newExpVendorForm'), title = document.getElementById('newExpVendorFormTitle');
+    if(!info || !form) return;
+    const nm = String(name || '').trim(), d = v && v.details;
+    if(!nm && !forceForm){ info.innerHTML = ''; form.style.display = 'none'; return; }
+    if(v && !forceForm){
+      const bits = d ? [d.phone, d.upi, d.gstin ? 'GST ' + d.gstin : '', d.city].filter(Boolean) : [];
+      info.innerHTML = '<span>' + (bits.length ? esc(bits.join(' · ')) : 'No contact details saved') + '</span><button type="button" class="eh-link" data-vdedit="1">' + (bits.length ? 'Edit details' : 'Add details') + '</button>';
+      form.style.display = 'none';
+      return;
+    }
+    info.innerHTML = '';
+    title.textContent = nm ? (v ? 'Details for ' + nm : 'New vendor: ' + nm + ' · add details (optional)') : 'New vendor · type the name above, details below (optional)';
+    VD.forEach(function(f){ const el = document.getElementById(VD_ID[f]); if(el) el.value = d && d[f] ? d[f] : ''; });
+    form.style.display = '';
   }
   function setPaid(p){ document.querySelectorAll('#newExpPaidChips button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-paid') === p); }); }
   function wireQuickAdd(){
     const wrap = document.getElementById('newExpVendorChips'); if(!wrap || wrap._wired) return; wrap._wired = true;
-    wrap.addEventListener('click', function(e){ const b = e.target.closest('button[data-vendor]'); if(!b) return; document.getElementById('newExpVendor').value = b.getAttribute('data-vendor'); onVendor(b.getAttribute('data-vendor')); });
+    wrap.addEventListener('click', function(e){
+      if(e.target.closest('button[data-newvendor]')){
+        const inp = document.getElementById('newExpVendor'); inp.value = '';
+        document.querySelectorAll('#newExpVendorChips button').forEach(function(b){ b.classList.toggle('on', !!b.getAttribute('data-newvendor')); });
+        document.getElementById('newExpCatHint').textContent = '';
+        vendorPanel('', null, true); inp.focus(); return;
+      }
+      const b = e.target.closest('button[data-vendor]'); if(!b) return; document.getElementById('newExpVendor').value = b.getAttribute('data-vendor'); onVendor(b.getAttribute('data-vendor'));
+    });
+    document.getElementById('newExpVendorInfo').addEventListener('click', function(e){
+      if(!e.target.closest('[data-vdedit]')) return;
+      const n = document.getElementById('newExpVendor').value; vendorPanel(n, vendorIndex()[vendorKey(n)], true);
+    });
+    document.getElementById('newExpVendor').addEventListener('input', function(e){
+      const form = document.getElementById('newExpVendorForm');
+      if(form && form.style.display !== 'none'){ const t = document.getElementById('newExpVendorFormTitle'); const n = e.target.value.trim(); const known = vendorIndex()[vendorKey(n)]; t.textContent = n ? (known ? 'Details for ' + n : 'New vendor: ' + n + ' · add details (optional)') : 'New vendor · type the name above, details below (optional)'; }
+    });
+    const g = document.getElementById('vdGstin'); if(g) g.addEventListener('input', function(){ g.value = g.value.toUpperCase().replace(/\s/g, ''); });
     document.getElementById('newExpVendor').addEventListener('change', function(e){ onVendor(e.target.value); });
     document.getElementById('newExpCategory').addEventListener('change', function(){ document.getElementById('newExpCatHint').textContent = ''; onCategory(); });
     document.getElementById('newExpPaidChips').addEventListener('click', function(e){ const b = e.target.closest('button[data-paid]'); if(b) setPaid(b.getAttribute('data-paid')); });
@@ -654,10 +711,29 @@
     document.getElementById('newExpCatHint').textContent = '';
     ['newExpKg', 'newExpRef'].forEach(function(id){ const el = document.getElementById(id); if(el) el.value = ''; });
     setPaid('upi'); onCategory();
+    vendorPanel('', null);
+    VD.forEach(function(f){ const el = document.getElementById(VD_ID[f]); if(el) el.value = ''; });
+  }
+  // Saves the vendor's details (if the form was open or this is a new vendor) along with
+  // the category and payment method used, so the next entry for them fills itself in.
+  function saveVendor(vendor, cat, paid){
+    const k = vendorKey(vendor); if(!k) return;
+    const form = document.getElementById('newExpVendorForm'), open = form && form.style.display !== 'none';
+    const C = cfg(), cur = C.vendors[k], known = vendorIndex()[k];
+    if(!open && known && !cur) return;
+    const d = cur || { name: vendor, addedAt: new Date().toISOString() };
+    d.name = vendor;
+    if(open) VD.forEach(function(f){ const el = document.getElementById(VD_ID[f]); if(el) d[f] = el.value.trim(); });
+    if(d.gstin) d.gstin = d.gstin.toUpperCase();
+    if(cat) d.category = cat;
+    if(paid) d.paidVia = paid;
+    d.updatedAt = new Date().toISOString();
+    C.vendors[k] = d;
   }
   function readQuickAdd(){
     const paid = document.querySelector('#newExpPaidChips button.on');
     const cat = document.getElementById('newExpCategory').value, vendor = document.getElementById('newExpVendor').value.trim();
+    saveVendor(vendor, cat, paid ? paid.getAttribute('data-paid') : '');
     const item = document.getElementById('newExpItem').value.trim();
     return {
       id: newId(), date: document.getElementById('newExpDate').value || isoLocal(),

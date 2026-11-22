@@ -2818,6 +2818,20 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
         <div class="qa-chips" id="newExpVendorChips"></div>
         <input type="text" id="newExpVendor" list="expenseVendorSuggestions" placeholder="Or type a vendor">
         <datalist id="expenseVendorSuggestions"></datalist>
+        <div class="qa-vinfo" id="newExpVendorInfo"></div>
+        <div class="qa-vform" id="newExpVendorForm" style="display:none;">
+          <div class="qa-vform-title" id="newExpVendorFormTitle">New vendor details</div>
+          <div class="row2">
+            <div><label>Phone</label><input type="tel" id="vdPhone" inputmode="tel" placeholder="98xxxxxxxx"></div>
+            <div><label>UPI ID</label><input type="text" id="vdUpi" placeholder="name@bank"></div>
+          </div>
+          <div class="row2" style="margin-top:10px;">
+            <div><label>GSTIN</label><input type="text" id="vdGstin" placeholder="09ABCDE1234F1Z5" style="text-transform:uppercase;"></div>
+            <div><label>City / area</label><input type="text" id="vdCity" placeholder="e.g. Chandni Chowk"></div>
+          </div>
+          <div style="margin-top:10px;"><label>What do you buy from them?</label><input type="text" id="vdNotes" placeholder="e.g. PLA filament, 1 kg spools"></div>
+          <div class="qa-vform-note">Saved with the vendor. Next time, picking them fills the category and how you paid.</div>
+        </div>
         <label class="qa-label">Category <span class="qa-auto" id="newExpCatHint"></span></label>
         <select id="newExpCategory"></select>
         <div class="qa-type" id="newExpTypeNote"></div>
@@ -18002,7 +18016,7 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="order-insights.js?v=1"></script>
 <script src="marketing-admin.js?v=7"></script>
 <script src="finance-admin.js?v=2"></script>
-<script src="expense-health.js?v=1"></script>
+<script src="expense-health.js?v=2"></script>
 <script src="tasks-admin.js?v=3"></script>
 <script src="product-lab.js?v=2"></script>
 <script src="support-admin.js?v=5"></script>
