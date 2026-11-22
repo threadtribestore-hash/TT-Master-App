@@ -25,7 +25,7 @@
   function canRead(role, coll, id){
     if(role === 'owner') return true;
     if(!role) return false;
-    if(coll === '$doc') return id !== 'bank' || role === 'accounts';
+    if(coll === '$doc') return (id !== 'bank' && id !== 'expenseCfg') || role === 'accounts';
     if(['orders', 'clients', 'productCatalog', 'printers', 'inventory'].indexOf(coll) !== -1) return true;
     if(role === 'manager') return coll !== 'expenses' && coll.indexOf('bank.') !== 0;
     if(role === 'production') return ['filamentRates', 'pon.partners', 'pon.jobs', 'pon.filamentIssues', 'lab.ideas'].indexOf(coll) !== -1 || coll.indexOf('fil.') === 0;
