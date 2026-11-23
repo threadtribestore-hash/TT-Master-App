@@ -1114,6 +1114,20 @@
   .mini-spark{ vertical-align:middle; }
 
   /* ---- Pricing Simulator ---- */
+  .sim-quick-row{ display:grid; grid-template-columns: 220px minmax(0,1fr); gap:16px; align-items:start; }
+  .sim-quick-in label{ display:block; margin-bottom:6px; }
+  .sim-quick-in input{ font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:700; padding:12px 14px; width:100%; box-sizing:border-box; }
+  .sim-quick-out{ display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:10px; }
+  .sim-quick-empty{ font-size:13px; color:var(--dim); padding:14px 0; grid-column:1/-1; }
+  .sim-q{ border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel); }
+  .sim-q.hl{ border-color:var(--cyan); background:rgba(79,209,197,.08); }
+  .sim-q .ql{ font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+  .sim-q .qv{ font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:700; margin:3px 0 2px; }
+  .sim-q .qs{ font-size:11.5px; color:var(--dim); line-height:1.35; }
+  .sim-quick-note{ grid-column:1/-1; font-size:11.5px; color:var(--dim); }
+  .sim-more{ margin-top:14px; border-top:1px solid var(--line); padding-top:10px; }
+  .sim-more summary{ cursor:pointer; font-size:12.5px; color:var(--cyan); font-weight:600; }
+  @media (max-width:640px){ .sim-quick-row{ grid-template-columns:1fr; } }
   .sim-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
   .sim-row.three{ grid-template-columns:1fr 1fr 1fr; }
   .sim-section{ margin-bottom:22px; }
@@ -2586,43 +2600,48 @@
   <div id="tabPricingSim" style="display:none;">
     <div class="panel">
       <div class="panel-title"><span class="panel-title-main">Pricing Simulator <button class="help-icon" data-help="pricingSim">?</button></span></div>
-      <div style="font-size:12px; color:var(--dim); margin-bottom:16px;">Calculate cost, margin, and profit for any product — pick from your catalog or enter specs manually. Compare pricing scenarios side-by-side.</div>
+      <div style="font-size:12px; color:var(--dim); margin-bottom:16px;">Type a model’s weight to get its print time, cost and a suggested price. Everything else is optional under More options.</div>
 
-      <div class="sim-section">
-        <div class="sim-section-title">📦 Product Setup</div>
-        <div class="sim-row">
-          <div>
-            <label>Pick from catalog</label>
-            <select id="simCatalogPick" style="width:100%;"><option value="">— Manual entry —</option></select>
+      <div class="sim-section sim-quick">
+        <div class="sim-section-title">⚖️ Price from weight</div>
+        <div class="sim-quick-row">
+          <div class="sim-quick-in">
+            <label for="simWeight">Model weight (g)</label>
+            <input type="number" id="simWeight" min="0" step="1" inputmode="decimal" placeholder="e.g. 120">
           </div>
-          <div>
-            <label>Channel</label>
-            <select id="simChannel" style="width:100%;">
-              <option value="d2c">D2C (Direct)</option>
-              <option value="b2b">B2B (Wholesale)</option>
-            </select>
+          <div class="sim-quick-out" id="simQuickOut"><div class="sim-quick-empty">Enter the model’s weight. Print time, cost and a suggested price are worked out from it.</div></div>
+        </div>
+        <details class="sim-more" id="simMore">
+          <summary>More options — catalog pick, print hours, material, quantity, packaging, delivery, your own price</summary>
+          <div class="sim-row" style="margin-top:12px;">
+            <div>
+              <label>Pick from catalog</label>
+              <select id="simCatalogPick" style="width:100%;"><option value="">— Manual entry —</option></select>
+            </div>
+            <div>
+              <label>Channel</label>
+              <select id="simChannel" style="width:100%;">
+                <option value="b2b">B2B (Wholesale)</option>
+                <option value="d2c">D2C (Direct)</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div class="sim-row three">
-          <div><label>Product name</label><input type="text" id="simName" placeholder="e.g. Mushroom Lamp"></div>
-          <div><label>Weight per unit (g)</label><input type="number" id="simWeight" min="0" step="0.5" value="0"></div>
-          <div><label>Print hours per unit</label><input type="number" id="simHours" min="0" step="0.1" value="0"></div>
-        </div>
-        <div class="sim-row three">
-          <div><label>Material</label><input type="text" id="simMaterial" placeholder="e.g. PLA" list="materialSuggestions"></div>
-          <div><label>Color</label><input type="text" id="simColor" placeholder="e.g. White" list="colorSuggestions"></div>
-          <div><label>Quantity</label><input type="number" id="simQty" min="1" step="1" value="1"></div>
-        </div>
-        <div class="sim-row three">
-          <div><label>Packaging cost per unit (₹)</label><input type="number" id="simPackaging" min="0" step="1" value="0"></div>
-          <div><label>Delivery cost total (₹)</label><input type="number" id="simDelivery" min="0" step="1" value="0"></div>
-          <div><label>Discount %</label><input type="number" id="simDiscount" min="0" max="100" step="0.5" value="0"></div>
-        </div>
-        <div style="margin-top:4px;">
-          <label>Selling price per unit (₹)</label>
-          <input type="number" id="simSellingPrice" min="0" step="1" value="0" style="max-width:200px;">
-          <span style="font-size:11px; color:var(--dim); margin-left:8px;">Leave 0 to use catalog price</span>
-        </div>
+          <div class="sim-row three">
+            <div><label>Product name</label><input type="text" id="simName" placeholder="e.g. Mushroom Lamp"></div>
+            <div><label>Print hours per unit</label><input type="number" id="simHours" min="0" step="0.1" placeholder="Auto from weight"></div>
+            <div><label>Quantity</label><input type="number" id="simQty" min="1" step="1" value="1"></div>
+          </div>
+          <div class="sim-row three">
+            <div><label>Material</label><input type="text" id="simMaterial" placeholder="e.g. PLA" list="materialSuggestions"></div>
+            <div><label>Color</label><input type="text" id="simColor" placeholder="e.g. White" list="colorSuggestions"></div>
+            <div><label>Discount %</label><input type="number" id="simDiscount" min="0" max="100" step="0.5" value="0"></div>
+          </div>
+          <div class="sim-row three">
+            <div><label>Packaging cost per unit (₹)</label><input type="number" id="simPackaging" min="0" step="1" value="0"></div>
+            <div><label>Delivery cost total (₹)</label><input type="number" id="simDelivery" min="0" step="1" value="0"></div>
+            <div><label>Selling price per unit (₹)</label><input type="number" id="simSellingPrice" min="0" step="1" placeholder="Auto: suggested price"></div>
+          </div>
+        </details>
       </div>
 
       <div class="sim-section">
@@ -9655,6 +9674,7 @@ const METRIC_DEFS = {
     section: 'Pricing Simulator',
     title: 'Pricing Simulator',
     body: [
+      ['Price from weight', 'Only the model weight is needed. Print hours are estimated from the grams-per-hour of your 7 catalog products closest in weight. Suggested prices are the median \u20b9 per gram you charged for the most similar-weight items on past orders (wholesale = orders linked to a client, direct = not linked), times the weight, rounded to \u20b95. Anything under More options overrides the estimate.'],
       ['COGS / Unit', 'Filament cost (weight \u00d7 buffer \u00d7 \u20b9/kg rate) + Machine cost (hours \u00d7 buffer \u00d7 machine rate). Uses material/color-specific rates from Filament Inventory when available.'],
       ['All-In Cost', 'COGS + packaging per unit + delivery cost spread across quantity.'],
       ['Margin Bar', 'Visual split of revenue into cost vs profit portions.'],
@@ -11771,10 +11791,53 @@ function renderFilamentBurn(){
 // ─── PRICING SIMULATOR ───
 // ═══════════════════════════════════════════════════════════════
 
+// From weight alone: print hours come from catalog products of similar weight (their
+// grams per hour), and suggested prices from what was actually charged for similar-weight
+// items on past orders (median ₹ per gram of the nearest sales), split wholesale vs direct.
+function simEstimate(weight){
+  var out = { hours: 0, gph: 0, hoursFrom: 0, ws: 0, d2c: 0, wsN: 0, d2cN: 0, lo: 0, hi: 0 };
+  if(!(weight > 0)) return out;
+  // Closest k by weight ratio; stays inside ±40% of the weight when at least 5 qualify.
+  function near(list, k){
+    var all = list.map(function(x){ return { x: x, d: Math.abs(Math.log(x.g / weight)) }; }).sort(function(a, b){ return a.d - b.d; });
+    var band = all.filter(function(y){ return y.d <= Math.log(1.4); });
+    return (band.length >= 5 ? band : all).slice(0, k).map(function(y){ return y.x; });
+  }
+  function median(a){ a = a.slice().sort(function(x, y){ return x - y; }); if(!a.length) return 0; var m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
+  var cat = (state.productCatalog || []).filter(function(p){ return +p.weight > 0 && +p.hours > 0; }).map(function(p){ return { g: +p.weight, h: +p.hours }; });
+  if(cat.length){
+    var nc = near(cat, 7);
+    out.gph = median(nc.map(function(x){ return x.g / x.h; }));
+    out.hoursFrom = nc.length;
+  } else out.gph = 22.5;
+  out.hours = out.gph > 0 ? weight / out.gph : 0;
+  var sold = [];
+  (state.orders || []).forEach(function(o){
+    if(o.status === 'quoted' || o.status === 'lost' || o.status === 'cancelled' || o.status === 'returned') return;
+    (o.products || []).forEach(function(p){ if(+p.fil > 0 && +p.actualPrice > 0) sold.push({ g: +p.fil, pr: +p.actualPrice, b2b: !!o.clientId }); });
+  });
+  var ws = near(sold.filter(function(x){ return x.b2b; }), 15), dc = near(sold.filter(function(x){ return !x.b2b; }), 9);
+  out.wsN = ws.length; out.d2cN = dc.length;
+  if(ws.length) out.ws = median(ws.map(function(x){ return x.pr / x.g; })) * weight;
+  if(dc.length >= 3) out.d2c = median(dc.map(function(x){ return x.pr / x.g; })) * weight;
+  else if(out.ws){
+    // Too few direct sales near this weight: scale wholesale by the overall direct/wholesale gap.
+    var allW = median(sold.filter(function(x){ return x.b2b; }).map(function(x){ return x.pr / x.g; }));
+    var allD = median(sold.filter(function(x){ return !x.b2b; }).map(function(x){ return x.pr / x.g; }));
+    out.d2c = out.ws * (allW > 0 && allD > 0 ? allD / allW : 1.4);
+  }
+  var near2 = ws.concat(dc);
+  if(near2.length){ out.lo = Math.min.apply(null, near2.map(function(x){ return x.g; })); out.hi = Math.max.apply(null, near2.map(function(x){ return x.g; })); }
+  out.ws = Math.round(out.ws / 5) * 5; out.d2c = Math.round(out.d2c / 5) * 5;
+  return out;
+}
+
 function getSimInputs(){
   var name = (document.getElementById('simName').value || '').trim() || 'Custom Product';
   var weight = parseFloat(document.getElementById('simWeight').value) || 0;
-  var hours = parseFloat(document.getElementById('simHours').value) || 0;
+  var est = simEstimate(weight);
+  var hoursTyped = parseFloat(document.getElementById('simHours').value) || 0;
+  var hours = hoursTyped || est.hours;
   var material = (document.getElementById('simMaterial').value || '').trim();
   var color = (document.getElementById('simColor').value || '').trim();
   var qty = Math.max(1, parseInt(document.getElementById('simQty').value) || 1);
@@ -11785,7 +11848,7 @@ function getSimInputs(){
   var sellingPrice = parseFloat(document.getElementById('simSellingPrice').value) || 0;
   return { name:name, weight:weight, hours:hours, material:material, color:color,
     qty:qty, packaging:packaging, delivery:delivery, discount:discount, channel:channel,
-    sellingPrice:sellingPrice };
+    sellingPrice:sellingPrice, est:est, hoursAuto:!hoursTyped };
 }
 
 function simCalc(inp){
@@ -11822,6 +11885,8 @@ function simCalc(inp){
       price = inp.channel === 'b2b' ? (cat.wholesalePrice || cat.d2cPrice || 0) : (cat.d2cPrice || cat.wholesalePrice || 0);
     }
   }
+  var priceAuto = false;
+  if(!price && inp.est){ price = inp.channel === 'b2b' ? inp.est.ws : inp.est.d2c; priceAuto = price > 0; }
   var discountedPrice = price * (1 - inp.discount / 100);
   var revenuePerUnit = discountedPrice;
   var profitPerUnit = revenuePerUnit - allInWithDelivery;
@@ -11839,13 +11904,14 @@ function simCalc(inp){
     revenuePerUnit:revenuePerUnit, profitPerUnit:profitPerUnit, margin:margin,
     totalRevenue:totalRevenue, totalCost:totalCost, totalProfit:totalProfit,
     totalHours:totalHours, price:price, discountedPrice:discountedPrice,
-    qty:inp.qty, bufferPct:(state.fleet.failureBufferPct||0)
+    qty:inp.qty, bufferPct:(state.fleet.failureBufferPct||0), priceAuto:priceAuto
   };
 }
 
 function renderSimResults(){
   var inp = getSimInputs();
   var c = simCalc(inp);
+  renderSimQuick(inp, c);
 
   // Results grid
   var grid = document.getElementById('simResultGrid');
@@ -11853,7 +11919,7 @@ function renderSimResults(){
   grid.innerHTML =
     '<div class="sim-stat"><div class="s-label">COGS / UNIT</div><div class="s-val">₹' + Math.round(c.cogsPerUnit) + '</div><div class="s-sub">Filament ₹' + Math.round(c.filCostPerUnit) + ' + Machine ₹' + Math.round(c.machineCostPerUnit) + '</div></div>' +
     '<div class="sim-stat"><div class="s-label">ALL-IN COST / UNIT</div><div class="s-val">₹' + Math.round(c.allInWithDelivery) + '</div><div class="s-sub">+ Pkg ₹' + Math.round(inp.packaging) + ' + Del ₹' + Math.round(c.totalDeliveryPerUnit) + '</div></div>' +
-    '<div class="sim-stat"><div class="s-label">SELLING PRICE</div><div class="s-val">₹' + Math.round(c.discountedPrice) + '</div><div class="s-sub">' + (inp.discount > 0 ? 'List ₹' + Math.round(c.price) + ' − ' + inp.discount + '% disc' : 'No discount') + '</div></div>' +
+    '<div class="sim-stat"><div class="s-label">SELLING PRICE</div><div class="s-val">₹' + Math.round(c.discountedPrice) + '</div><div class="s-sub">' + (inp.discount > 0 ? 'List ₹' + Math.round(c.price) + ' − ' + inp.discount + '% disc' : c.priceAuto ? 'Suggested from similar sales' : 'No discount') + '</div></div>' +
     '<div class="sim-stat"><div class="s-label">PROFIT / UNIT</div><div class="s-val" style="color:' + (c.profitPerUnit >= 0 ? 'var(--green)' : 'var(--red)') + '">₹' + Math.round(c.profitPerUnit) + '</div><div class="s-sub">Margin ' + c.margin.toFixed(1) + '%</div></div>' +
     '<div class="sim-stat"><div class="s-label">ORDER TOTAL</div><div class="s-val">₹' + Math.round(c.totalRevenue).toLocaleString('en-IN') + '</div><div class="s-sub">' + inp.qty + ' units × ₹' + Math.round(c.discountedPrice) + '</div></div>' +
     '<div class="sim-stat"><div class="s-label">TOTAL PROFIT</div><div class="s-val" style="color:' + (c.totalProfit >= 0 ? 'var(--green)' : 'var(--red)') + '">₹' + Math.round(c.totalProfit).toLocaleString('en-IN') + '</div><div class="s-sub">' + c.totalHours.toFixed(1) + ' print hours total</div></div>';
@@ -11896,6 +11962,24 @@ function renderSimResults(){
 
   // Qty chart — SVG showing profit at different quantities
   renderSimQtyChart(inp, c);
+}
+
+// The answer card next to the weight box: time, cost and both suggested prices.
+function renderSimQuick(inp, c){
+  var el = document.getElementById('simQuickOut');
+  if(!el) return;
+  var e = inp.est;
+  if(!(inp.weight > 0)){ el.innerHTML = '<div class="sim-quick-empty">Enter the model’s weight. Print time, cost and a suggested price are worked out from it.</div>'; return; }
+  var cost = c.allInWithDelivery;
+  function mg(p){ return p > 0 ? Math.round((p - cost) / p * 100) + '% margin · ₹' + Math.round(p - cost) + ' profit' : 'No similar sales yet'; }
+  var hrs = c.printHrs / (1 + (state.fleet.failureBufferPct || 0) / 100);
+  var hl = inp.channel === 'b2b' ? 'ws' : 'd2c';
+  el.innerHTML =
+    '<div class="sim-q"><div class="ql">Print time</div><div class="qv">' + hrs.toFixed(1) + ' h</div><div class="qs">' + (inp.hoursAuto ? 'Estimated: ~' + Math.round(e.gph) + ' g/hour, like your ' + e.hoursFrom + ' closest catalog products' : 'As entered') + '</div></div>' +
+    '<div class="sim-q"><div class="ql">Cost / piece</div><div class="qv">₹' + Math.round(cost) + '</div><div class="qs">Filament ₹' + Math.round(c.filCostPerUnit) + ' + machine ₹' + Math.round(c.machineCostPerUnit) + (inp.packaging || inp.delivery ? ' + pkg/delivery' : '') + ' · incl. ' + c.bufferPct + '% failure buffer</div></div>' +
+    '<div class="sim-q' + (hl === 'ws' ? ' hl' : '') + '"><div class="ql">Suggested wholesale</div><div class="qv">' + (e.ws ? '₹' + e.ws : '—') + '</div><div class="qs">' + mg(e.ws) + '</div></div>' +
+    '<div class="sim-q' + (hl === 'd2c' ? ' hl' : '') + '"><div class="ql">Suggested direct (D2C)</div><div class="qv">' + (e.d2c ? '₹' + e.d2c : '—') + '</div><div class="qs">' + mg(e.d2c) + '</div></div>' +
+    (e.wsN || e.d2cN ? '<div class="sim-quick-note">Suggested prices = what you charged for the ' + (e.wsN + e.d2cN) + ' most similar items sold (' + Math.round(e.lo) + '–' + Math.round(e.hi) + ' g), scaled to ' + inp.weight + ' g' + (e.d2cN < 3 && e.d2c ? '; direct price scaled from wholesale since few direct sales are this weight' : '') + '. The sections below use the ' + (inp.channel === 'b2b' ? 'wholesale' : 'direct') + ' price — change it under More options.</div>' : '');
 }
 
 function renderSimQtyChart(inp, c){
@@ -12927,7 +13011,7 @@ document.getElementById('simCatalogPick').addEventListener('change', function(){
   document.getElementById('simColor').value = item.color || '';
   var channel = document.getElementById('simChannel').value;
   var price = channel === 'b2b' ? (item.wholesalePrice || item.d2cPrice || 0) : (item.d2cPrice || item.wholesalePrice || 0);
-  document.getElementById('simSellingPrice').value = price || 0;
+  document.getElementById('simSellingPrice').value = price || '';
   renderSimResults();
 });
 
