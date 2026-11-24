@@ -50,34 +50,72 @@
   var HIDE_MONEY = ['production', 'packing'], HIDE_COSTS = ['sales'];
 
   var current = { role: '', email: '' };
+  // Per-person limits on top of the role, set by an owner in Team & access (studio_team.limits).
+  // hideTabs: screens this person doesn't get; hideMoney / hideCosts: extra money hiding.
+  var limits = { hideTabs: [], hideMoney: false, hideCosts: false };
+  function normLimits(l){ l = l || {}; return { hideTabs: Array.isArray(l.hideTabs) ? l.hideTabs : [], hideMoney: !!l.hideMoney, hideCosts: !!l.hideCosts }; }
+  // What the signed-in person may open: their role's screens minus their personal cuts.
+  function myTabAllowed(tab){
+    if(!current.role || current.role === 'owner') return true;
+    return tabAllowed(current.role, tab) && limits.hideTabs.indexOf(tab) === -1;
+  }
+  function allTabList(){
+    var all = [];
+    document.querySelectorAll('[data-tab],[data-mtab],[data-goto]').forEach(function(b){ var t = b.getAttribute('data-tab') || b.getAttribute('data-mtab') || b.getAttribute('data-goto'); if(t && all.indexOf(t) === -1) all.push(t); });
+    ['printfarm', 'automations', 'notify', 'printmatch', 'research'].forEach(function(t){ if(all.indexOf(t) === -1) all.push(t); });
+    return all;
+  }
+  function tabLabel(t){
+    if(t === 'printfarm') return 'Print farm';
+    var b = document.querySelector('.tab-btn[data-tab="' + t + '"]') || document.querySelector('[data-tab="' + t + '"]');
+    var txt = b ? (b.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    return txt || t;
+  }
   function esc(s){ return typeof escapeHtml === 'function' ? escapeHtml(s == null ? '' : String(s)) : String(s == null ? '' : s); }
 
   // ---------- apply a role ----------
   var styleEl = null;
   function applyRole(role, email){
+    var changed = (role || '') !== current.role || (email || '') !== current.email;
     current.role = role || ''; current.email = email || '';
+    if(changed){ limits = normLimits(); loadMyLimits(); }
+    applyRules();
+    badge();
+    renderTeamPanel();
+  }
+  async function loadMyLimits(){
+    if(!current.role || current.role === 'owner' || !sb()) return;
+    var who = current.email;
+    try{
+      var r = await sb().rpc('team_limits');
+      if(r.error || who !== current.email) return; // not set up yet: role rules only
+      limits = normLimits(r.data);
+      applyRules();
+    }catch(e){}
+  }
+  function applyRules(){
     document.body.setAttribute('data-tt-role', current.role || 'none');
-    var allTabs = [];
-    document.querySelectorAll('[data-tab],[data-mtab],[data-goto]').forEach(function(b){ var t = b.getAttribute('data-tab') || b.getAttribute('data-mtab') || b.getAttribute('data-goto'); if(t && allTabs.indexOf(t) === -1) allTabs.push(t); });
-    ['printfarm', 'automations', 'notify', 'printmatch', 'research'].forEach(function(t){ if(allTabs.indexOf(t) === -1) allTabs.push(t); });
-    var hidden = allTabs.filter(function(t){ return !tabAllowed(current.role, t); });
+    var allTabs = allTabList();
+    var hidden = allTabs.filter(function(t){ return !myTabAllowed(t); });
     // Menu buttons, the phone bottom bar (data-mtab) and the phone More sheet (data-goto).
     var css = hidden.filter(function(t){ return t !== 'printfarm'; }).map(function(t){ return '[data-tab="' + t + '"],[data-mtab="' + t + '"],[data-goto="' + t + '"]'; }).join(',');
     var rules = [];
     if(css) rules.push(css + '{display:none !important}');
     if(hidden.indexOf('printfarm') !== -1) rules.push('.ttf-menu-item{display:none !important}');
-    if(HIDE_MONEY.indexOf(current.role) !== -1){
+    var hideMoney = HIDE_MONEY.indexOf(current.role) !== -1 || (current.role !== 'owner' && limits.hideMoney);
+    var hideCosts = HIDE_COSTS.indexOf(current.role) !== -1 || (current.role !== 'owner' && limits.hideCosts);
+    if(hideMoney){
       rules.push(['#pipelineForecastStrip', '.kb-val', '.kanban-col-total', '.order-intel', '#kbHoverTip', '.profit-figures', '.profit-band', '.payments-total-band',
         '.payment-due-hint', '.payment-remind-badge', '.selling-price-hint', '.recalc-cost-link', '.cost-frozen-text', '#ordersViewToggle [data-view="table"]', '#exportOrdersTableBtn',
         '#paymentReminderBanner', '.panel:has(#paymentsSummaryList)', '.kanban-column[data-status="payment"] .kanban-card-badge',
         'div:has(> input.p-list-price)', 'div:has(> input.p-actual-price)', 'div:has(> input.p-amount-paid)', 'div:has(> select.p-payment-mode)', 'div:has(> input.p-refund-amount)',
         'div:has(> input.p-packaging-cost)', 'div:has(> input.p-delivery-cost)', 'div:has(> input.payment-cleared-date-input)'].join(',') + '{display:none !important}');
     }
-    if(HIDE_COSTS.indexOf(current.role) !== -1 || current.role === 'manager'){
+    if(hideCosts || current.role === 'manager'){
       // No expenses for these roles, so net profit would mislead; sales also doesn't see margins.
       rules.push('#pipelineForecastStrip .pc-conversion{display:none !important}');
     }
-    if(HIDE_COSTS.indexOf(current.role) !== -1){
+    if(hideCosts){
       rules.push('#pipelineForecastStrip .pc-revenue,.order-intel,#kbHoverTip .order-intel,.profit-figures,.profit-band,.recalc-cost-link,.cost-frozen-text{display:none !important}');
     }
     // Bulk actions (imports, backups, "Clear all") rewrite shared data for everyone: owners only.
@@ -88,9 +126,7 @@
     styleEl.textContent = rules.join('\n');
     // If the open screen isn't allowed, go Home.
     var active = document.querySelector('.tab-btn.active');
-    if(active && !tabAllowed(current.role, active.getAttribute('data-tab'))){ var h = document.querySelector('.tab-btn[data-tab="home"]'); if(h) h.click(); }
-    badge();
-    renderTeamPanel();
+    if(active && !myTabAllowed(active.getAttribute('data-tab'))){ var h = document.querySelector('.tab-btn[data-tab="home"]'); if(h) h.click(); }
   }
   window.ttApplyRole = applyRole;
 
@@ -116,7 +152,7 @@
     var t = e.target.closest && e.target.closest('[data-tab]');
     var pf = e.target.closest && e.target.closest('.ttf-menu-item');
     var tab = t ? t.getAttribute('data-tab') : pf ? 'printfarm' : '';
-    if(tab && !tabAllowed(r, tab)){ e.preventDefault(); e.stopImmediatePropagation(); if(typeof showToast === 'function') showToast('Your role (' + ROLES[r] + ') doesn’t include this screen'); }
+    if(tab && !myTabAllowed(tab)){ e.preventDefault(); e.stopImmediatePropagation(); if(typeof showToast === 'function') showToast(tabAllowed(r, tab) ? 'This screen is switched off for you. Ask an owner.' : 'Your role (' + ROLES[r] + ') doesn’t include this screen'); }
   }, true);
 
   function badge(){
@@ -131,7 +167,7 @@
   }
 
   // ---------- Team & access (Settings) ----------
-  var T = { list: null, err: '', missing: false, act: null, actErr: '', who: '', loading: false };
+  var T = { list: null, err: '', missing: false, act: null, actErr: '', who: '', loading: false, open: '', limitsMissing: false };
   function sb(){ return (typeof cloud !== 'undefined' && cloud.sb) ? cloud.sb : null; }
   async function loadTeam(){
     if(!sb() || T.loading) return;
@@ -141,7 +177,7 @@
       if(role === 'owner'){
         var r = await sb().from('studio_team').select('*').order('role').order('name');
         if(r.error){ T.missing = /studio_team|does not exist|schema cache|relation/i.test(r.error.message || ''); T.err = T.missing ? '' : r.error.message; T.list = []; }
-        else { T.missing = false; T.err = ''; T.list = r.data || []; }
+        else { T.missing = false; T.err = ''; T.list = r.data || []; T.limitsMissing = T.list.length > 0 && !('limits' in T.list[0]); }
       }
       if(role === 'owner' || role === 'manager'){
         var q = sb().from('studio_activity').select('*').order('at', { ascending: false }).limit(200);
@@ -171,13 +207,17 @@
         h += '<p class="ta-dim">One-time setup: in Supabase → SQL Editor, run <b>team_access_setup.sql</b> (in tt-bridge). Then reopen this screen.</p>';
       } else {
         h += '<p class="ta-dim">Owners (you) see everything. Each person below signs in at this Studio address with their email code and sees only their role’s screens and data. The database enforces it.</p>' +
-          '<table class="ta-t"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Access</th><th></th></tr></thead><tbody>' +
+          '<table class="ta-t"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Access</th><th>Limits</th><th></th></tr></thead><tbody>' +
           (T.list && T.list.length ? T.list.map(function(m){
+            var lim = normLimits(m.limits), nCut = lim.hideTabs.filter(function(t){ return tabAllowed(m.role, t); }).length + (lim.hideMoney ? 1 : 0) + (lim.hideCosts ? 1 : 0);
+            var isOpen = T.open === m.email;
             return '<tr><td><input data-ta-f="name" data-e="' + esc(m.email) + '" value="' + esc(m.name) + '"></td><td>' + esc(m.email) + '</td>' +
               '<td><select data-ta-f="role" data-e="' + esc(m.email) + '">' + Object.keys(ROLES).filter(function(k){ return k !== 'owner'; }).map(function(k){ return '<option value="' + k + '"' + (m.role === k ? ' selected' : '') + '>' + ROLES[k] + '</option>'; }).join('') + '</select></td>' +
               '<td><label class="ta-sw"><input type="checkbox" data-ta-f="active" data-e="' + esc(m.email) + '"' + (m.active ? ' checked' : '') + '> ' + (m.active ? 'On' : 'Off') + '</label></td>' +
-              '<td><button type="button" class="ta-btn" data-ta="remove" data-e="' + esc(m.email) + '">Remove</button></td></tr>';
-          }).join('') : '<tr><td colspan="5" class="ta-dim">' + (T.list ? 'No team members yet.' : 'Loading…') + '</td></tr>') +
+              '<td><button type="button" class="ta-btn' + (isOpen ? ' primary' : '') + '" data-ta="limits" data-e="' + esc(m.email) + '">' + (nCut ? nCut + ' cut' + (nCut > 1 ? 's' : '') : 'Full role') + '</button></td>' +
+              '<td><button type="button" class="ta-btn" data-ta="remove" data-e="' + esc(m.email) + '">Remove</button></td></tr>' +
+              (isOpen ? '<tr class="ta-lim-row"><td colspan="6">' + limitsHtml(m, lim) + '</td></tr>' : '');
+          }).join('') : '<tr><td colspan="6" class="ta-dim">' + (T.list ? 'No team members yet.' : 'Loading…') + '</td></tr>') +
           '</tbody></table>' +
           '<div class="ta-add"><input id="taName" placeholder="Name"><input id="taEmail" type="email" placeholder="Email they sign in with"><select id="taRole">' +
           Object.keys(ROLES).filter(function(k){ return k !== 'owner'; }).map(function(k){ return '<option value="' + k + '">' + ROLES[k] + '</option>'; }).join('') +
@@ -210,6 +250,28 @@
         '</tbody></table></div></div>';
     }
     return h;
+  }
+  // Checklist of the screens this person's role allows; untick to switch one off for them only.
+  function limitsHtml(m, lim){
+    if(T.limitsMissing) return '<p class="ta-dim">One-time setup for per-person limits: in Supabase → SQL Editor, run <b>team_limits_setup.sql</b> (in this repo). Then reopen this screen.</p>';
+    var tabs = allTabList().filter(function(t){ return tabAllowed(m.role, t) && t !== 'home' && t !== 'settings'; });
+    var e = esc(m.email);
+    return '<div class="ta-lim"><div class="ta-dim">Screens ' + esc(m.name || m.email) + ' can open (their role: ' + esc(ROLES[m.role] || m.role) + '). Untick to switch a screen off for them only.</div>' +
+      '<div class="ta-lim-grid">' + tabs.map(function(t){
+        return '<label class="ta-sw"><input type="checkbox" data-ta-lim="tab" data-t="' + esc(t) + '" data-e="' + e + '"' + (lim.hideTabs.indexOf(t) === -1 ? ' checked' : '') + '> ' + esc(tabLabel(t)) + '</label>';
+      }).join('') + '</div>' +
+      '<div class="ta-dim" style="margin-top:8px">Also hide for them</div><div class="ta-lim-grid">' +
+      (HIDE_MONEY.indexOf(m.role) === -1 ? '<label class="ta-sw"><input type="checkbox" data-ta-lim="hideMoney" data-e="' + e + '"' + (lim.hideMoney ? ' checked' : '') + '> Prices, payments & totals</label>' : '<span class="ta-dim">Prices and payments are already hidden for this role.</span>') +
+      (HIDE_MONEY.indexOf(m.role) === -1 && HIDE_COSTS.indexOf(m.role) === -1 ? '<label class="ta-sw"><input type="checkbox" data-ta-lim="hideCosts" data-e="' + e + '"' + (lim.hideCosts ? ' checked' : '') + '> Costs, margins & profit</label>' : '') +
+      '</div><div class="ta-add"><button type="button" class="ta-btn" data-ta="limits-reset" data-e="' + e + '">Give full role back</button><span class="ta-dim">Changes apply the next time they open Studio. Home and Settings always stay.</span></div></div>';
+  }
+  async function saveLimits(email, lim){
+    var r = await sb().from('studio_team').update({ limits: lim, updated_at: new Date().toISOString() }).eq('email', email);
+    if(r.error){
+      if(/limits/i.test(r.error.message || '') && /column|schema cache/i.test(r.error.message || '')){ T.limitsMissing = true; renderTeamPanel(true); return; }
+      T.err = r.error.message; renderTeamPanel(true); return;
+    }
+    loadTeam();
   }
   function renderTeamPanel(fromLoad){
     var host = document.getElementById('tabSettings'); if(!host) return;
@@ -248,6 +310,21 @@
         loadTeam();
       }, 'Remove');
     } else if(a === 'refresh') loadTeam();
+    else if(a === 'limits'){ var me = b.getAttribute('data-e'); T.open = T.open === me ? '' : me; renderTeamPanel(true); }
+    else if(a === 'limits-reset') saveLimits(b.getAttribute('data-e'), {});
+  });
+  document.addEventListener('change', function(e){
+    var k = e.target.getAttribute && e.target.getAttribute('data-ta-lim'); if(!k) return;
+    var em = e.target.getAttribute('data-e');
+    var m = (T.list || []).filter(function(x){ return x.email === em; })[0]; if(!m) return;
+    var lim = normLimits(m.limits);
+    if(k === 'tab'){
+      var t = e.target.getAttribute('data-t');
+      lim.hideTabs = lim.hideTabs.filter(function(x){ return x !== t; });
+      if(!e.target.checked) lim.hideTabs.push(t);
+    } else lim[k] = e.target.checked;
+    m.limits = lim;
+    saveLimits(em, lim);
   });
   document.addEventListener('change', function(e){
     var f = e.target.getAttribute && e.target.getAttribute('data-ta-f');
@@ -269,12 +346,14 @@
     '#ttTeamBox .ta-roles summary{cursor:pointer;color:var(--dim);font-size:12.5px;margin-top:6px}',
     '#ttTeamBox .ta-tw{max-height:420px;overflow:auto}',
     '#ttTeamBox .ta-nw{white-space:nowrap}',
-    '#ttTeamBox .ta-sw{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}'
+    '#ttTeamBox .ta-sw{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}',
+    '#ttTeamBox .ta-lim{padding:6px 2px}',
+    '#ttTeamBox .ta-lim-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 14px;margin-top:6px}'
   ].join('');
   document.head.appendChild(css);
 
   // Sign-in may have finished before this file loaded.
   if(typeof cloud !== 'undefined' && cloud.role) setTimeout(function(){ applyRole(cloud.role, cloud.email); }, 0);
 
-  window.TTAccess = { roles: ROLES, tabAllowed: tabAllowed, canRead: canRead, canWrite: canWrite, role: function(){ return current.role; } };
+  window.TTAccess = { roles: ROLES, tabAllowed: tabAllowed, myTabAllowed: myTabAllowed, limits: function(){ return limits; }, canRead: canRead, canWrite: canWrite, role: function(){ return current.role; } };
 })();
