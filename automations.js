@@ -87,6 +87,8 @@
       desc: 'Flag open leads with no call, visit or message logged for 5 days.' },
     { id: 'pay-remind', area: 'Finances', kind: 'flags', name: 'Payment ladder · day 7, 14, 21',
       desc: 'Unpaid delivered orders get a WhatsApp reminder at day 7, a firmer one at day 14 and a final one at day 21, each in Needs you with the message ready. Tapping Send records the step. At day 21 the client’s sales rep also gets a task.' },
+    { id: 'price-gram', area: 'Finances', kind: 'acts', name: 'New orders: price by weight, proforma, then tax invoice',
+      desc: 'Every line of each new order is priced at the rate per gram of model weight × quantity (with a minimum per piece); GST is added on top at the rate in Settings. Once the order is booked a proforma invoice (PF-…) is issued for the advance, and when it is marked Delivered the tax invoice (INV-…) follows. Prices follow the lines until the tax invoice exists. Orders that were already in Studio when the rule was switched on are left alone. Undo from the log to price one order by hand.' },
     { id: 'credit-hold', area: 'Finances', kind: 'flags', name: 'Credit hold on new bookings',
       desc: 'Booking an order for a client who owes money delivered 21 or more days ago asks first, and the order pop-up shows what they owe.' }
   ];
@@ -106,8 +108,75 @@
 
   function atRisk(){ return window.TTControl ? window.TTControl.problems().risk : []; }
 
+  // ---------- price by weight ----------
+  // Settings for the rule, plus the order ids that existed when it was switched on.
+  function PG(){
+    const a = A();
+    if(!a.pg || typeof a.pg !== 'object') a.pg = {};
+    if(!(+a.pg.rate > 0)) a.pg.rate = 4;
+    if(a.pg.min == null || a.pg.min === '') a.pg.min = 20;
+    if(!Array.isArray(a.pg.known)) a.pg.known = null;
+    return a.pg;
+  }
+  function pgStart(){ const P = PG(); P.known = state.orders.map(function(o){ return o.id; }); P.since = new Date().toISOString(); }
+  // Only the owner's or accounts' device issues numbers, so two open devices can't both do it.
+  function pgCanRun(){ const r = window.TTAccess && window.TTAccess.role ? window.TTAccess.role() : 'owner'; return !r || r === 'owner' || r === 'accounts'; }
+  function catalogWeight(name){
+    const k = String(name || '').trim().toLowerCase(); if(!k) return 0;
+    const c = (state.productCatalog || []).find(function(x){ return String(x.name || '').trim().toLowerCase() === k; });
+    return c ? +c.weight || 0 : 0;
+  }
+  function lineGrams(p){ return +p.fil > 0 ? +p.fil : catalogWeight(p.name); }
+  function pgUnit(g){ const P = PG(); return Math.max(+P.min || 0, Math.round(g * P.rate)); }
+  function pgLines(o){ return (o.products || []).filter(function(p){ return (+p.qty || 0) > 0; }); }
+  function pgMissing(o){ return pgLines(o).filter(function(p){ return !(lineGrams(p) > 0); }); }
+  function money(o){ return typeof orderTotals === 'function' ? orderTotals(o).grandTotal : 0; }
+  function runPriceGram(){
+    const P = PG();
+    if(!P.known) pgStart();
+    const known = {}; P.known.forEach(function(id){ known[id] = 1; });
+    let changed = false;
+    state.orders.forEach(function(o){
+      if(!known[o.id]){
+        P.known.push(o.id); known[o.id] = 1; changed = true;
+        if(['lost', 'cancelled', 'returned', 'delivered'].indexOf(o.status) === -1 && !o.invoiceNumber){
+          o.priceByWeight = true;
+          o.priceByWeightAt = new Date().toISOString();
+          o.priceByWeightPrev = (o.products || []).map(function(p){ return { id: p.id, listPrice: p.listPrice, actualPrice: p.actualPrice }; });
+          log('price-gram', label(o) + ' · priced by weight at ₹' + P.rate + '/g (min ₹' + P.min + ' a piece)', { pgOrderId: o.id });
+        }
+      }
+      if(!o.priceByWeight || o.invoiceNumber) return;
+      (o.products || []).forEach(function(p){
+        const g = lineGrams(p); if(!(g > 0)) return;
+        if(!(+p.fil > 0)) { p.fil = g; changed = true; }
+        const u = pgUnit(g);
+        if(p.actualPrice !== u || p.listPrice !== u){ p.actualPrice = u; p.listPrice = u; changed = true; }
+      });
+      const ready = pgLines(o).length > 0 && !pgMissing(o).length;
+      // Give whoever is typing the order in a few minutes before the proforma number is issued;
+      // any change to the lines restarts the wait.
+      const sig = JSON.stringify(pgLines(o).map(function(p){ return [p.name, p.qty, lineGrams(p)]; }));
+      if(o.priceByWeightSig !== sig){ o.priceByWeightSig = sig; o.priceByWeightAt = new Date().toISOString(); changed = true; }
+      const settled = Date.now() - Date.parse(o.priceByWeightAt || 0) >= 5 * 60000;
+      if(ready && settled && ['booked', 'in_production', 'production_done'].indexOf(o.status) !== -1 && !o.proformaNumber && typeof nextProformaNumber === 'function'){
+        o.proformaNumber = nextProformaNumber(); o.proformaDate = today(); changed = true;
+        log('price-gram', 'Proforma ' + o.proformaNumber + ' issued for ' + label(o) + ' · ' + rupees(money(o)));
+      }
+      if(ready && o.status === 'delivered' && typeof nextInvoiceNumber === 'function'){
+        o.invoiceNumber = nextInvoiceNumber(); o.invoiceDate = o.deliveryDate || today(); changed = true;
+        log('price-gram', 'Tax invoice ' + o.invoiceNumber + ' issued for ' + label(o) + ' on delivery · ' + rupees(money(o)));
+      }
+    });
+    if(changed){
+      if(typeof scheduleSave === 'function') scheduleSave();
+      if(typeof renderOrders === 'function') try{ renderOrders(); }catch(e){}
+    }
+  }
+
   function runActs(){
     if(!canAct()) return;
+    if(isOn('price-gram') && pgCanRun()) try{ runPriceGram(); }catch(e){ console.warn('[automations] price-gram', e); }
     if(isOn('made-done')){
       state.orders.forEach(function(o){
         if(o.status !== 'in_production' || !fullyMade(o)) return;
@@ -136,6 +205,14 @@
   function undo(i){
     const e = A().log[i];
     if(!e || !e.undo) return;
+    if(e.undo.pgOrderId){
+      // Back to hand pricing for this order: restore the prices it had and stop re-pricing it.
+      const o = state.orders.find(function(x){ return x.id === e.undo.pgOrderId; });
+      if(o){
+        (o.priceByWeightPrev || []).forEach(function(b){ const p = (o.products || []).find(function(x){ return x.id === b.id; }); if(p){ p.listPrice = b.listPrice; p.actualPrice = b.actualPrice; } });
+        o.priceByWeight = false;
+      }
+    }
     if(e.undo.orderId){
       const o = state.orders.find(function(x){ return x.id === e.undo.orderId; });
       if(o){ o.status = e.undo.before.status; o.productionDoneDate = e.undo.before.productionDoneDate; }
@@ -188,6 +265,17 @@
         return ['new', 'contacted', 'meeting', 'quote'].indexOf(l.stage) !== -1 && ((last[l.id] || (l.data || {}).createdAt || l.updated_at || '').slice(0, 10) < cutoff);
       });
       if(idle.length) out.push({ level: 2, rank: 0, score: idle.length, text: idle.length + ' open lead' + (idle.length === 1 ? ' has' : 's have') + ' had no activity for 5 days', act: 'tab', id: 'sales', btn: 'Sales' });
+    }
+    if(isOn('price-gram')){
+      state.orders.forEach(function(o){
+        if(!o.priceByWeight || o.invoiceNumber || ['lost', 'cancelled', 'returned'].indexOf(o.status) !== -1) return;
+        const miss = pgMissing(o);
+        if(miss.length) out.push({ level: 1, rank: 0, score: miss.length, text: label(o) + ': ' + miss.map(function(p){ return (p.name || 'a line').trim() || 'a line'; }).slice(0, 3).join(', ') + (miss.length === 1 ? ' has' : ' have') + ' no weight, so it can’t be priced by weight', act: 'order', id: o.id, btn: 'Add weight' });
+        else if(o.proformaNumber && !o.proformaSent && o.status !== 'delivered') out.push({ level: 2, rank: 0, score: 1, text: 'Proforma ' + o.proformaNumber + ' for ' + label(o) + ' · ' + rupees(money(o)) + ' ready to send', act: 'doc', id: o.id + '|proforma', btn: 'Open & send' });
+      });
+      state.orders.forEach(function(o){
+        if(o.priceByWeight && o.invoiceNumber && o.status === 'delivered' && !o.invoiceSent) out.push({ level: 1, rank: 0, score: 1, text: 'Tax invoice ' + o.invoiceNumber + ' for ' + label(o) + ' · ' + rupees(money(o)) + ' ready to send', act: 'doc', id: o.id + '|invoice', btn: 'Open & send' });
+      });
     }
     // Payment ladder (payment-ladder.js): one item per order with a reminder due.
     if(window.TTPayLadder) try{ out.push.apply(out, window.TTPayLadder.needs()); }catch(e){ console.warn('[automations] ladder', e); }
@@ -450,7 +538,8 @@
 
     h += '<div class="panel"><div class="panel-title">Rules</div><p class="au-note">Rules run while Studio is open on a signed-in device. Each starts off. “Acts” rules change data and can be undone from the log; “Flags” rules add items to Home → Needs you.</p>' +
       RULES.map(function(r){
-        return '<label class="au-rule"><input type="checkbox" data-au="rule" data-id="' + r.id + '"' + (isOn(r.id) ? ' checked' : '') + '><span><b>' + esc(r.name) + '</b> <em class="au-tag au-' + r.kind + '">' + (r.kind === 'acts' ? 'Acts' : 'Flags') + '</em> <em class="au-tag">' + esc(r.area) + '</em><br><small>' + esc(r.desc) + '</small></span></label>';
+        return '<label class="au-rule"><input type="checkbox" data-au="rule" data-id="' + r.id + '"' + (isOn(r.id) ? ' checked' : '') + '><span><b>' + esc(r.name) + '</b> <em class="au-tag au-' + r.kind + '">' + (r.kind === 'acts' ? 'Acts' : 'Flags') + '</em> <em class="au-tag">' + esc(r.area) + '</em><br><small>' + esc(r.desc) + '</small>' +
+          (r.id === 'price-gram' ? '<span class="au-pg">₹ <input type="number" min="0.5" step="0.5" data-au-pg="rate" value="' + esc(PG().rate) + '"> per gram · minimum ₹ <input type="number" min="0" step="1" data-au-pg="min" value="' + esc(PG().min) + '"> a piece · GST ' + esc(((state.business || {}).gstRate || 0)) + '% from Settings' + (!((state.business || {}).gstRate > 0) ? ' <b class="au-bad">(set it in Settings → Business)</b>' : '') + '</span>' : '') + '</span></label>';
       }).join('') + '</div>';
 
     h += '<div class="panel"><div class="panel-title">Activity log</div>' + (a.log.length ? a.log.slice(0, 40).map(function(e, i){
@@ -485,10 +574,13 @@
     else if(act === 'partner-job'){ goTab('partners'); if(typeof ponOpenJob === 'function') ponOpenJob(null); }
   });
   document.addEventListener('change', function(e){
+    const pgIn = e.target.closest('[data-au-pg]');
+    if(pgIn){ const P = PG(), k = pgIn.getAttribute('data-au-pg'), v = +pgIn.value; if(k === 'rate' && v > 0) P.rate = v; if(k === 'min' && v >= 0) P.min = v; log('price-gram', 'Price by weight set to ₹' + P.rate + '/g, minimum ₹' + P.min + ' a piece'); tick(); render(); return; }
     const b = e.target.closest('[data-au="rule"]');
     if(!b) return;
     const id = b.getAttribute('data-id'), r = RULES.find(function(x){ return x.id === id; });
     A().on[id] = b.checked;
+    if(id === 'price-gram' && b.checked) pgStart();
     if(id === 'lead-idle' && b.checked && window.TTSales) window.TTSales.load().catch(function(){});
     log(id, (r ? r.name : id) + (b.checked ? ' turned on' : ' turned off'));
     if(b.checked) tick();
@@ -497,6 +589,7 @@
 
   const css = document.createElement('style');
   css.textContent =
+    '.au-pg{display:block;margin-top:6px;font-size:12.5px}.au-pg input{width:70px;display:inline-block;padding:3px 6px;margin:0 2px}' +
     '.au-note{font-size:13px;color:var(--dim);margin:4px 0 10px}.au-dim{color:var(--dim)}.au-bad{color:var(--red);font-weight:600}' +
     '.au-tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}' +
     '.au-tool{text-align:left;background:var(--input-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text);font:inherit}' +

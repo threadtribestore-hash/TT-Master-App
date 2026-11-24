@@ -163,7 +163,7 @@
 
     const actions = document.createElement('div');
     actions.className = 'om-actions';
-    if(inv){ inv.textContent = inv.dataset.doc === 'quote' ? '📄 Quotation' : '🧾 Invoice'; if(inv.dataset.doc === 'quote') inv.title = 'Open quotation (download PDF / print)'; actions.appendChild(inv); }
+    if(inv){ inv.textContent = inv.dataset.doc === 'quote' ? '📄 Quotation' : inv.dataset.doc === 'proforma' ? '🧾 Proforma' : '🧾 Invoice'; if(inv.dataset.doc === 'quote') inv.title = 'Open quotation (download PDF / print)'; if(inv.dataset.doc === 'proforma') inv.title = 'Open proforma invoice (tax invoice is issued on delivery)'; actions.appendChild(inv); }
     if(dup){ dup.textContent = '⧉ Duplicate'; actions.appendChild(dup); }
     if(up && down){
       const move = document.createElement('div');

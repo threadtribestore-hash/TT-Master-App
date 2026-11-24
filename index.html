@@ -2927,6 +2927,7 @@ Replacements — Manufacturing defects will be replaced free of cost. Damage due
     <div class="invoice-toolbar">
       <label class="invoice-delivery" title="Billed to the client as its own line, with GST at the order's rate. Saved on the order.">Delivery charge ₹ <input type="number" id="invoiceDeliveryCharge" min="0" step="1" inputmode="decimal" placeholder="0"></label>
       <button class="backup-btn" id="invoicePrintBtn">⬇ Download PDF / Print</button>
+      <button class="backup-btn" id="invoiceWhatsappBtn" title="Opens WhatsApp with the message ready — attach the downloaded PDF">WhatsApp message</button>
       <button class="backup-btn" id="invoiceCloseBtn">✕ Close</button>
     </div>
     <div class="invoice-doc" id="invoiceDoc"></div>
@@ -3769,6 +3770,7 @@ function cloneOrder(orderId){
   copy.deliveryDate = '';
   copy.productionDoneDate = '';
   copy.invoiceNumber = '';
+  copy.proformaNumber = ''; copy.proformaDate = ''; delete copy.priceByWeight; delete copy.priceByWeightPrev;
   copy.invoiceDate = '';
   copy.wasQuoted = wasQuoteOrLost;
   copy.quotedDate = wasQuoteOrLost ? isoLocal() : '';
@@ -5283,9 +5285,10 @@ function buildOrderCardHead(order, index){
     tailBtns[0].addEventListener('click', function(){ moveOrder(order.id, -1); });
     tailBtns[1].addEventListener('click', function(){ moveOrder(order.id, 1); });
     tailBtns[2].addEventListener('click', function(){ cloneOrder(order.id); });
-    const isQuote = order.status === 'quoted' || order.status === 'lost';
-    if(isQuote) tailBtns[3].dataset.doc = 'quote';
-    tailBtns[3].addEventListener('click', function(){ isQuote ? generateQuotation(order.id) : generateInvoice(order.id); });
+    const docKind = orderDocKind(order);
+    if(docKind !== 'invoice') tailBtns[3].dataset.doc = docKind;
+    if(docKind === 'proforma') tailBtns[3].title = 'Proforma invoice (tax invoice is issued on delivery)';
+    tailBtns[3].addEventListener('click', function(){ docKind === 'quote' ? generateQuotation(order.id) : docKind === 'proforma' ? generateProforma(order.id) : generateInvoice(order.id); });
     tailBtns[4].addEventListener('click', function(){ removeOrder(order.id); });
     return head;
   }
@@ -13862,6 +13865,20 @@ function nextQuoteNumber(){
 }
 const QUOTE_VALID_DAYS = 15;
 function generateQuotation(orderId){ generateInvoice(orderId, { quote: true }); }
+// Proformas (advance-payment bills before delivery) have their own PF- series, so they
+// never use up a tax-invoice number. The tax invoice follows on delivery.
+function nextProformaNumber(){
+  state.proformaCounter = (state.proformaCounter || 0) + 1;
+  return 'PF-' + String(state.proformaCounter).padStart(4, '0');
+}
+function generateProforma(orderId){ generateInvoice(orderId, { proforma: true }); }
+// The order card's document button: priced-by-weight orders show their proforma until
+// the tax invoice exists (issued on delivery); everything else works as before.
+function orderDocKind(order){
+  if(order.status === 'quoted' || order.status === 'lost') return 'quote';
+  if(order.priceByWeight && !order.invoiceNumber && order.status !== 'delivered') return 'proforma';
+  return 'invoice';
+}
 
 function nextInvoiceNumber(){
   state.invoiceCounter = (state.invoiceCounter || 0) + 1;
@@ -13878,6 +13895,7 @@ function generateInvoice(orderId, opts){
   const order = state.orders.find(function(o){ return o.id === orderId; });
   if(!order) return;
   const quote = !!(opts && opts.quote);
+  const proforma = !quote && !!(opts && opts.proforma);
   if(!quote && (order.status === 'quoted' || order.status === 'lost')){
     showNoticeModal('Invoice isn\'t available until this order is won. Use Quotation instead.');
     return;
@@ -13888,6 +13906,8 @@ function generateInvoice(orderId, opts){
     quoteDate = (order.quotedDate || isoLocal()).slice(0, 10);
     const v = new Date(quoteDate + 'T00:00:00'); v.setDate(v.getDate() + QUOTE_VALID_DAYS);
     validUntil = order.quoteValidUntil || isoLocal(v);
+  } else if(proforma){
+    if(!order.proformaNumber){ order.proformaNumber = nextProformaNumber(); order.proformaDate = isoLocal(); scheduleSave(); }
   } else if(!order.invoiceNumber){
     order.invoiceNumber = nextInvoiceNumber();
     order.invoiceDate = isoLocal();
@@ -14073,9 +14093,10 @@ function generateInvoice(orderId, opts){
         '</div>' +
       '</div>' +
       '<div class="inv-title">' +
-        '<div class="big">' + (quote ? 'QUOTATION' : t.gstAmount > 0 ? 'TAX INVOICE' : 'INVOICE') + '</div>' +
-        '<div class="meta">' + escapeHtml(quote ? order.quoteNumber : order.invoiceNumber) +
-          '<br>Date: ' + (quote ? formatDateDisplay(quoteDate) : formatDateDisplay(invoiceDateOf(order))) +
+        '<div class="big">' + (quote ? 'QUOTATION' : proforma ? 'PROFORMA INVOICE' : t.gstAmount > 0 ? 'TAX INVOICE' : 'INVOICE') + '</div>' +
+        '<div class="meta">' + escapeHtml(quote ? order.quoteNumber : proforma ? order.proformaNumber : order.invoiceNumber) +
+          '<br>Date: ' + (quote ? formatDateDisplay(quoteDate) : proforma ? formatDateDisplay(order.proformaDate || isoLocal()) : formatDateDisplay(invoiceDateOf(order))) +
+          (proforma ? '<br>Not a tax invoice · GST invoice on delivery' : '') +
           (quote ? '<br>Valid until: ' + formatDateDisplay(validUntil) : '') +
         '</div>' +
       '</div>' +
@@ -14128,7 +14149,7 @@ function generateInvoice(orderId, opts){
   const dcInput = document.getElementById('invoiceDeliveryCharge');
   if(dcInput && document.activeElement !== dcInput) dcInput.value = order.deliveryCharge ? String(order.deliveryCharge) : '';
   // The saved PDF is named after the page title, e.g. "Quotation QT-0007 - Ishita Pandey".
-  invoiceDocTitle = (quote ? 'Quotation ' + order.quoteNumber : 'Invoice ' + order.invoiceNumber) + ' - ' + String(order.clientName || order.name || 'Client').replace(/[\\/:*?"<>|]+/g, ' ').trim();
+  invoiceDocTitle = (quote ? 'Quotation ' + order.quoteNumber : proforma ? 'Proforma ' + order.proformaNumber : 'Invoice ' + order.invoiceNumber) + ' - ' + String(order.clientName || order.name || 'Client').replace(/[\\/:*?"<>|]+/g, ' ').trim();
 }
 let invoiceDocTitle = '';
 let invoiceOpen = null;
@@ -14148,6 +14169,22 @@ document.getElementById('invoicePrintBtn').addEventListener('click', function(){
   if(invoiceDocTitle) document.title = invoiceDocTitle;
   window.print();
   setTimeout(function(){ document.title = was; }, 1000);
+});
+// Ready-made WhatsApp text for the open document; the PDF is attached by hand.
+document.getElementById('invoiceWhatsappBtn').addEventListener('click', function(){
+  if(!invoiceOpen) return;
+  const order = state.orders.find(function(o){ return o.id === invoiceOpen.orderId; }); if(!order) return;
+  const o2 = invoiceOpen.opts || {}, t = orderTotals(order), biz = state.business || {};
+  const kind = o2.quote ? 'quotation ' + order.quoteNumber : o2.proforma ? 'proforma invoice ' + order.proformaNumber : 'invoice ' + order.invoiceNumber;
+  const who = (order.clientName || order.name || '').trim();
+  const due = o2.quote || o2.proforma ? t.grandTotal : orderAmountDue(order);
+  const text = 'Hi' + (who ? ' ' + who : '') + ', sharing ' + kind + ' for order ' + (order.displayId || '') + ': \u20b9' + Math.round(due).toLocaleString('en-IN') + (t.gstAmount > 0 ? ' incl. GST' : '') + '.' +
+    (biz.upi && !o2.quote ? ' UPI: ' + biz.upi + '.' : '') + ' PDF attached. — ' + (biz.name || 'Thread Tribe');
+  let ph = String(order.clientPhone || '').replace(/\D/g, ''); if(ph.length === 10) ph = '91' + ph;
+  window.open('https://wa.me/' + (ph.length >= 11 ? ph : '') + '?text=' + encodeURIComponent(text), '_blank', 'noopener');
+  // Clears the "ready to send" item on Home.
+  if(o2.proforma) order.proformaSent = isoLocal(); else if(!o2.quote) order.invoiceSent = isoLocal();
+  scheduleSave();
 });
 document.getElementById('invoiceCloseBtn').addEventListener('click', function(){
   document.getElementById('invoiceOverlay').classList.add('hidden');
@@ -18007,11 +18044,11 @@ setInterval(renderDeliveryReminderBanner, 30 * 60 * 1000);
 <script src="print-files.js?v=1"></script>
 <script src="sales-admin.js?v=14"></script>
 <script src="shop-admin.js?v=2"></script>
-<script src="owner-home.js?v=8"></script>
+<script src="owner-home.js?v=9"></script>
 <script src="daily-tasks.js?v=2"></script>
-<script src="automations.js?v=8"></script>
+<script src="automations.js?v=9"></script>
 <script src="app-shell.js?v=3"></script>
-<script src="ui-polish.js?v=15"></script>
+<script src="ui-polish.js?v=16"></script>
 <script src="upsell.js?v=2"></script>
 <script src="order-insights.js?v=1"></script>
 <script src="marketing-admin.js?v=7"></script>

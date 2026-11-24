@@ -350,6 +350,7 @@
     else if(act === 'printtool' && window.TTAutomations) window.TTAutomations.printOut(H.html || '');
     else if(act === 'undoauto' && window.TTAutomations){ window.TTAutomations.undo(+id); render(); if(window.ttToast) window.ttToast('Undone'); }
     else if(act === 'link') window.open(id, '_blank', 'noopener');
+    else if(act === 'doc' && typeof generateInvoice === 'function'){ const parts = String(id).split('|'); generateInvoice(parts[0], parts[1] === 'proforma' ? { proforma: true } : {}); }
     else if(act === 'farm'){ const m = document.querySelector('.ttf-menu-item'); if(m) m.click(); else goTab('control'); }
     else if(act === 'printer'){
       const p = (state.printers || []).find(function(x){ return x.id === id; });
